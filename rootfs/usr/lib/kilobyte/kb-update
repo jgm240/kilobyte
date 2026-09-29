@@ -144,7 +144,8 @@ install_tree() {
     done
     # The start-up logo in the initramfs.
     local initramfs_changed=
-    for f in etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/scripts/init-top/kilobyte-logo \
+    for f in etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage \
+             etc/initramfs-tools/scripts/init-top/kilobyte-logo \
              etc/initramfs-tools/scripts/init-bottom/kilobyte-logo; do
         [ -f "$src/$f" ] || continue
         cmp -s "$src/$f" "/$f" || initramfs_changed=1

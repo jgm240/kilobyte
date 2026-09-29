@@ -1,0 +1,15 @@
+#!/bin/sh
+# Every disk, CD/DVD and USB stick driver in the initramfs, whatever the
+# kernel. Debian 13's initramfs-tools picks storage drivers by the kernel
+# functions they call, a list made for its own kernel: with the 32-bit
+# image's Debian 12 kernel it missed ata_piix, ahci and usb-storage, so the
+# live system could not find its CD or stick. udev loads what the machine needs.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+for d in kernel/drivers/ata kernel/drivers/scsi kernel/drivers/usb/storage kernel/drivers/cdrom \
+         kernel/drivers/nvme kernel/drivers/mmc kernel/drivers/block kernel/drivers/usb/host; do
+    [ -d "${MODULESDIR}/$d" ] && copy_modules_dir "$d"
+done
+exit 0
