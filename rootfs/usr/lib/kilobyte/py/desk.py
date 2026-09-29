@@ -162,6 +162,7 @@ class Desk:
         self.first_argv = argv
         self.windows = []                  # bottom to top; the last is active
         self.drag = None                   # ("move"|"size", window, dx, dy)
+        self.pointer = None                # where the mouse is, drawn as a block
         self.last_click = (0, None)
         self.menu = None
         s.scr.nodelay(True)
@@ -313,6 +314,15 @@ class Desk:
         self.draw_bars()
         if self.menu:
             self.draw_menu()
+        # The mouse pointer: the cell under it in reverse colours.
+        if self.pointer:
+            px, py = self.pointer
+            H, W = self.s.size()
+            if 0 <= px < W and 0 <= py < H:
+                try:
+                    self.s.scr.chgat(py, px, 1, curses.A_REVERSE)
+                except curses.error:
+                    pass
         # The cursor of the active window's program.
         if act and not act.screen.cursor.hidden and not self.menu:
             cx, cy = act.x + 1 + act.screen.cursor.x, act.y + 1 + act.screen.cursor.y
@@ -398,6 +408,7 @@ class Desk:
             _, mx, my, _, b = curses.getmouse()
         except curses.error:
             return
+        self.pointer = (mx, my)
         if os.environ.get("KB_DESK_DEBUG"):
             with open("/tmp/desk-mouse.log", "a") as log:
                 log.write("mouse x=%d y=%d bstate=%#x drag=%s\n" % (mx, my, b, bool(self.drag)))

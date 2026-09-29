@@ -113,7 +113,7 @@ cmd_apply() {
     # System files that belong to Kilobyte (not the owner's settings).
     for f in etc/profile.d/kilobyte.sh etc/systemd/system/kilobyte-wifi.service \
              etc/modules-load.d/kilobyte-optical.conf etc/sysctl.d/10-kilobyte.conf \
-             etc/yt-dlp.conf etc/elinks/elinks.conf etc/issue etc/systemd/network/20-wired.network \
+             etc/yt-dlp.conf etc/elinks/elinks.conf etc/gpm.conf etc/issue etc/systemd/network/20-wired.network \
              etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
              etc/systemd/network/25-wireless.network; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
@@ -148,6 +148,7 @@ cmd_apply() {
 
     # New services and groups that came with the update.
     systemctl enable kilobyte-post.service 2>/dev/null || true
+    systemctl try-restart gpm.service 2>/dev/null || true      # new mouse settings
     # shellcheck source=/dev/null
     . /usr/lib/kilobyte/setup-questions.sh
     for u in $(awk -F: '$3 >= 1000 && $3 < 60000 {print $1}' /etc/passwd); do
