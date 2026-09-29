@@ -66,3 +66,33 @@ Created symlink '/etc/systemd/system/systemd-networkd-wait-online.service' → '
 passwd: password changed.
 update-initramfs: Generating /boot/initrd.img-6.12.111+deb13-amd64
 W: No zstd in /usr/bin:/sbin:/bin, using gzip
+live-boot: core filesystems dm-verity devices utils udev blockdev dns.
+I: cleaning package lists and apt cache...
+I: success in 997.4959 seconds
+1.4G	/work/rootfs
+==> Compressing the root file system
+[===================\                                        ]  7600/23102  32%Unrecognised xattr prefix system.posix_acl_access
+Unrecognised xattr prefix system.posix_acl_default
+
+[===========================================================\] 23102/23102 100%
+501M	/work/iso/live/filesystem.squashfs
+==> Writing /out/kilobyte-1.3-amd64.iso (boots with BIOS and UEFI)
+xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
+
+Drive current: -outdev 'stdio:/out/kilobyte-1.3-amd64.iso.tmp'
+Media current: stdio file, overwriteable
+Media status : is blank
+Media summary: 0 sessions, 0 data blocks, 0 data, 22.9g free
+Added to ISO image: directory '/'='/tmp/grub.lN3Qo1'
+Added to ISO image: directory '/'='/work/iso'
+xorriso : NOTE : Copying to System Area: 512 bytes from file '/usr/lib/grub/i386-pc/boot_hybrid.img'
+ISO image produced: 294041 sectors
+Written to medium : 294041 sectors at LBA 0
+Writing to 'stdio:/out/kilobyte-1.3-amd64.iso.tmp' completed successfully.
+
+-rw-r--r-- 1 root root 575M Sep 29 13:21 /out/kilobyte-1.3-amd64.iso
+Done:
+out/kilobyte-1.3-amd64.iso
+out/kilobyte-1.2-amd64.iso
+out/kilobyte-1.0-amd64.iso.sha256
+out/kilobyte-1.0-amd64.iso

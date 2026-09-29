@@ -393,9 +393,13 @@ command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; 
 if [ -z "${KILOBYTE_DESK:-}" ] && [ ! -e "$KB_CONF/windows-off" ] && [ -t 0 ] &&
    python3 -c 'import pyte' 2>/dev/null; then
     kb_sound startup
-    "$KB_LIB/apps/desk" kilobyte && { clear; kb_palette ""; exit 0; }
-    echo "Kilobyte Windows stopped unexpectedly; starting without windows." >&2
-    sleep 2
+    if "$KB_LIB/apps/desk" kilobyte; then
+        # All windows closed: log out, unless windows were just switched off.
+        [ -e "$KB_CONF/windows-off" ] || { clear; kb_palette ""; exit 0; }
+    else
+        echo "Kilobyte Windows stopped unexpectedly; starting without windows." >&2
+        sleep 2
+    fi
 fi
 export KILOBYTE=1
 # Ctrl-Z would suspend Kilobyte and leave a bare shell: switch it off.

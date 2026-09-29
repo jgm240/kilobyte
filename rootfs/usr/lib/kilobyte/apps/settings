@@ -409,6 +409,29 @@ login_panel() {
     done
 }
 
+# --- Windows (multitasking) -----------------------------------------------
+
+windows_panel() {
+    if [ -e "$KB_CONF/windows-off" ]; then
+        kb_yesno "Windows" "Windows are \ZbOFF\Zn: one program at a time, on the whole screen.
+
+Switch on movable windows and multitasking?
+Kilobyte restarts in windows." 11 60 || return
+        rm -f "$KB_CONF/windows-off"
+        exit 42         # the Program Manager restarts itself, now in windows
+    else
+        kb_yesno "Windows" "Windows are \ZbON\Zn: several programs at once in movable windows.
+
+Switch them off? All windows close (save your work first) and
+Kilobyte continues with one program at a time." 12 66 || return
+        : > "$KB_CONF/windows-off"
+        # Closing every window ends Kilobyte Windows; Kilobyte then carries on without.
+        if [ -n "${KB_DESK_PID:-}" ]; then
+            kill -USR1 "$KB_DESK_PID" 2>/dev/null
+        fi
+    fi
+}
+
 # --- Sound -----------------------------------------------------------------
 
 sound_panel() {
@@ -639,6 +662,7 @@ while true; do
             --menu "Settings for this computer." 0 64 0 \
             Update     "Kilobyte Update"               "Get the newest Kilobyte from GitHub" \
             Wi-Fi      "Wireless networks"             "Turn Wi-Fi on or off and connect to a network" \
+            Windows    "Windows and multitasking: $([ -e "$KB_CONF/windows-off" ] && echo OFF || echo ON)" "Several programs at once in movable windows" \
             Hotspot    "Wi-Fi hotspot"                 "Share this computer's Internet connection over Wi-Fi" \
             Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
@@ -663,6 +687,7 @@ while true; do
     case $sel in
         Update)     update_panel ;;
         Wi-Fi)      wifi_panel ;;
+        Windows)    windows_panel ;;
         Hotspot)    hotspot_panel ;;
         Bluetooth)  bluetooth_panel ;;
         Network)    network_panel ;;

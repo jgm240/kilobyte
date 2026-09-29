@@ -66,6 +66,13 @@ KEYS = {
 for name, seq in (("KEY_SR", b"\x1b[1;2A"), ("KEY_SF", b"\x1b[1;2B")):
     if hasattr(curses, name):
         KEYS[getattr(curses, name)] = seq
+# When a program asks for "application cursor keys" (DECCKM, as dialog and
+# every curses program does), an xterm sends these as ESC O x instead.
+DECCKM = 1 << 5          # pyte keeps private mode 1 like this (it has no name for it)
+APP_KEYS = {
+    curses.KEY_UP: b"\x1bOA", curses.KEY_DOWN: b"\x1bOB", curses.KEY_RIGHT: b"\x1bOC",
+    curses.KEY_LEFT: b"\x1bOD", curses.KEY_HOME: b"\x1bOH", curses.KEY_END: b"\x1bOF",
+}
 
 
 class Window:
@@ -510,6 +517,8 @@ class Desk:
             return
         if isinstance(k, str):
             win.send(k.encode("utf-8"))
+        elif k in APP_KEYS and DECCKM in win.screen.mode:
+            win.send(APP_KEYS[k])
         elif k in KEYS:
             win.send(KEYS[k])
 
@@ -538,7 +547,12 @@ class Desk:
                         k = self.s.scr.get_wch()
                     except curses.error:
                         break
-                    self.key(k)
+                    try:
+                        self.key(k)
+                    except Exception:           # one bad key must not end every window
+                        import traceback
+                        with open(os.path.expanduser("~/.cache/kilobyte-desk.log"), "a") as log:
+                            traceback.print_exc(file=log)
             # Let more program output arrive before drawing again.
             time.sleep(0.01)
 
