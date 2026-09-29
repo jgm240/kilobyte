@@ -1,0 +1,25 @@
+Description: A click on the highlighted menu item chooses it
+ In a menu, the first click on an item highlights it (as before) and a click
+ on the item that is already highlighted works like Enter on the OK button.
+ So a double-click runs a menu item, as on a desktop.
+Author: Kilobyte <https://github.com/jgm240/kilobyte>
+
+--- a/menubox.c
++++ b/menubox.c
+@@ -554,6 +554,16 @@
+ 		key -= DLGK_MOUSE(KEY_MAX);
+ 		i = RowToItem(key);
+ 		if (i < max_choice) {
++		    /*
++		     * Kilobyte: clicking the item that is already highlighted
++		     * chooses it, so a double-click works like Enter on OK.
++		     */
++		    if (i == choice) {
++			button = 0;
++			dlg_draw_buttons(dialog, height - 2, 0, buttons, button, FALSE, width);
++			ungetch('\n');
++			continue;
++		    }
+ 		    found = TRUE;
+ 		} else {
+ 		    beep();

@@ -55,6 +55,7 @@ for ARCH in $ARCHES; do
             "debian:$SUITE" bash /src/image/build-in-container.sh "$name"
     }
 
+    stage debs --platform "$PLATFORM"
     stage rootfs --privileged --platform "$PLATFORM"
     case $ARCH in
         amd64 | i386)

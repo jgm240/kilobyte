@@ -1,0 +1,628 @@
+#!/usr/bin/python3
+"""kb-office: office files for Kilobyte's text-mode programs.
+
+Documents (DOCX, ODT) become plain text for the Editor and back:
+    kb-office doc-to-text  DOC.docx|odt  OUT.txt
+    kb-office text-to-doc  IN.txt  DOC.docx|odt  [TEMPLATE]
+
+Spreadsheets (XLSX, ODS) become sc-im sheets and back:
+    kb-office sheet-to-sc  BOOK.xlsx|ods  OUT.sc
+    kb-office sc-to-sheet  IN.sc  BOOK.xlsx|ods
+
+The text form: paragraphs separated by blank lines, "# " to "###### " for
+headings, "- " for list items, "| a | b |" for table rows. When a document
+is written back with a TEMPLATE (the original file), everything but the
+text is kept: styles, headers, footers, page setup, pictures' files.
+Spreadsheets keep values, text and formulas of the first sheet; formatting
+is not kept. Only the Python standard library is used.
+"""
+import re
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
+
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ODF = {
+    "office": "urn:oasis:names:tc:opendocument:xmlns:office:1.0",
+    "text": "urn:oasis:names:tc:opendocument:xmlns:text:1.0",
+    "table": "urn:oasis:names:tc:opendocument:xmlns:table:1.0",
+    "style": "urn:oasis:names:tc:opendocument:xmlns:style:1.0",
+    "fo": "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0",
+}
+
+
+def q(ns, tag):
+    return "{%s}%s" % (ns, tag)
+
+
+def ext(path):
+    return path.rsplit(".", 1)[-1].lower()
+
+
+# ============================================================ documents
+
+def docx_to_text(path):
+    z = zipfile.ZipFile(path)
+    body = ET.fromstring(z.read("word/document.xml")).find(q(W, "body"))
+    out = []
+
+    def para_text(p):
+        parts = []
+        for node in p.iter():
+            if node.tag == q(W, "t"):
+                parts.append(node.text or "")
+            elif node.tag == q(W, "tab"):
+                parts.append("\t")
+            elif node.tag in (q(W, "br"), q(W, "cr")):
+                parts.append(" ")
+        return "".join(parts).strip()
+
+    for el in body:
+        if el.tag == q(W, "p"):
+            text = para_text(el)
+            style = el.find(".//" + q(W, "pStyle"))
+            sid = style.get(q(W, "val"), "") if style is not None else ""
+            m = re.match(r"(?i)heading\s*(\d)", sid)
+            is_list = el.find(".//" + q(W, "numPr")) is not None or re.match(r"(?i)list", sid)
+            if is_list and text:
+                out.append("- " + text)
+            elif m and text:
+                out.append("#" * int(m.group(1)) + " " + text)
+            elif sid.lower() == "title" and text:
+                out.append("# " + text)
+            else:
+                out.append(text)
+        elif el.tag == q(W, "tbl"):
+            for row in el.findall(q(W, "tr")):
+                cells = [" ".join(para_text(p) for p in tc.findall(".//" + q(W, "p"))) for tc in row.findall(q(W, "tc"))]
+                out.append("| " + " | ".join(cells) + " |")
+    return join_blocks(out)
+
+
+def odt_to_text(path):
+    z = zipfile.ZipFile(path)
+    root = ET.fromstring(z.read("content.xml"))
+    office_text = root.find(".//" + q(ODF["office"], "text"))
+    out = []
+
+    def text_of(el):
+        parts = [el.text or ""]
+        for child in el:
+            if child.tag == q(ODF["text"], "s"):
+                parts.append(" " * int(child.get(q(ODF["text"], "c"), "1")))
+            elif child.tag == q(ODF["text"], "tab"):
+                parts.append("\t")
+            elif child.tag == q(ODF["text"], "line-break"):
+                parts.append(" ")
+            elif child.tag in (q(ODF["text"], "note"),):
+                pass
+            else:
+                parts.append(text_of(child))
+            parts.append(child.tail or "")
+        return "".join(parts)
+
+    def walk(el, in_list=False):
+        for child in el:
+            tag = child.tag
+            if tag == q(ODF["text"], "h"):
+                level = int(child.get(q(ODF["text"], "outline-level"), "1"))
+                out.append("#" * min(level, 6) + " " + text_of(child).strip())
+            elif tag == q(ODF["text"], "p"):
+                t = text_of(child).strip()
+                out.append(("- " + t) if in_list and t else t)
+            elif tag == q(ODF["text"], "list"):
+                walk(child, True)
+            elif tag in (q(ODF["text"], "list-item"), q(ODF["text"], "section")):
+                walk(child, in_list)
+            elif tag == q(ODF["table"], "table"):
+                for row in child.iter(q(ODF["table"], "table-row")):
+                    cells = [" ".join(text_of(p).strip() for p in cell.iter(q(ODF["text"], "p")))
+                             for cell in row.findall(q(ODF["table"], "table-cell"))]
+                    out.append("| " + " | ".join(cells) + " |")
+
+    walk(office_text)
+    return join_blocks(out)
+
+
+def join_blocks(lines):
+    """Paragraphs with a blank line between them; list items and table rows
+    stay together."""
+    out = []
+    for line in lines:
+        if not line:
+            continue
+        kind = "list" if line.startswith("- ") else "table" if line.startswith("| ") else "p"
+        if out and not (kind != "p" and out[-1][0] == kind):
+            out.append(("gap", ""))
+        out.append((kind, line))
+    return "\n".join(text for _, text in out) + "\n"
+
+
+def parse_text(path):
+    """Plain text -> blocks: ("h", level, text), ("p", text), ("li", text), ("row", [cells])."""
+    blocks, para = [], []
+
+    def flush():
+        if para:
+            blocks.append(("p", " ".join(para)))
+            para.clear()
+
+    for raw in open(path, encoding="utf-8", errors="replace").read().splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            flush()
+            continue
+        m = re.match(r"^(#{1,6})\s+(.*)", line)
+        if m:
+            flush()
+            blocks.append(("h", len(m.group(1)), m.group(2).strip()))
+        elif re.match(r"^\s*[-*]\s+", line):
+            flush()
+            blocks.append(("li", re.sub(r"^\s*[-*]\s+", "", line)))
+        elif line.startswith("|") and line.endswith("|"):
+            flush()
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if not all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):   # markdown ruler
+                blocks.append(("row", cells))
+        else:
+            para.append(line.strip())
+    flush()
+    return blocks
+
+
+def w_run(text):
+    return '<w:r><w:t xml:space="preserve">%s</w:t></w:r>' % escape(text)
+
+
+def docx_body(blocks, styles):
+    """WordprocessingML for the blocks; styles: ids that exist in the file."""
+    heading_id = {}
+    for i in range(1, 7):
+        for candidate in ("Heading%d" % i, "heading%d" % i, "berschrift%d" % i, "Titre%d" % i):
+            if candidate in styles:
+                heading_id[i] = candidate
+                break
+        heading_id.setdefault(i, "Heading%d" % i)
+    list_style = next((s for s in ("ListBullet", "ListParagraph", "Listenabsatz") if s in styles), None)
+    out, table = [], []
+
+    def end_table():
+        if table:
+            rows = "".join("<w:tr>%s</w:tr>" % "".join(
+                "<w:tc><w:p>%s</w:p></w:tc>" % w_run(c) for c in cells) for cells in table)
+            out.append('<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/>'
+                       '<w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/>'
+                       '<w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/>'
+                       '<w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>'
+                       "</w:tblBorders></w:tblPr>%s</w:tbl>" % rows)
+            table.clear()
+
+    for b in blocks:
+        if b[0] != "row":
+            end_table()
+        if b[0] == "h":
+            out.append('<w:p><w:pPr><w:pStyle w:val="%s"/></w:pPr>%s</w:p>' % (heading_id[b[1]], w_run(b[2])))
+        elif b[0] == "li":
+            style = '<w:pStyle w:val="%s"/>' % list_style if list_style else ""
+            out.append("<w:p><w:pPr>%s</w:pPr>%s</w:p>" % (style, w_run("• " + b[1] if not list_style else b[1])))
+        elif b[0] == "row":
+            table.append(b[1])
+        else:
+            out.append("<w:p>%s</w:p>" % w_run(b[1]))
+    end_table()
+    return "".join(out)
+
+
+DOCX_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>"""
+DOCX_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"""
+DOCX_DOC_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"""
+DOCX_STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="%s">
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault>
+<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+%s
+<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>
+</w:styles>""" % (W, "".join(
+    '<w:style w:type="paragraph" w:styleId="Heading%d"><w:name w:val="heading %d"/><w:basedOn w:val="Normal"/>'
+    '<w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="240"/><w:outlineLvl w:val="%d"/></w:pPr>'
+    '<w:rPr><w:b/><w:sz w:val="%d"/></w:rPr></w:style>' % (i, i, i - 1, 36 - 3 * i) for i in range(1, 7)))
+
+
+def text_to_docx(src, dest, template=None):
+    blocks = parse_text(src)
+    if template and zipfile.is_zipfile(template):
+        tz = zipfile.ZipFile(template)
+        styles = set(re.findall(r'w:styleId="([^"]+)"', tz.read("word/styles.xml").decode("utf-8", "replace"))) \
+            if "word/styles.xml" in tz.namelist() else set()
+        doc = tz.read("word/document.xml").decode("utf-8")
+        # Keep the section properties (page size, headers, footers).
+        sect = re.search(r"<w:sectPr\b.*</w:sectPr>\s*(?=</w:body>)", doc, re.S)
+        body = docx_body(blocks, styles) + (sect.group(0) if sect else "")
+        doc = re.sub(r"(<w:body[^>]*>).*(</w:body>)", lambda m: m.group(1) + body + m.group(2), doc, flags=re.S)
+        with zipfile.ZipFile(dest + ".new", "w", zipfile.ZIP_DEFLATED) as out:
+            for item in tz.infolist():
+                out.writestr(item, doc if item.filename == "word/document.xml" else tz.read(item.filename))
+    else:
+        doc = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="%s" xmlns:r="%s">'
+               "<w:body>%s<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1417\" w:right=\"1417\" "
+               "w:bottom=\"1134\" w:left=\"1417\" w:header=\"708\" w:footer=\"708\" w:gutter=\"0\"/></w:sectPr>"
+               "</w:body></w:document>") % (W, R, docx_body(blocks, {"Heading%d" % i for i in range(1, 7)} | {"ListBullet"}))
+        with zipfile.ZipFile(dest + ".new", "w", zipfile.ZIP_DEFLATED) as out:
+            out.writestr("[Content_Types].xml", DOCX_TYPES)
+            out.writestr("_rels/.rels", DOCX_RELS)
+            out.writestr("word/_rels/document.xml.rels", DOCX_DOC_RELS)
+            out.writestr("word/styles.xml", DOCX_STYLES)
+            out.writestr("word/document.xml", doc)
+    replace(dest)
+
+
+def odt_body(blocks):
+    out, table, items = [], [], []
+
+    def end_list():
+        if items:
+            out.append("<text:list>%s</text:list>" % "".join(
+                "<text:list-item><text:p>%s</text:p></text:list-item>" % escape(t) for t in items))
+            items.clear()
+
+    def end_table():
+        if table:
+            width = max(len(r) for r in table)
+            rows = "".join("<table:table-row>%s</table:table-row>" % "".join(
+                '<table:table-cell office:value-type="string"><text:p>%s</text:p></table:table-cell>' % escape(c)
+                for c in r + [""] * (width - len(r))) for r in table)
+            out.append('<table:table table:name="Table%d"><table:table-column table:number-columns-repeated="%d"/>%s</table:table>'
+                       % (len(out) + 1, width, rows))
+            table.clear()
+
+    for b in blocks:
+        if b[0] != "li":
+            end_list()
+        if b[0] != "row":
+            end_table()
+        if b[0] == "h":
+            out.append('<text:h text:style-name="Heading_20_%d" text:outline-level="%d">%s</text:h>' % (b[1], b[1], escape(b[2])))
+        elif b[0] == "li":
+            items.append(b[1])
+        elif b[0] == "row":
+            table.append(b[1])
+        else:
+            out.append('<text:p text:style-name="Text_20_body">%s</text:p>' % escape(b[1]))
+    end_list()
+    end_table()
+    return "".join(out)
+
+
+ODT_NS = " ".join('xmlns:%s="%s"' % kv for kv in ODF.items())
+
+
+def text_to_odt(src, dest, template=None):
+    body = odt_body(parse_text(src))
+    if template and zipfile.is_zipfile(template):
+        tz = zipfile.ZipFile(template)
+        content = tz.read("content.xml").decode("utf-8")
+        # Keep declarations at the start of office:text (sequences, forms).
+        content = re.sub(r"(<office:text[^>]*>)(.*)(</office:text>)",
+                         lambda m: m.group(1) + "".join(re.findall(
+                             r"<(?:text:sequence-decls|office:forms|text:variable-decls)\b.*?(?:/>|</(?:text:sequence-decls|office:forms|text:variable-decls)>)",
+                             m.group(2), re.S)) + body + m.group(3), content, flags=re.S)
+        with zipfile.ZipFile(dest + ".new", "w") as out:
+            for item in tz.infolist():
+                data = content if item.filename == "content.xml" else tz.read(item.filename)
+                out.writestr(item, data, zipfile.ZIP_STORED if item.filename == "mimetype" else zipfile.ZIP_DEFLATED)
+    else:
+        content = ('<?xml version="1.0" encoding="UTF-8"?><office:document-content %s office:version="1.2">'
+                   "<office:body><office:text>%s</office:text></office:body></office:document-content>") % (ODT_NS, body)
+        write_odf(dest + ".new", "application/vnd.oasis.opendocument.text", content)
+    replace(dest)
+
+
+def write_odf(path, mime, content):
+    with zipfile.ZipFile(path, "w") as out:
+        out.writestr("mimetype", mime, zipfile.ZIP_STORED)          # must come first, uncompressed
+        out.writestr("META-INF/manifest.xml",
+                     '<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">'
+                     '<manifest:file-entry manifest:full-path="/" manifest:media-type="%s"/>'
+                     '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+                     "</manifest:manifest>" % mime, zipfile.ZIP_DEFLATED)
+        out.writestr("content.xml", content, zipfile.ZIP_DEFLATED)
+
+
+def replace(dest):
+    import os
+    os.replace(dest + ".new", dest)
+
+
+# ========================================================= spreadsheets
+# sc-im numbers rows from 0 (A0); Excel and ODS from 1 (A1).
+
+EXCEL_TO_SC = {"SUM": "@sum", "AVERAGE": "@avg", "MIN": "@min", "MAX": "@max", "COUNT": "@count",
+               "ABS": "@abs", "SQRT": "@sqrt", "ROUND": "@round", "INT": "@int", "EXP": "@exp", "LN": "@ln",
+               "LOG10": "@log", "PI": "@pi", "STDEV": "@stddev", "NOW": "@now", "TODAY": "@now",
+               "SIN": "@sin", "COS": "@cos", "TAN": "@tan", "IF": "@if"}
+SC_TO_EXCEL = {v: k for k, v in EXCEL_TO_SC.items() if k not in ("TODAY",)}
+REF = re.compile(r"\$?\b([A-Z]{1,3})\$?(\d+)\b")
+
+
+def shift_refs(formula, delta):
+    return REF.sub(lambda m: "%s%d" % (m.group(1), int(m.group(2)) + delta), formula)
+
+
+def excel_to_sc(formula):
+    f = formula.lstrip("=")
+    if re.search(r"[A-Za-z]+!|\[|\"", f):                  # other sheets, structured refs, text: too hard
+        return None
+    for name in sorted(EXCEL_TO_SC, key=len, reverse=True):
+        f = re.sub(r"\b%s\(" % name, EXCEL_TO_SC[name] + "(", f, flags=re.I)
+    if re.search(r"\b[A-Z]{2,}\(", f):                      # a function sc-im does not know
+        return None
+    return shift_refs(f, -1)
+
+
+def sc_to_excel(expr):
+    f = shift_refs(expr, +1)
+    for name, xl in SC_TO_EXCEL.items():
+        f = f.replace(name + "(", xl + "(")
+    return re.sub(r"@(\w+)", lambda m: m.group(1).upper(), f)
+
+
+def col_index(letters):
+    n = 0
+    for ch in letters:
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def col_letters(i):
+    s = ""
+    i += 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def read_xlsx(path):
+    """First sheet -> {(col, row0): ("n", value) | ("s", text) | ("f", formula, cached)}"""
+    z = zipfile.ZipFile(path)
+    shared = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall(q(S, "si")):
+            shared.append("".join(t.text or "" for t in si.iter(q(S, "t"))))
+    wb = ET.fromstring(z.read("xl/workbook.xml"))
+    rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
+    first = wb.find(q(S, "sheets"))[0]
+    rid = first.get(q(R, "id"))
+    target = next(r.get("Target") for r in rels if r.get("Id") == rid)
+    target = target.lstrip("/") if target.startswith("/") else "xl/" + target
+    cells = {}
+    for c in ET.fromstring(z.read(target)).iter(q(S, "c")):
+        m = re.match(r"([A-Z]+)(\d+)", c.get("r", ""))
+        if not m:
+            continue
+        key = (col_index(m.group(1)), int(m.group(2)) - 1)
+        t = c.get("t", "n")
+        v = c.findtext(q(S, "v"))
+        f = c.findtext(q(S, "f"))
+        if t == "s" and v is not None:
+            cells[key] = ("s", shared[int(v)])
+        elif t == "inlineStr":
+            cells[key] = ("s", "".join(x.text or "" for x in c.iter(q(S, "t"))))
+        elif t == "str":
+            cells[key] = ("s", v or "")
+        elif t == "b":
+            cells[key] = ("n", v or "0")
+        elif f:
+            cells[key] = ("f", f, v)
+        elif v is not None:
+            cells[key] = ("n", v)
+    return cells
+
+
+def read_ods(path):
+    z = zipfile.ZipFile(path)
+    root = ET.fromstring(z.read("content.xml"))
+    table = next(root.iter(q(ODF["table"], "table")))
+    cells, row = {}, 0
+    T, O = ODF["table"], ODF["office"]
+    for tr in table.iter(q(T, "table-row")):
+        rrep = int(tr.get(q(T, "number-rows-repeated"), "1"))
+        col = 0
+        for tc in tr:
+            if tc.tag not in (q(T, "table-cell"), q(T, "covered-table-cell")):
+                continue
+            crep = int(tc.get(q(T, "number-columns-repeated"), "1"))
+            vtype = tc.get(q(O, "value-type"))
+            formula = tc.get(q(T, "formula"))
+            text = "\n".join("".join(p.itertext()) for p in tc.findall(q(ODF["text"], "p")))
+            value = tc.get(q(O, "value"))
+            if vtype and rrep < 1000 and crep < 1000:          # skip the "rest of the sheet" filler
+                for dr in range(rrep):
+                    for dc in range(crep):
+                        key = (col + dc, row + dr)
+                        if formula:
+                            f = re.sub(r"^of:=", "=", formula)
+                            f = re.sub(r"\[\.?([A-Z]+\d+)(?::\.?([A-Z]+\d+))?\]",
+                                       lambda m: m.group(1) + (":" + m.group(2) if m.group(2) else ""), f)
+                            cells[key] = ("f", f.replace(";", ","), value)
+                        elif vtype in ("float", "percentage", "currency"):
+                            cells[key] = ("n", value)
+                        elif vtype == "boolean":
+                            cells[key] = ("n", "1" if tc.get(q(O, "boolean-value")) == "true" else "0")
+                        else:
+                            cells[key] = ("s", text)
+            col += crep
+        row += rrep
+    return cells
+
+
+def sheet_to_sc(src, dest):
+    cells = read_xlsx(src) if ext(src) == "xlsx" else read_ods(src)
+    lines = ["# Converted by Kilobyte from %s" % src.rsplit("/", 1)[-1]]
+    for (c, r), cell in sorted(cells.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+        ref = "%s%d" % (col_letters(c), r)
+        if cell[0] == "s":
+            text = cell[1].replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+            lines.append('leftstring %s = "%s"' % (ref, text))
+        elif cell[0] == "n":
+            lines.append("let %s = %s" % (ref, cell[1]))
+        else:
+            sc = excel_to_sc(cell[1])
+            if sc:
+                lines.append("let %s = %s" % (ref, sc))
+            elif cell[2] is not None:                        # keep the last result
+                try:
+                    float(cell[2])
+                    lines.append("let %s = %s" % (ref, cell[2]))
+                except ValueError:
+                    lines.append('leftstring %s = "%s"' % (ref, cell[2]))
+    with open(dest, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def read_sc(path):
+    """sc-im file -> {(col, row0): ("n", v) | ("s", text) | ("f", excel_formula)}"""
+    cells = {}
+    for line in open(path, encoding="utf-8", errors="replace"):
+        m = re.match(r'^(let|label|leftstring|rightstring)\s+([A-Z]+)(\d+)\s*=\s*(.*)$', line.strip())
+        if not m:
+            continue
+        kind, col, row, rhs = m.groups()
+        key = (col_index(col), int(row))
+        if kind == "let":
+            try:
+                float(rhs)
+                cells[key] = ("n", rhs)
+            except ValueError:
+                cells[key] = ("f", sc_to_excel(rhs))
+        else:
+            text = rhs.strip()
+            if text.startswith('"') and text.endswith('"'):
+                text = text[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            cells[key] = ("s", text)
+    return cells
+
+
+def sc_to_xlsx(src, dest):
+    cells = read_sc(src)
+    rows = {}
+    for (c, r), cell in cells.items():
+        rows.setdefault(r, []).append((c, cell))
+    xml = []
+    for r in sorted(rows):
+        cs = []
+        for c, cell in sorted(rows[r]):
+            ref = "%s%d" % (col_letters(c), r + 1)
+            if cell[0] == "n":
+                cs.append('<c r="%s"><v>%s</v></c>' % (ref, cell[1]))
+            elif cell[0] == "s":
+                cs.append('<c r="%s" t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>' % (ref, escape(cell[1])))
+            else:
+                cs.append('<c r="%s"><f>%s</f></c>' % (ref, escape(cell[1])))
+        xml.append('<row r="%d">%s</row>' % (r + 1, "".join(cs)))
+    with zipfile.ZipFile(dest + ".new", "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                   '<Default Extension="xml" ContentType="application/xml"/>'
+                   '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                   '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                   "</Types>")
+        z.writestr("_rels/.rels",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+        z.writestr("xl/_rels/workbook.xml.rels",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+        z.writestr("xl/workbook.xml",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="%s" xmlns:r="%s">'
+                   '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets><calcPr fullCalcOnLoad="1"/></workbook>' % (S, R))
+        z.writestr("xl/worksheets/sheet1.xml",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="%s"><sheetData>%s</sheetData></worksheet>'
+                   % (S, "".join(xml)))
+    replace(dest)
+
+
+def excel_to_of(formula):
+    """SUM(A1:A5)+B2 -> SUM([.A1:.A5])+[.B2]; ";" separates arguments."""
+    ranges = []
+
+    def keep(m):
+        ranges.append("[.%s:.%s]" % (m.group(1), m.group(2)))
+        return "\x00%d\x00" % (len(ranges) - 1)
+
+    f = re.sub(r"\$?\b([A-Z]{1,3}\$?\d+):\$?([A-Z]{1,3}\$?\d+)\b", keep, formula.replace("$", ""))
+    f = re.sub(r"\b([A-Z]{1,3}\d+)\b", r"[.\1]", f)
+    f = re.sub(r"\x00(\d+)\x00", lambda m: ranges[int(m.group(1))], f)
+    return f.replace(",", ";")
+
+
+def sc_to_ods(src, dest):
+    cells = read_sc(src)
+    if cells:
+        max_c = max(c for c, _ in cells)
+        max_r = max(r for _, r in cells)
+    else:
+        max_c = max_r = 0
+    rows = []
+    for r in range(max_r + 1):
+        tds = []
+        for c in range(max_c + 1):
+            cell = cells.get((c, r))
+            if cell is None:
+                tds.append("<table:table-cell/>")
+            elif cell[0] == "n":
+                tds.append('<table:table-cell office:value-type="float" office:value="%s"><text:p>%s</text:p></table:table-cell>'
+                           % (cell[1], cell[1]))
+            elif cell[0] == "s":
+                tds.append('<table:table-cell office:value-type="string"><text:p>%s</text:p></table:table-cell>' % escape(cell[1]))
+            else:
+                of = "of:=" + excel_to_of(cell[1])
+                tds.append('<table:table-cell table:formula="%s" office:value-type="float"/>' % escape(of, {'"': "&quot;"}))
+        rows.append("<table:table-row>%s</table:table-row>" % "".join(tds))
+    content = ('<?xml version="1.0" encoding="UTF-8"?><office:document-content %s office:version="1.2">'
+               '<office:body><office:spreadsheet><table:table table:name="Sheet1">'
+               '<table:table-column table:number-columns-repeated="%d"/>%s</table:table>'
+               "</office:spreadsheet></office:body></office:document-content>") % (ODT_NS, max_c + 1, "".join(rows))
+    write_odf(dest + ".new", "application/vnd.oasis.opendocument.spreadsheet", content)
+    replace(dest)
+
+
+# ================================================================= main
+
+def main(argv):
+    if len(argv) < 3:
+        sys.exit(__doc__)
+    cmd, src, dest = argv[0], argv[1], argv[2]
+    template = argv[3] if len(argv) > 3 else None
+    if cmd == "doc-to-text":
+        text = docx_to_text(src) if ext(src) == "docx" else odt_to_text(src)
+        open(dest, "w", encoding="utf-8").write(text)
+    elif cmd == "text-to-doc":
+        (text_to_docx if ext(dest) == "docx" else text_to_odt)(src, dest, template)
+    elif cmd == "sheet-to-sc":
+        sheet_to_sc(src, dest)
+    elif cmd == "sc-to-sheet":
+        (sc_to_xlsx if ext(dest) == "xlsx" else sc_to_ods)(src, dest)
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

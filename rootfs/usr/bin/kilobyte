@@ -20,14 +20,87 @@ APPS=/usr/lib/kilobyte/apps
 run_editor() {
     local f
     f=$(kb_pick_file "Edit" "*") || return
-    kb_guarded '\e[21~' mcedit "$f"     # F10 quits, asking to save first
+    case ${f,,} in
+        *.docx | *.odt) office_document "$f" ;;
+        *)              kb_guarded '\e[21~' mcedit "$f" ;;   # F10 quits, asking to save first
+    esac
 }
 
 run_spreadsheet() {
     local f
-    f=$(kb_pick_file "Spreadsheet" "*.sc" "*.csv" "*.tsv" "*.xlsx") || return
+    f=$(kb_pick_file "Spreadsheet" "*.sc" "*.csv" "*.tsv" "*.xlsx" "*.ods") || return
     case $f in *.*) ;; *) f="$f.sc" ;; esac
-    kb_guarded '\e:q\r' sc-im "$f"
+    case ${f,,} in
+        *.xlsx | *.ods) office_sheet "$f" ;;
+        *)              kb_guarded '\e:q\r' sc-im "$f" ;;
+    esac
+}
+
+# Word and Writer documents (DOCX, ODT) are edited as plain text: headings
+# "# ", list items "- ", table rows "| a | b |". Saving puts the text back
+# into the document and keeps its styles, headers and page layout.
+office_document() {
+    local f=$1 tmp txt before
+    tmp=$(mktemp -d)
+    txt="$tmp/$(basename "${f%.*}").txt"
+    if [ -s "$f" ]; then
+        if ! "$KB_LIB/kb-office" doc-to-text "$f" "$txt" 2>"$tmp/err"; then
+            kb_msg "Edit" "\Z1This document could not be opened.\Zn\n\n$(tail -n 1 "$tmp/err")" 10 64
+            rm -rf "$tmp"
+            return
+        fi
+        kb_info "Bold, italics and pictures are not shown here. Headings start with #, lists with -."
+        sleep 2
+    else
+        printf '# %s\n\n' "$(basename "${f%.*}")" > "$txt"
+    fi
+    before=$(cksum < "$txt")
+    kb_guarded '\e[21~' mcedit "$txt"
+    if [ "$(cksum < "$txt")" != "$before" ] || [ ! -e "$f" ]; then
+        if kb_yesno "Save Document" "Save your changes into \Zb$(basename "$f")\Zn?\n\nIts styles, headers and page layout are kept. A copy of the old version is kept as $(basename "$f")~." 11 66; then
+            [ -e "$f" ] && cp "$f" "$f~"
+            if "$KB_LIB/kb-office" text-to-doc "$txt" "$f" "$( [ -e "$f~" ] && echo "$f~")" 2>"$tmp/err"; then
+                kb_msg "Save Document" "\ZbSaved.\Zn" 6 30
+            else
+                kb_msg "Save Document" "\Z1Saving failed:\Zn\n\n$(tail -n 1 "$tmp/err")\n\nYour text is still in $txt" 11 66
+                return
+            fi
+        fi
+    fi
+    rm -rf "$tmp"
+}
+
+# Excel and Calc sheets (XLSX, ODS): values, text and formulas of the first
+# sheet, edited in sc-im and written back when it was saved there (:w).
+office_sheet() {
+    local f=$1 tmp sc before
+    tmp=$(mktemp -d)
+    sc="$tmp/$(basename "${f%.*}").sc"
+    if [ -s "$f" ]; then
+        if ! "$KB_LIB/kb-office" sheet-to-sc "$f" "$sc" 2>"$tmp/err"; then
+            kb_msg "Spreadsheet" "\Z1This spreadsheet could not be opened.\Zn\n\n$(tail -n 1 "$tmp/err")" 10 64
+            rm -rf "$tmp"
+            return
+        fi
+        kb_info "The first sheet opens. Colours and number formats are not kept. :w saves, :q quits."
+        sleep 2
+    else
+        : > "$sc"
+    fi
+    before=$(cksum < "$sc")
+    kb_guarded '\e:q\r' sc-im "$sc"
+    if [ "$(cksum < "$sc")" != "$before" ]; then
+        if kb_yesno "Save Spreadsheet" "Save your changes into \Zb$(basename "$f")\Zn?\n\nA copy of the old version is kept as $(basename "$f")~." 10 66; then
+            [ -e "$f" ] && cp "$f" "$f~"
+            if "$KB_LIB/kb-office" sc-to-sheet "$sc" "$f" 2>"$tmp/err"; then
+                kb_msg "Save Spreadsheet" "\ZbSaved.\Zn" 6 30
+            else
+                kb_msg "Save Spreadsheet" "\Z1Saving failed:\Zn\n\n$(tail -n 1 "$tmp/err")\n\nYour sheet is still in $sc" 11 66
+                return
+            fi
+        fi
+    fi
+    rm -rf "$tmp"
 }
 
 run_web() {
@@ -233,8 +306,8 @@ program_manager() {
     while true; do
         battery_warning
         items=(
-            Editor      "Text editor"                "Write and edit text files (mcedit, F9 opens its menus)"
-            Spreadsheet "Spreadsheet"                "Tables and formulas (sc-im, :w saves, :q quits)"
+            Editor      "Text editor"                "Text files and documents (also DOCX, ODT); F9 opens the menus"
+            Spreadsheet "Spreadsheet"                "Tables and formulas, also XLSX and ODS (sc-im: :w saves, :q quits)"
             Web         "Web browser"                "Browse the web in text mode (links, Esc opens its menus)"
             Mail        "Email"                      "Read and write email (Alpine; the first start sets up your account)"
             Internet    "Internet  »"                "Chat, BBS dialer, YouTube downloader..."

@@ -3,6 +3,7 @@
 # ../build.sh. The project is mounted at /src, the work area (a Docker volume
 # per architecture) at /work and the output directory at /out.
 #
+#   debs     container of the target architecture: Kilobyte's patched packages
 #   rootfs   container of the target architecture: Debian with mmdebstrap
 #   squash   any architecture: compress it for the live ISO (the slow part)
 #   iso      container of the target architecture: kernel, initrd, GRUB
@@ -37,6 +38,32 @@ tools() {
 
 pkgs() { sed 's/#.*//' "$@" | xargs | tr ' ' ','; }
 
+# Debian packages Kilobyte patches (image/patches/PACKAGE-*.patch): built from
+# Debian's source with a "+kilobyte1" version and installed over the original.
+stage_debs() {
+    local p pkg dir v
+    echo "==> Building patched packages"
+    echo "deb-src $MIRROR $SUITE main" > /etc/apt/sources.list.d/kilobyte-src.list
+    tools dpkg-dev build-essential fakeroot patch
+    rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src"
+    for pkg in $(ls /src/image/patches/*.patch | xargs -n 1 basename | sed 's/-.*//' | sort -u); do
+        DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq "$pkg" >/dev/null
+        (cd "$WORK/src" && apt-get source -qq "$pkg" >/dev/null)
+        dir=$(find "$WORK/src" -mindepth 1 -maxdepth 1 -type d -name "$pkg-*" | head -n 1)
+        for p in /src/image/patches/"$pkg"-*.patch; do
+            patch -d "$dir" -p1 < "$p"
+        done
+        v=$(cd "$dir" && dpkg-parsechangelog -S Version)
+        { printf '%s (%s+kilobyte1) %s; urgency=medium\n\n  * Kilobyte patches: %s\n\n -- Kilobyte <kilobyte@users.noreply.github.com>  %s\n\n' \
+              "$pkg" "$v" "$SUITE" "$(cd /src/image/patches && ls "$pkg"-*.patch | xargs)" "$(date -R)"
+          cat "$dir/debian/changelog"; } > "$dir/debian/changelog.new"
+        mv "$dir/debian/changelog.new" "$dir/debian/changelog"
+        (cd "$dir" && DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -b -us -uc >/dev/null 2>&1)
+        cp "$WORK"/src/"$pkg"_*+kilobyte1_*.deb "$WORK/debs/"
+    done
+    ls -1 "$WORK/debs"
+}
+
 stage_rootfs() {
     local packages
     packages="$(pkgs /src/image/packages.txt /src/image/packages-$KIND.txt),$KERNEL${EFI:+,$EFI}"
@@ -44,7 +71,7 @@ stage_rootfs() {
 
     echo "==> Installing build tools"
     tools mmdebstrap ca-certificates curl
-    rm -rf "$WORK/rootfs" "$WORK/iso"
+    rm -rf "$WORK/rootfs" "$WORK/iso"   # (the patched packages in $WORK/debs stay)
 
     echo "==> Building the Debian $SUITE root file system for $ARCH"
     export KB_PACKAGES="$packages"   # recorded in the image for Kilobyte Update
@@ -69,6 +96,7 @@ stage_rootfs() {
         --customize-hook='curl -fsSL -o "$1/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 "$1/usr/local/bin/yt-dlp"' \
         --customize-hook='echo "${KB_COMMIT:-unknown}" > "$1/usr/share/kilobyte/commit"' \
         --customize-hook='echo "$KB_PACKAGES" | tr , "\n" | sort -u > "$1/usr/share/kilobyte/packages.txt"' \
+        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then cp /work/debs/*.deb "$1/tmp/" && chroot "$1" sh -c "dpkg -i /tmp/*.deb && apt-mark hold \$(dpkg-deb -f /tmp/*.deb Package) && rm /tmp/*.deb"; fi' \
         --customize-hook='cp /src/image/customize.sh "$1/tmp/customize.sh"' \
         --customize-hook='chroot "$1" bash /tmp/customize.sh "$KB_VARIANT"' \
         "$SUITE" "$WORK/rootfs" \
@@ -137,9 +165,10 @@ EOF
 }
 
 case "${1:-}" in
+    debs)    stage_debs ;;
     rootfs)  stage_rootfs ;;
     squash)  stage_squash ;;
     iso)     stage_iso ;;
     piimage) stage_piimage ;;
-    *) echo "usage: $0 rootfs|squash|iso|piimage" >&2; exit 2 ;;
+    *) echo "usage: $0 debs|rootfs|squash|iso|piimage" >&2; exit 2 ;;
 esac
