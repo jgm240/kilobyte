@@ -11,7 +11,7 @@ console-setup keyboard-configuration kbd gpm
 systemd-resolved systemd-timesyncd wpasupplicant rfkill wireless-regdb
 
 # --- Kilobyte and its programs ---
-dialog mc links sc-im calcurse htop bc bsdgames moon-buggy
+dialog mc links sc-im calcurse htop bc bsdgames moon-buggy alpine
 
 # --- media: video player, YouTube downloader, disc player, sound ---
 mpv ffmpeg python3 quickjs lsdvd eject alsa-utils alsa-ucm-conf

@@ -64,12 +64,14 @@ accessories() {
         Clock      "Big block-letter clock" "Any key closes the clock" \
         Cardfile   "Index cards for notes and addresses" "Notes are kept in ~/Cardfile" \
         Month      "Pick a date on a calendar" "Shows a month calendar" \
+        Battery    "Battery meter"             "Charge, time left and battery health (laptops)" \
         Charmap    "Box drawing and block characters" "Characters for your own text art"); do
         case $sel in
             Calculator) "$APPS/calculator" ;;
             Agenda)     kb_guarded q calcurse ;;
             Clock)      "$APPS/clock" ;;
             Cardfile)   "$APPS/cardfile" ;;
+            Battery)    "$APPS/battery" ;;
             Month)      kb_dialog --title " Calendar " --ok-label "Close" --no-cancel --calendar "Use Tab and the arrow keys to move." 0 0 >/dev/null ;;
             Charmap)    kb_textfile "Character Map" "$KB_SHARE/charmap.txt" ;;
         esac
@@ -116,6 +118,20 @@ games() {
     done
 }
 
+# Warn once when the battery runs low; again only after it was charged.
+KB_BATTERY_WARNED=
+battery_warning() {
+    local bat pct
+    bat=$(kb_battery) || return 0
+    pct=${bat%%%*}
+    if [ "${bat: -1}" = + ] || [ "$pct" -gt 15 ]; then
+        KB_BATTERY_WARNED=
+    elif [ "$pct" -le 10 ] && [ -z "$KB_BATTERY_WARNED" ]; then
+        KB_BATTERY_WARNED=1
+        kb_msg "Battery Low" "\Z1\ZbThe battery is at $pct%.\Zn\n\nPlug in the charger soon, or save your work." 9 52
+    fi
+}
+
 shut_down() {
     kb_yesno "Shut Down" "Turn off the computer now?" || return
     clear
@@ -143,10 +159,12 @@ quit_menu() {
 program_manager() {
     local sel=Editor rc items
     while true; do
+        battery_warning
         items=(
             Editor      "Text editor"                "Write and edit text files (mcedit, F9 opens its menus)"
             Spreadsheet "Spreadsheet"                "Tables and formulas (sc-im, :w saves, :q quits)"
             Web         "Web browser"                "Browse the web in text mode (links, Esc opens its menus)"
+            Mail        "Email"                      "Read and write email (Alpine; the first start sets up your account)"
             Files       "File manager"               "Two-panel file manager (mc, F10 quits)"
             Terminal    "Terminal"                   "Fullscreen command line, type exit to come back"
             Media       "Media  »"                   "Video player, YouTube downloader, disc player"
@@ -180,6 +198,7 @@ program_manager() {
             Editor)      run_editor ;;
             Spreadsheet) run_spreadsheet ;;
             Web)         run_web ;;
+            Mail)        "$APPS/mail" ;;
             Files)       run_files ;;
             Terminal)    run_terminal ;;
             Media)       media ;;

@@ -1,0 +1,91 @@
+#!/bin/bash
+# Battery: charge, time left and the battery's remaining capacity (health),
+# drawn with block characters. Refreshes every two seconds; any key closes.
+. /usr/lib/kilobyte/lib.sh
+
+trap 'exit 0' INT QUIT
+
+# bar PERCENT WIDTH -> coloured block bar
+bar() {
+    local pct=$1 width=$2 full colour i out=""
+    [ "$pct" -gt 100 ] && pct=100
+    full=$(( pct * width / 100 ))
+    if   [ "$pct" -le 15 ]; then colour='\Z1'
+    elif [ "$pct" -le 40 ]; then colour='\Z3'
+    else                         colour='\Z2'
+    fi
+    out+="$colour\\Zb"
+    for ((i = 0; i < full; i++)); do out+="█"; done
+    out+='\Zn'
+    for ((i = full; i < width; i++)); do out+="░"; done
+    printf '%s' "$out"
+}
+
+# hm MINUTES -> "2 h 05 min"
+hm() { printf '%d h %02d min' $(( $1 / 60 )) $(( $1 % 60 )); }
+
+report() {
+    local b text="" n=0 v pct status now full design rate cap cycles ac=""
+    for b in "$KB_POWER"/*; do
+        [ "$(kb_psu "$b" type)" = Mains ] && [ "$(kb_psu "$b" online)" = 1 ] && ac=1
+    done
+    for b in "$KB_POWER"/*; do
+        [ "$(kb_psu "$b" type)" = Battery ] || continue
+        [ "$(kb_psu "$b" present)" = 0 ] && continue
+        n=$(( n + 1 ))
+        pct=$(kb_psu "$b" capacity)
+        status=$(kb_psu "$b" status)
+        # Energy in µWh, or charge in µAh on some laptops: the ratios are the same.
+        now=$(kb_psu "$b" energy_now);  [ -n "$now" ] || now=$(kb_psu "$b" charge_now)
+        full=$(kb_psu "$b" energy_full); [ -n "$full" ] || full=$(kb_psu "$b" charge_full)
+        design=$(kb_psu "$b" energy_full_design); [ -n "$design" ] || design=$(kb_psu "$b" charge_full_design)
+        rate=$(kb_psu "$b" power_now);  [ -n "$rate" ] || rate=$(kb_psu "$b" current_now)
+        [ -n "$pct" ] || { [ -n "$full" ] && [ "$full" -gt 0 ] && pct=$(( now * 100 / full )); }
+        pct=${pct:-0}
+
+        text+="\n \Zb$(basename "$b")\Zn  $(kb_psu "$b" manufacturer) $(kb_psu "$b" model_name) $(kb_psu "$b" technology)\n\n"
+        text+="  Charge    $(bar "$pct" 40)  \Zb$pct%\Zn\n"
+        case $status in
+            Charging)       v="Charging" ;;
+            Discharging)    v="On battery" ;;
+            Full)           v="Full" ;;
+            "Not charging") v="Plugged in, not charging" ;;
+            *)              v=${status:-unknown} ;;
+        esac
+        # Time left (or until full) from the present power draw.
+        if [ -n "$rate" ] && [ "$rate" -gt 0 ] && [ -n "$now" ]; then
+            if [ "$status" = Discharging ]; then
+                v+=", $(hm $(( now * 60 / rate ))) left"
+            elif [ "$status" = Charging ] && [ -n "$full" ]; then
+                v+=", full in $(hm $(( (full - now) * 60 / rate )))"
+            fi
+        fi
+        text+="  Status    $v\n"
+        if [ -n "$full" ] && [ -n "$design" ] && [ "$design" -gt 0 ]; then
+            cap=$(( full * 100 / design ))
+            [ $cap -gt 100 ] && cap=100
+            text+="\n  Capacity  $(bar "$cap" 40)  \Zb$cap%\Zn\n"
+            local unit=Wh
+            [ -n "$(kb_psu "$b" energy_full)" ] || unit=Ah
+            text+="$(awk -v f="$full" -v d="$design" -v u="$unit" 'BEGIN { printf "            holds %.1f %s of the %.1f %s it held when new", f / 1e6, u, d / 1e6, u }')\n"
+        fi
+        cycles=$(kb_psu "$b" cycle_count)
+        [ -n "$cycles" ] && [ "$cycles" != 0 ] && text+="  Cycles    $cycles charges\n"
+    done
+    if [ $n -eq 0 ]; then
+        return 1
+    fi
+    text+="\n  Power     $([ -n "$ac" ] && echo "charger plugged in" || echo "running on battery")"
+    printf '%s' "$text"
+}
+
+if ! report >/dev/null; then
+    kb_msg "Battery" "This computer has no battery, or does not report one." 7 60
+    exit 0
+fi
+while true; do
+    text=$(report)
+    kb_dialog --title " Battery " --infobox "$text\n\n                        (any key closes)" \
+        $(( $(printf '%b' "$text" | wc -l) + 5 )) 72
+    read -rsn1 -t 2 && break
+done

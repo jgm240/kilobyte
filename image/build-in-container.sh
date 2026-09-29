@@ -31,6 +31,7 @@ stage_rootfs() {
     rm -rf "$WORK/rootfs"
 
     echo "==> Building the Debian $SUITE root file system"
+    export KB_PACKAGES="$packages"   # recorded in the image for Kilobyte Update
     mmdebstrap --variant=minbase --mode=root \
         --components="main non-free-firmware" \
         --include="$packages" \
@@ -49,6 +50,7 @@ stage_rootfs() {
         --customize-hook='tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$1" -xf -' \
         --customize-hook='curl -fsSL -o "$1/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 "$1/usr/local/bin/yt-dlp"' \
         --customize-hook='echo "${KB_COMMIT:-unknown}" > "$1/usr/share/kilobyte/commit"' \
+        --customize-hook='echo "$KB_PACKAGES" | tr , "\n" | sort -u > "$1/usr/share/kilobyte/packages.txt"' \
         --customize-hook='cp /src/image/customize.sh "$1/tmp/customize.sh"' \
         --customize-hook='chroot "$1" bash /tmp/customize.sh' \
         "$SUITE" "$WORK/rootfs" \

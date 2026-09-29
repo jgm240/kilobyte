@@ -33,6 +33,11 @@
                   <  or  >  enter left/right aligned text, \ centred text.
                   :w saves, :q quits, :help shows the manual.
 
+   Email          Alpine. The first start asks for your address and sets
+                  up the account (Settings > Email account changes it).
+                  I inbox, C write, L folders, Q quit; Ctrl+X sends.
+                  Gmail, iCloud and Yahoo need an "app password".
+
    Web browser    links. Esc opens the menu bar, g types an address,
                   arrow keys follow links, ← goes back, q quits.
 

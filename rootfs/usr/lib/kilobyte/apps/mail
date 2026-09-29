@@ -1,0 +1,130 @@
+#!/bin/bash
+# Email: Alpine (the successor of Pine) with a Kilobyte account wizard.
+#   mail           open the inbox (runs the wizard the first time)
+#   mail --setup   set up the account again
+. /usr/lib/kilobyte/lib.sh
+
+RC="$HOME/.pinerc"
+
+configured() { grep -q '^inbox-path=.' "$RC" 2>/dev/null; }
+
+# provider EMAIL -> preset name, guessed from the domain
+guess_provider() {
+    case ${1##*@} in
+        gmail.com | googlemail.com)                     echo gmail ;;
+        outlook.* | hotmail.* | live.* | msn.com)       echo outlook ;;
+        icloud.com | me.com | mac.com)                  echo icloud ;;
+        yahoo.* | ymail.com)                            echo yahoo ;;
+        gmx.* )                                         echo gmx ;;
+        web.de)                                         echo webde ;;
+        posteo.*)                                       echo posteo ;;
+        mailbox.org)                                    echo mailboxorg ;;
+        *)                                              echo other ;;
+    esac
+}
+
+setup() {
+    local name email domain provider imap smtp sent drafts note host
+    name=$(getent passwd "$USER" | cut -d: -f5 | cut -d, -f1)
+    [ "$name" = "Kilobyte Live" ] && name=""
+    name=$(kb_input "Email Account" "Your name, as others will see it:" "$name") || return 1
+    while true; do
+        email=$(kb_input "Email Account" "Your email address:" "${email:-}") || return 1
+        [[ $email =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] && break
+        kb_msg "Email Account" "That does not look like an email address." 7 50
+    done
+    domain=${email##*@}
+
+    provider=$(kb_dialog --title " Email Provider " --default-item "$(guess_provider "$email")" \
+        --ok-label "Next" --cancel-label "Cancel" --menu "Who provides this email address?" 18 60 10 \
+        gmail      "Gmail" \
+        outlook    "Outlook, Hotmail, Live (Microsoft)" \
+        icloud     "iCloud" \
+        yahoo      "Yahoo" \
+        gmx        "GMX" \
+        webde      "WEB.DE" \
+        posteo     "Posteo" \
+        mailboxorg "mailbox.org" \
+        other      "Another provider (enter the servers)") || return 1
+
+    sent=Sent drafts=Drafts
+    note="Alpine asks for your password when it connects and offers to remember it."
+    case $provider in
+        gmail)
+            imap="imap.gmail.com:993/ssl" smtp="smtp.gmail.com:587/tls"
+            sent="" drafts="[Gmail]/Drafts"   # Gmail files sent mail by itself
+            note="Gmail needs an \Zbapp password\Zn: create one at myaccount.google.com > Security > App passwords, and type it when Alpine asks." ;;
+        outlook)
+            imap="outlook.office365.com:993/ssl/auth=xoauth2" smtp="smtp.office365.com:587/tls/auth=xoauth2"
+            sent="Sent Items"
+            note="Microsoft needs a sign-in in a web browser: Alpine shows a web address and a code. Open it on a phone or another computer, enter the code and sign in." ;;
+        icloud)
+            imap="imap.mail.me.com:993/ssl" smtp="smtp.mail.me.com:587/tls" sent="Sent Messages"
+            note="iCloud needs an \Zbapp-specific password\Zn: create one at account.apple.com > Sign-In and Security." ;;
+        yahoo)
+            imap="imap.mail.yahoo.com:993/ssl" smtp="smtp.mail.yahoo.com:465/ssl"
+            note="Yahoo needs an \Zbapp password\Zn: create one in your Yahoo account security settings." ;;
+        gmx)        imap="imap.gmx.net:993/ssl"    smtp="mail.gmx.net:587/tls"     sent=Gesendet drafts=Entwürfe ;;
+        webde)      imap="imap.web.de:993/ssl"     smtp="smtp.web.de:587/tls"      sent=Gesendet drafts=Entwürfe ;;
+        posteo)     imap="posteo.de:993/ssl"       smtp="posteo.de:587/tls" ;;
+        mailboxorg) imap="imap.mailbox.org:993/ssl" smtp="smtp.mailbox.org:587/tls" ;;
+        other)
+            host=$(kb_input "Incoming Mail" "IMAP server (port 993, SSL):" "imap.$domain") || return 1
+            imap="$host:993/ssl"
+            host=$(kb_input "Outgoing Mail" "SMTP server (port 587, STARTTLS):" "smtp.$domain") || return 1
+            smtp="$host:587/tls" ;;
+    esac
+
+    [ -f "$RC" ] && cp "$RC" "$RC.before-kilobyte"
+    local box="{$imap/user=$email}"
+    cat > "$RC" <<EOF
+# Written by Kilobyte's email setup (Program Manager > Email).
+# Run it again from Settings > Email account, or edit this file.
+personal-name=$name
+user-domain=$domain
+smtp-server=$smtp/user=$email
+inbox-path=${box}INBOX
+folder-collections="$email" ${box}[]
+default-fcc=${sent:+${box}$sent}
+postponed-folder=${box}$drafts
+feature-list=enable-arrow-navigation,
+	quell-user-lookup-in-passwd-file,
+	enable-dot-folders
+# Kilobyte colours: white on blue like EDIT.COM, grey title, cyan key bar.
+color-style=force-ansi-16color
+normal-foreground-color=white
+normal-background-color=blue
+reverse-foreground-color=black
+reverse-background-color=cyan
+title-foreground-color=black
+title-background-color=white
+title-closed-foreground-color=black
+title-closed-background-color=white
+status-foreground-color=black
+status-background-color=cyan
+keylabel-foreground-color=black
+keylabel-background-color=cyan
+keyname-foreground-color=red
+keyname-background-color=cyan
+selectable-item-foreground-color=yellow
+selectable-item-background-color=blue
+prompt-foreground-color=black
+prompt-background-color=cyan
+EOF
+    chmod 600 "$RC"
+    # Its presence lets Alpine offer to remember the password (encrypted).
+    [ -e "$HOME/.pine-passfile" ] || install -m 600 /dev/null "$HOME/.pine-passfile"
+
+    kb_msg "Email Account" "\Z2\ZbYour account is set up.\Zn
+
+$note
+
+In Alpine: \ZbI\Zn inbox, \ZbC\Zn write a message, \ZbL\Zn folders,
+\ZbQ\Zn quit. Ctrl+X sends a message you are writing." 16 70
+}
+
+if [ "${1:-}" = --setup ] || ! configured; then
+    setup || exit 0
+    [ "${1:-}" = --setup ] && exit 0
+fi
+kb_guarded q alpine -i

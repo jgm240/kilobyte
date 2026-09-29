@@ -41,14 +41,15 @@ classic text-mode programs.
 | Spreadsheet | `sc-im` | formulas, CSV/XLSX import, `:w` saves |
 | Web | `links` | text-mode web browser with menus (Esc) |
 | Files | `mc` | Midnight Commander, a Norton Commander clone |
+| Email | `alpine` | Pine's successor; a setup wizard knows Gmail, Outlook, iCloud, Yahoo, GMX, WEB.DE, Posteo, mailbox.org |
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
 | Media › YouTube Downloader | `yt-dlp` + QuickJS | search, watch, save video (MP4) or sound (MP3) |
 | Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
 | Media › Sound volume | `alsamixer` | |
 | Terminal | `bash` | fullscreen shell, `exit` returns |
-| Accessories | Kilobyte | calculator (bc), agenda (calcurse), big block clock, cardfile, calendar, character map |
+| Accessories | Kilobyte | calculator (bc), agenda (calcurse), big block clock, cardfile, calendar, battery meter, character map |
 | Games | bsdgames, moon-buggy | Moon Buggy, Snake, Robots, Hangman, Adventure, Trek... |
-| Settings | Kilobyte | Wi-Fi, network, colour theme, console font, keyboard, date/time zone, add/remove programs, password, task manager (htop), autostart, about |
+| Settings | Kilobyte | Kilobyte Update, Wi-Fi, network, colour theme, console font, battery, email account, sound, keyboard, date/time zone, add/remove programs, password, task manager (htop), autostart, about |
 | Install | `kilobyte-install` | installs the live system to disk (live medium only) |
 
 **Themes** (Settings › Appearance): Classic Blue (EDIT.COM), Norton
@@ -76,6 +77,11 @@ needs no password. QuickJS runs YouTube's JavaScript challenges.
 `udf` load at boot. Users are in the `cdrom` group, and `/media/cdrom` can be
 mounted without root. `eject` and `lsdvd` are included. Encrypted commercial
 DVDs need `libdvdcss`, which Debian does not ship (see Help › DVDs).
+
+**Battery**: on laptops the top line shows the charge (`Battery 87%`, `+`
+while charging), and Kilobyte warns once below 10%. Accessories › Battery
+shows block gauges for charge and capacity (how much of its design capacity
+the battery still holds), time left or time to full, and charge cycles.
 
 **Wi-Fi is on by default.** At boot `kilobyte-wifi.service` unblocks the
 radios and starts `wpa_supplicant` on every wireless adapter.

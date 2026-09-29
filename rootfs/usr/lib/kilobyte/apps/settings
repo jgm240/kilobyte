@@ -395,6 +395,8 @@ while true; do
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
             Appearance "Colour theme"                  "Blue EDIT, Norton, Windows 1.0, green or amber CRT..." \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
+            Battery    "Battery"                       "Charge, time left and battery health (laptops)" \
+            Email      "Email account"                 "Set up the account the Email program uses" \
             Sound      "Sound volume"                  "alsamixer: arrows change, M mutes, Esc closes" \
             Keyboard   "Keyboard layout"               "Choose the layout of your keyboard" \
             Date       "Date, time and time zone"      "Set the clock and the time zone" \
@@ -412,6 +414,8 @@ while true; do
         Network)    network_panel ;;
         Appearance) appearance_panel ;;
         Display)    display_panel ;;
+        Battery)    "$KB_LIB/apps/battery" ;;
+        Email)      "$KB_LIB/apps/mail" --setup ;;
         Sound)      kb_guarded '\e' alsamixer ;;
         Keyboard)   keyboard_panel ;;
         Date)       datetime_panel ;;

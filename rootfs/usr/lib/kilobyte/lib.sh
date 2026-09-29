@@ -60,10 +60,29 @@ kb_load_theme() {
 
 # Top line of the screen, like a menu bar: product, user, date and time.
 kb_backtitle() {
-    local where="${USER:-$(id -un)}@$(hostname 2>/dev/null)" note=""
+    local where="${USER:-$(id -un)}@$(hostname 2>/dev/null)" note="" bat
     kb_is_live && where="$where (live)"
-    kb_update_available && note="   │   ▲ Update available"
-    printf ' ■ Kilobyte %s   │   %s   │   %s%s' "$KB_VERSION" "$where" "$(date '+%a %d %b %Y  %H:%M')" "$note"
+    bat=$(kb_battery) && note+="  │  Battery $bat"
+    kb_update_available && note+="  │  ▲ Update available"
+    printf ' ■ Kilobyte %s  │  %s  │  %s%s' "$KB_VERSION" "$where" "$(date '+%a %d %b  %H:%M')" "$note"
+}
+
+# --- battery --------------------------------------------------------------
+
+KB_POWER=${KB_POWER:-/sys/class/power_supply}
+
+kb_psu() { cat "$1/$2" 2>/dev/null; }  # kb_psu DEVICE ATTRIBUTE
+
+# "87%" or "87%+" (charging) for the first battery; nothing without one.
+kb_battery() {
+    local b
+    for b in "$KB_POWER"/*; do
+        [ "$(kb_psu "$b" type)" = Battery ] && [ "$(kb_psu "$b" present)" != 0 ] || continue
+        [ -n "$(kb_psu "$b" capacity)" ] || continue
+        printf '%s%%%s' "$(kb_psu "$b" capacity)" "$([ "$(kb_psu "$b" status)" = Charging ] && echo +)"
+        return 0
+    done
+    return 1
 }
 
 # --- updates from GitHub --------------------------------------------------
