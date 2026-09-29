@@ -1,0 +1,138 @@
+#!/bin/bash
+# YouTube Downloader: search, watch, and save videos or their sound with
+# yt-dlp. Videos go to ~/Videos, audio to ~/Music.
+. /usr/lib/kilobyte/lib.sh
+
+VIDEOS="$HOME/Videos"
+MUSIC="$HOME/Music"
+TMP=$(mktemp -d /tmp/kb-youtube.XXXXXX)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$VIDEOS" "$MUSIC"
+
+online() {
+    getent hosts www.youtube.com >/dev/null 2>&1 && return 0
+    kb_msg "YouTube Downloader" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
+    return 1
+}
+
+show_error() { # show_error TEXT LOGFILE
+    local detail
+    detail=$(grep -E 'ERROR|error' "$2" 2>/dev/null | tail -n 3 | cut -c1-200)
+    kb_msg "YouTube Downloader" "\Z1\Zb$1\Zn\n\n${detail:-No details.}\n\nIf this keeps happening, choose \"Update the downloader\"." 14 72
+}
+
+# download URL video|audio [HEIGHT]
+download() {
+    local url=$1 kind=$2 height=${3:-720} dir args=() log="$TMP/log" out="$TMP/file" line pct rest
+    if [ "$kind" = audio ]; then
+        dir=$MUSIC
+        args=(-f 'ba/b' -x --audio-format mp3 --audio-quality 2)
+    else
+        dir=$VIDEOS
+        args=(-f "bv*[height<=$height]+ba/b[height<=$height]/b" --merge-output-format mp4
+              --remux-video mp4)
+    fi
+    : > "$out"
+    yt-dlp --no-playlist --newline --no-colors \
+        --progress-template 'download:KBPCT %(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s' \
+        --print-to-file after_move:filepath "$out" \
+        -o "$dir/%(title).120B [%(id)s].%(ext)s" "${args[@]}" "$url" 2>"$log" |
+    while IFS= read -r line; do
+        case $line in
+            KBPCT*)
+                rest=${line#KBPCT }
+                pct=${rest%%|*}; pct=${pct// /}; pct=${pct%\%*}; pct=${pct%%.*}
+                IFS='|' read -r _ speed eta <<< "$rest"
+                printf 'XXX\n%d\n\n  Downloading...  %s   %s left\nXXX\n' "${pct:-0}" "${speed// /}" "${eta// /}" ;;
+            *Merger* | *ExtractAudio* | *VideoRemuxer* | *Fixup*)
+                printf 'XXX\n100\n\n  Finishing (converting the file)...\nXXX\n' ;;
+        esac
+    done | kb_dialog --title " Downloading " --gauge "\n  Starting..." 9 70 0
+
+    local file
+    file=$(tail -n 1 "$out")
+    if [ -z "$file" ] || [ ! -f "$file" ]; then
+        show_error "The download failed." "$log"
+        return 1
+    fi
+    if kb_dialog --title " Download Complete " --yes-label "Play" --no-label "Close" --yesno \
+        "Saved as\n\n  \Zb$(basename "$file")\Zn\n\nin ~/${dir#"$HOME"/}." 11 72; then
+        "$KB_LIB/apps/player" "$file"
+    fi
+}
+
+# item_menu URL TITLE: what to do with one video.
+item_menu() {
+    local url=$1 title=$2 sel q
+    while true; do
+        sel=$(kb_dialog --title " $title " --ok-label "Select" --cancel-label "Back" --menu \
+            "What do you want to do?" 13 72 4 \
+            Watch "Watch now, without saving" \
+            Video "Download the video (MP4)" \
+            Audio "Download the sound only (MP3)") || return
+        case $sel in
+            Watch) "$KB_LIB/apps/player" "$url" ;;
+            Audio) download "$url" audio; return ;;
+            Video)
+                q=$(kb_dialog --title " Quality " --default-item 720 --ok-label "Download" --cancel-label "Back" \
+                    --menu "Picture size. Bigger files take longer to download." 14 60 5 \
+                    360 "Small  (360p)" 480 "Medium (480p)" 720 "HD     (720p)" 1080 "Full HD (1080p)") || continue
+                download "$url" video "$q"; return ;;
+        esac
+    done
+}
+
+search() {
+    local q items=() id dur title sel log="$TMP/search.log"
+    q=$(kb_input "Search YouTube" "Search for:") || return
+    [ -n "$q" ] && online || return
+    kb_info "Searching YouTube for \"$q\"..."
+    declare -A titles=()
+    while IFS=$'\t' read -r id dur title; do
+        [ -n "$id" ] || continue
+        titles[$id]=$title
+        items+=("$id" "$(printf '%8s  %s' "${dur:-live}" "${title:0:52}")")
+    done < <(yt-dlp --flat-playlist --no-warnings \
+                 --print $'%(id)s\t%(duration_string)s\t%(title)s' "ytsearch20:$q" 2>"$log")
+    if [ ${#items[@]} -eq 0 ]; then
+        show_error "Nothing found for \"$q\"." "$log"
+        return
+    fi
+    while sel=$(kb_dialog --title " Results: $q " --ok-label "Select" --cancel-label "Back" \
+        --default-item "${sel:-}" --menu "Choose a video:" 22 76 15 "${items[@]}"); do
+        item_menu "https://www.youtube.com/watch?v=$sel" "${titles[$sel]:0:60}"
+    done
+}
+
+paste_link() {
+    local url title log="$TMP/link.log"
+    url=$(kb_input "Video Link" "Paste or type the address of a video:") || return
+    [ -n "$url" ] && online || return
+    kb_info "Looking up the video..."
+    title=$(yt-dlp --no-playlist --no-warnings --skip-download --print '%(title)s' "$url" 2>"$log" | head -n 1)
+    if [ -z "$title" ]; then
+        show_error "That address does not lead to a video." "$log"
+        return
+    fi
+    item_menu "$url" "${title:0:60}"
+}
+
+update() {
+    online || return
+    kb_run_pause sudo -n "$KB_LIB/kb-root" ytdlp update
+}
+
+sel=Search
+while sel=$(kb_dialog --title " YouTube Downloader " --default-item "$sel" --ok-label "Select" --cancel-label "Close" \
+    --menu "Watch and save videos. Videos are saved in ~/Videos, sound in ~/Music." 15 72 5 \
+    Search  "Search YouTube" \
+    Link    "Paste a video link" \
+    Saved   "Play saved videos and music" \
+    Update  "Update the downloader (when YouTube stops working)"); do
+    case $sel in
+        Search) search ;;
+        Link)   paste_link ;;
+        Saved)  "$KB_LIB/apps/player" ;;
+        Update) update ;;
+    esac
+done

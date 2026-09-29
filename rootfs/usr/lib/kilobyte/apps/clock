@@ -1,0 +1,40 @@
+#!/bin/bash
+# Clock: the time in big letters built from block characters.
+. /usr/lib/kilobyte/lib.sh
+
+trap 'exit 0' INT QUIT
+
+# Five rows per glyph, index 0-9 then ':'.
+font=(
+    "█████" "█   █" "█   █" "█   █" "█████"   # 0
+    "  ██ " "   █ " "   █ " "   █ " "  ███"   # 1
+    "█████" "    █" "█████" "█    " "█████"   # 2
+    "█████" "    █" " ████" "    █" "█████"   # 3
+    "█   █" "█   █" "█████" "    █" "    █"   # 4
+    "█████" "█    " "█████" "    █" "█████"   # 5
+    "█████" "█    " "█████" "█   █" "█████"   # 6
+    "█████" "    █" "   █ " "  █  " "  █  "   # 7
+    "█████" "█   █" "█████" "█   █" "█████"   # 8
+    "█████" "█   █" "█████" "    █" "█████"   # 9
+    "     " "  █  " "     " "  █  " "     "   # :
+)
+
+big() { # big "12:34:56" -> five text rows
+    local s=$1 row i ch idx line
+    for row in 0 1 2 3 4; do
+        line=""
+        for ((i = 0; i < ${#s}; i++)); do
+            ch=${s:i:1}
+            if [ "$ch" = ":" ]; then idx=10; else idx=$ch; fi
+            line+="${font[idx * 5 + row]} "
+        done
+        printf '%s\n' "$line"
+    done
+}
+
+while true; do
+    now=$(date '+%H:%M:%S')
+    text="$(big "$now")"
+    kb_dialog --title " Clock " --infobox "\n\Z4\Zb$text\Zn\n\n       $(date '+%A, %d %B %Y')\n\n              (any key closes)" 12 58
+    read -rsn1 -t 1 && break
+done

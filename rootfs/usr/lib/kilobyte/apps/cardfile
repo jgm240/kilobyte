@@ -1,0 +1,37 @@
+#!/bin/bash
+# Cardfile: index cards kept as plain text files in ~/Cardfile.
+. /usr/lib/kilobyte/lib.sh
+
+CARDS="$HOME/Cardfile"
+mkdir -p "$CARDS"
+
+edit_card() { # edit_card FILE
+    local tmp new
+    tmp=$(mktemp)
+    new=$(kb_dialog --title " Card: $(basename "$1" .txt) " --ok-label "Save" --cancel-label "Cancel" \
+        --extra-button --extra-label "Delete" --editbox "$1" 20 64)
+    case $? in
+        "$DIALOG_OK")    printf '%s\n' "$new" > "$1" ;;
+        "$DIALOG_EXTRA") kb_yesno "Delete Card" "Throw away the card \"$(basename "$1" .txt)\"?" && rm -f "$1" ;;
+    esac
+    rm -f "$tmp"
+}
+
+sel=""
+while true; do
+    items=("<New>" "Write a new card")
+    while IFS= read -r f; do
+        items+=("$(basename "$f" .txt)" "$(head -n 1 "$f" | cut -c1-40)")
+    done < <(find "$CARDS" -maxdepth 1 -name '*.txt' | sort)
+
+    sel=$(kb_dialog --title " Cardfile " --default-item "$sel" --ok-label "Open" --cancel-label "Close" \
+        --menu "Your cards, sorted by title:" 20 64 12 "${items[@]}") || exit 0
+    if [ "$sel" = "<New>" ]; then
+        name=$(kb_input "New Card" "Title of the card:") || continue
+        name=${name//\//-}
+        [ -n "$name" ] || continue
+        [ -e "$CARDS/$name.txt" ] || printf '%s\n\n' "$name" > "$CARDS/$name.txt"
+        sel=$name
+    fi
+    edit_card "$CARDS/$sel.txt"
+done

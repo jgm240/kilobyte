@@ -1,0 +1,13 @@
+Welcome to Kilobyte!
+====================
+
+This is the Editor (mcedit). It works much like EDIT.COM:
+
+  F9            open the menu bar at the top
+  F2            save
+  F10 or Esc    close the editor
+  Shift+arrows  select text
+  F5 / F6 / F8  copy / move / delete the selected block
+  F7            search
+
+Your files live in ~/Documents. Try the Spreadsheet next: open Budget.sc.

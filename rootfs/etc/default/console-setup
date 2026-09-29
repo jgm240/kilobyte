@@ -1,0 +1,8 @@
+# Console font: the IBM VGA font, like DOS. Change it in Settings > Display.
+# The FullGreek set is the one that has every DOS graphics character.
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="FullGreek"
+FONTFACE="VGA"
+FONTSIZE="8x16"
+VIDEOMODE=

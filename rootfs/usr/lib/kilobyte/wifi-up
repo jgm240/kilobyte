@@ -1,0 +1,30 @@
+#!/bin/sh
+# Boot-time Wi-Fi: unblock the radios and run wpa_supplicant on every wireless
+# adapter. systemd-networkd then fetches an address over DHCP.
+# Wi-Fi stays off only if the user turned it off (/etc/kilobyte/wifi-off).
+
+[ -e /etc/kilobyte/wifi-off ] && { rfkill block wifi; exit 0; }
+rfkill unblock wifi || true
+
+# Adapters can appear a little after boot while firmware loads.
+for _ in 1 2 3 4 5; do
+    ls -d /sys/class/net/*/wireless >/dev/null 2>&1 && break
+    sleep 1
+done
+
+for d in /sys/class/net/*/wireless; do
+    [ -d "$d" ] || continue
+    i=$(basename "$(dirname "$d")")
+    conf=/etc/wpa_supplicant/wpa_supplicant-$i.conf
+    if [ ! -e "$conf" ]; then
+        cat > "$conf" <<EOF
+ctrl_interface=DIR=/run/wpa_supplicant GROUP=netdev
+update_config=1
+ap_scan=1
+EOF
+        chmod 600 "$conf"
+    fi
+    ip link set "$i" up || true
+    systemctl start "wpa_supplicant@$i.service" || true
+done
+exit 0

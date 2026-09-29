@@ -1,0 +1,120 @@
+#!/usr/bin/perl
+# kb-guard [-q KEYS] PROGRAM [ARGS...]
+#
+# Run PROGRAM on its own pseudo terminal so that Ctrl-C always closes it and
+# returns to the Program Manager, even when the program reads the keyboard in
+# raw mode and never sees Ctrl-C as a signal (mc, sc-im, calcurse, games...).
+#
+#   -q KEYS  on the first Ctrl-C, type KEYS into the program instead (its own
+#            quit key, so an editor can still offer to save). A second Ctrl-C
+#            ends the program outright. KEYS understands \e, \r and \n.
+#
+# Uses only perl-base, which every Debian system has.
+use strict;
+use warnings;
+use POSIX qw(setsid _exit WNOHANG);
+
+my ($TIOCGWINSZ, $TIOCSWINSZ, $TIOCSCTTY, $TIOCSPTLCK, $TIOCGPTN) =
+    (0x5413, 0x5414, 0x540E, 0x40045431, 0x80045430);
+
+my $quit_keys;
+if (@ARGV >= 2 && $ARGV[0] eq '-q') {
+    shift @ARGV;
+    ($quit_keys = shift @ARGV) =~ s/\\e/\e/g;
+    $quit_keys =~ s/\\r/\r/g;
+    $quit_keys =~ s/\\n/\n/g;
+}
+@ARGV or die "usage: kb-guard [-q KEYS] program [args]\n";
+
+# Without a terminal or a pty there is nothing to guard: just run it.
+exec @ARGV unless -t STDIN;
+open(my $master, '+<', '/dev/ptmx') or exec @ARGV;
+my $unlock = pack('i', 0);
+ioctl($master, $TIOCSPTLCK, $unlock) or exec @ARGV;
+my $ptn = pack('i', 0);
+ioctl($master, $TIOCGPTN, $ptn) or exec @ARGV;
+my $slave_path = '/dev/pts/' . unpack('i', $ptn);
+
+my $winsize = "\0" x 8;
+ioctl(STDIN, $TIOCGWINSZ, $winsize) or undef $winsize;
+
+my $pid = fork();
+exec @ARGV unless defined $pid;
+if ($pid == 0) {
+    close $master;
+    setsid();
+    open(my $slave, '+<', $slave_path) or _exit(127);
+    ioctl($slave, $TIOCSCTTY, 0);
+    ioctl($slave, $TIOCSWINSZ, $winsize) if defined $winsize;
+    open(STDIN,  '<&', $slave);
+    open(STDOUT, '>&', $slave);
+    open(STDERR, '>&', $slave);
+    close $slave;
+    { no warnings 'exec'; exec { $ARGV[0] } @ARGV; }
+    _exit(127);
+}
+
+# Parent: pass bytes between the real terminal and the program.
+chomp(my $saved_tty = `stty -g`);
+system('stty', 'raw', '-echo');
+$SIG{WINCH} = sub {
+    my $ws = "\0" x 8;
+    ioctl($master, $TIOCSWINSZ, $ws) if ioctl(STDIN, $TIOCGWINSZ, $ws);
+};
+$SIG{INT} = $SIG{QUIT} = 'IGNORE';
+$SIG{HUP} = $SIG{TERM} = sub { end_program('HUP') };
+
+# Every process of the program's session (mc, for example, starts a subshell).
+sub end_program {
+    my ($sig) = @_;
+    my @procs = ($pid);
+    for my $stat (glob '/proc/[0-9]*/stat') {
+        open(my $f, '<', $stat) or next;
+        my $line = <$f> // next;
+        # pid (comm) state ppid pgrp session ...
+        push @procs, $1 if $line =~ /^(\d+) \(.*\) \S+ \d+ \d+ (\d+)/ && $2 == $pid;
+    }
+    kill $sig, @procs;
+}
+
+my ($status, $ctrl_c, $killed_at) = (undef, 0, 0);
+my $stdin_open = 1;
+while (1) {
+    my $rin = '';
+    vec($rin, fileno($master), 1) = 1;
+    vec($rin, fileno(STDIN), 1) = 1 if $stdin_open;
+    my $n = select(my $rout = $rin, undef, undef, 0.2);
+
+    if ($n > 0 && vec($rout, fileno($master), 1)) {
+        my $got = sysread($master, my $buf, 65536);
+        last unless $got;    # EIO: the program and its children are gone
+        syswrite(STDOUT, $buf);
+    }
+    if ($n > 0 && $stdin_open && vec($rout, fileno(STDIN), 1)) {
+        my $got = sysread(STDIN, my $buf, 4096);
+        if (!$got) { $stdin_open = 0; next; }
+        if ($buf =~ /\x03/) {
+            $ctrl_c++;
+            if (defined $quit_keys && $ctrl_c == 1) {
+                syswrite($master, $quit_keys);
+            } else {
+                end_program('TERM');
+                $killed_at ||= time;
+            }
+            $buf =~ s/\x03//g;
+        }
+        syswrite($master, $buf) if length $buf;
+    }
+    if (!defined $status && waitpid($pid, WNOHANG) == $pid) {
+        $status = $?;
+        # Let a subshell or other leftovers go too, then drain the output.
+        end_program('HUP');
+    }
+    end_program('KILL') if $killed_at && time - $killed_at >= 2;
+}
+waitpid($pid, 0), $status = $? unless defined $status;
+
+system('stty', $saved_tty);
+# Leave a clean screen behind whatever state the program was in.
+print "\e[0m\e[?1049l\e[?1000l\e[?1002l\e[?1006l\e[?25h";
+exit($ctrl_c && $status != 0 ? 130 : ($status >> 8));

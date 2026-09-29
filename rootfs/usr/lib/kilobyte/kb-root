@@ -1,0 +1,33 @@
+#!/bin/sh
+# The few root actions Kilobyte may run without a password (see
+# /etc/sudoers.d/kilobyte). Anything else goes through a normal sudo prompt.
+set -e
+
+wifi_ifaces() {
+    for d in /sys/class/net/*/wireless; do
+        [ -d "$d" ] && basename "$(dirname "$d")"
+    done
+}
+
+case "${1:-} ${2:-}" in
+    "kilobyte update")
+        exec /usr/lib/kilobyte/kb-update apply "${3:-}"
+        ;;
+    "wifi on")
+        rm -f /etc/kilobyte/wifi-off
+        systemctl restart kilobyte-wifi.service
+        ;;
+    "wifi off")
+        mkdir -p /etc/kilobyte
+        : > /etc/kilobyte/wifi-off
+        for i in $(wifi_ifaces); do systemctl stop "wpa_supplicant@$i.service" || true; done
+        rfkill block wifi
+        ;;
+    "ytdlp update")
+        # The downloader has to keep up with YouTube, faster than Debian can.
+        /usr/local/bin/yt-dlp --update
+        ;;
+    "power reboot")   systemctl reboot ;;
+    "power poweroff") systemctl poweroff ;;
+    *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2; exit 2 ;;
+esac

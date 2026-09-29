@@ -1,0 +1,27 @@
+ CHARACTER MAP - copy these into your own text art
+
+ Single lines        Double lines        Mixed
+   ┌───┬───┐           ╔═══╦═══╗           ╒═══╤═══╕   ╓───╥───╖
+   │   │   │           ║   ║   ║           │   │   │   ║   ║   ║
+   ├───┼───┤           ╠═══╬═══╣           ╞═══╪═══╡   ╟───╫───╢
+   │   │   │           ║   ║   ║           │   │   │   ║   ║   ║
+   └───┴───┘           ╚═══╩═══╝           ╘═══╧═══╛   ╙───╨───╜
+
+ Blocks and shades
+   █ full   ▀ upper   ▄ lower   ▌ left   ▐ right
+   ░ light  ▒ medium  ▓ dark    ■ square
+
+ Arrows and pointers
+   ↑ ↓ ← → ↕ ↔   ▲ ▼ ◀ ▶
+
+ Symbols
+   ☺ ☻ ♥ ♦ ♣ ♠ • ○ ◘ ◙ ♂ ♀ ♪ ♫ ☼ ⌂ § ¶ ° · √ ² ± ÷ ≈ ≡ ≤ ≥ ∞ ∩ π Σ Ω
+
+ Letters
+   Ç ü é â ä à å ç ê ë è ï î ì Ä Å É æ Æ ô ö ò û ù ÿ Ö Ü ¢ £ ¥ ƒ á í ó ú ñ Ñ ª º ¿ ¡ « » ß µ
+
+ All of these are in the original IBM PC character set (code page 437),
+ so they display on any Linux text console.
+
+ Typing them: in the Editor press Ctrl+Q and type the code, or copy them
+ from this file: /usr/share/kilobyte/charmap.txt

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Calculator: a paper tape on top of bc(1).
+. /usr/lib/kilobyte/lib.sh
+
+tape=()
+last=""
+while true; do
+    start=$(( ${#tape[@]} > 8 ? ${#tape[@]} - 8 : 0 ))
+    shown=$(printf '%s\n' "${tape[@]:start}")
+    expr=$(kb_dialog --title " Calculator " --ok-label "  =  " --cancel-label "Close" \
+        --extra-button --extra-label "Clear" \
+        --inputbox "${shown:+$shown\n}──────────────────────────────────────────\nExpression, e.g.  12*(3+4)   2^64   sqrt(2)   s(3.14)\nThe word \Zbans\Zn stands for the last answer." $(( 10 + ${#tape[@]} - start )) 64 "")
+    case $? in
+        "$DIALOG_EXTRA") tape=(); last=""; continue ;;
+        "$DIALOG_OK") ;;
+        *) exit 0 ;;
+    esac
+    [ -n "$expr" ] || continue
+    bc_expr=${expr//ans/(${last:-0})}
+    result=$(printf 'scale=12\n%s\n' "$bc_expr" | BC_LINE_LENGTH=0 bc -l 2>&1 | tail -n 1)
+    case $result in
+        *error* | *Error* | "") tape+=("  $expr  \Z1\Zb= error\Zn") ;;
+        *)
+            # Trim trailing zeros from decimal results: 1.500000 -> 1.5
+            case $result in *.*) result=$(sed -e 's/0*$//' -e 's/\.$//' <<< "$result") ;; esac
+            case $result in .* ) result="0$result" ;; -.*) result="-0${result#-}" ;; esac
+            last=$result
+            tape+=("  $expr  = \Zb$result\Zn")
+            ;;
+    esac
+done

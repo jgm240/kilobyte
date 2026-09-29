@@ -1,0 +1,2 @@
+# Kilobyte: switching Wi-Fi and shutting down need no password.
+%users ALL=(root) NOPASSWD: /usr/lib/kilobyte/kb-root

@@ -1,0 +1,425 @@
+#!/bin/bash
+# Settings: every knob of a Kilobyte computer in one place.
+. /usr/lib/kilobyte/lib.sh
+
+ROOT="sudo -n /usr/lib/kilobyte/kb-root"   # the few passwordless root actions
+
+# --- Wi-Fi ----------------------------------------------------------------
+
+wifi_iface() {
+    local d
+    for d in /sys/class/net/*/wireless; do
+        [ -d "$d" ] && { basename "$(dirname "$d")"; return 0; }
+    done
+    return 1
+}
+
+wifi_is_on() { [ ! -e /etc/kilobyte/wifi-off ]; }
+
+wcli() { wpa_cli -i "$IF" "$@" 2>/dev/null; }
+
+wifi_status_text() {
+    local st ssid ip
+    if ! IF=$(wifi_iface); then echo "\Z1No Wi-Fi adapter found.\Zn"; return; fi
+    if ! wifi_is_on; then echo "Wi-Fi is \Z1\ZbOFF\Zn."; return; fi
+    st=$(wcli status)
+    ssid=$(sed -n 's/^ssid=//p' <<< "$st")
+    ip=$(sed -n 's/^ip_address=//p' <<< "$st")
+    case $(sed -n 's/^wpa_state=//p' <<< "$st") in
+        COMPLETED) echo "Wi-Fi is \Z2\ZbON\Zn, connected to \Zb$ssid\Zn${ip:+ ($ip)}." ;;
+        SCANNING | ASSOCIATING | AUTHENTICATING | ASSOCIATED | 4WAY_HANDSHAKE | GROUP_HANDSHAKE)
+                   echo "Wi-Fi is \Z2\ZbON\Zn, connecting..." ;;
+        "")        echo "Wi-Fi is \Z2\ZbON\Zn, the adapter $IF is starting..." ;;
+        *)         echo "Wi-Fi is \Z2\ZbON\Zn, not connected." ;;
+    esac
+}
+
+bars() { # signal in dBm -> strength bars
+    local s=${1%%.*}
+    if   [ "$s" -ge -55 ]; then echo "■■■■"
+    elif [ "$s" -ge -67 ]; then echo "■■■·"
+    elif [ "$s" -ge -75 ]; then echo "■■··"
+    else                        echo "■···"
+    fi
+}
+
+wifi_connect() {
+    local line bssid freq sig flags ssid items=() seen="" choice pw id hex n st
+    kb_info "Looking for wireless networks..."
+    wcli scan >/dev/null
+    sleep 4
+    # Strongest first, one entry per network name.
+    while IFS=$'\t' read -r bssid freq sig flags ssid; do
+        [ -n "$ssid" ] || continue
+        case "$seen" in *$'\n'"$ssid"$'\n'*) continue ;; esac
+        seen+=$'\n'"$ssid"$'\n'
+        case $flags in *WPA* | *RSN* | *SAE*) flags="secured" ;; *WEP*) flags="WEP" ;; *) flags="open" ;; esac
+        items+=("$ssid" "$(bars "$sig")  $flags")
+    done < <(wcli scan_results | tail -n +2 | sort -t$'\t' -k3,3 -nr)
+    if [ ${#items[@]} -eq 0 ]; then
+        kb_msg "Wi-Fi" "No wireless networks found.\n\nMove closer to the access point and try again."
+        return
+    fi
+    items+=("<Hidden>" "Network that does not broadcast its name")
+
+    choice=$(kb_dialog --title " Connect to Wi-Fi " --ok-label "Connect" --cancel-label "Back" \
+        --menu "Networks in range:" 20 64 12 "${items[@]}") || return
+    if [ "$choice" = "<Hidden>" ]; then
+        choice=$(kb_input "Hidden Network" "Name (SSID) of the network:") || return
+        [ -n "$choice" ] || return
+        flags=secured
+    else
+        flags=$(wcli scan_results | awk -F'\t' -v s="$choice" '$5 == s { print $4; exit }')
+    fi
+
+    id=$(wcli add_network | tail -n 1)
+    hex=$(printf '%s' "$choice" | od -An -tx1 | tr -d ' \n')
+    wcli set_network "$id" ssid "$hex" >/dev/null
+    if ! grep -q 'secured\|WPA\|RSN\|SAE\|WEP' <<< "$flags"; then
+        wcli set_network "$id" key_mgmt NONE >/dev/null
+    else
+        pw=$(kb_password "Wi-Fi Password" "Password for \"$choice\":") || { wcli remove_network "$id" >/dev/null; return; }
+        wcli set_network "$id" psk "\"$pw\"" >/dev/null
+        wcli set_network "$id" key_mgmt "WPA-PSK WPA-PSK-SHA256 SAE" >/dev/null
+        wcli set_network "$id" ieee80211w 1 >/dev/null
+    fi
+    wcli set_network "$id" scan_ssid 1 >/dev/null
+    wcli enable_network "$id" >/dev/null
+    wcli select_network "$id" >/dev/null
+    wcli save_config >/dev/null
+
+    for n in $(seq 1 20); do
+        kb_info "Connecting to \"$choice\"...  ($n)"
+        st=$(wcli status)
+        if grep -q '^wpa_state=COMPLETED' <<< "$st" && grep -q '^ip_address=' <<< "$st"; then
+            kb_msg "Wi-Fi" "\Z2\ZbConnected\Zn to \"$choice\".\n\nAddress: $(sed -n 's/^ip_address=//p' <<< "$st")"
+            return
+        fi
+        sleep 1
+    done
+    if grep -q '^wpa_state=COMPLETED' <<< "$st"; then
+        kb_msg "Wi-Fi" "Connected to \"$choice\", still waiting for an address from the network."
+    else
+        kb_msg "Wi-Fi" "\Z1Could not connect\Zn to \"$choice\".\n\nCheck the password and try again."
+        wcli remove_network "$id" >/dev/null
+        wcli save_config >/dev/null
+    fi
+}
+
+wifi_forget() {
+    local items=() id ssid rest choice
+    while IFS=$'\t' read -r id ssid rest; do
+        [[ $id =~ ^[0-9]+$ ]] && items+=("$id" "$ssid")
+    done < <(wcli list_networks)
+    if [ ${#items[@]} -eq 0 ]; then kb_msg "Wi-Fi" "No saved networks."; return; fi
+    choice=$(kb_dialog --title " Saved Networks " --ok-label "Forget" --cancel-label "Back" \
+        --menu "Choose a network to forget:" 18 60 10 "${items[@]}") || return
+    wcli remove_network "$choice" >/dev/null
+    wcli save_config >/dev/null
+}
+
+wifi_panel() {
+    local sel toggle
+    while true; do
+        if wifi_is_on; then toggle="Turn Wi-Fi off"; else toggle="Turn Wi-Fi on"; fi
+        sel=$(kb_dialog --title " Wi-Fi " --ok-label "Select" --cancel-label "Back" \
+            --menu "$(wifi_status_text)" 14 64 4 \
+            Toggle  "$toggle" \
+            Connect "Connect to a network" \
+            Forget  "Forget a saved network") || return
+        case $sel in
+            Toggle)
+                if wifi_is_on; then $ROOT wifi off; else $ROOT wifi on; sleep 2; fi ;;
+            Connect | Forget)
+                if ! IF=$(wifi_iface); then kb_msg "Wi-Fi" "\Z1No Wi-Fi adapter found.\Zn\n\nThe adapter may need firmware that is not included."; continue; fi
+                wifi_is_on || { $ROOT wifi on; sleep 2; }
+                if [ "$sel" = Connect ]; then wifi_connect; else wifi_forget; fi ;;
+        esac
+    done
+}
+
+network_panel() {
+    local text gw dns
+    gw=$(ip route show default 2>/dev/null | awk '{print $3; exit}')
+    dns=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf 2>/dev/null | tr '\n' ' ')
+    local d links=""
+    # Real adapters only: those with a device behind them.
+    for d in /sys/class/net/*; do
+        [ -e "$d/device" ] && links+="  $(ip -br addr show dev "$(basename "$d")" 2>/dev/null)\n"
+    done
+    text="\ZbConnections\Zn\n${links:-  none\n}\n"
+    text+="\ZbGateway\Zn   ${gw:-none}\n\ZbDNS\Zn       ${dns:-none}\n\n"
+    text+="$(wifi_status_text)\n\nCable connections are set up automatically."
+    kb_dialog --title " Network " --ok-label "Close" --extra-button --extra-label "Test" \
+        --msgbox "$text" 20 72
+    if [ $? -eq "$DIALOG_EXTRA" ]; then
+        kb_info "Testing the connection to the Internet..."
+        if ping -c 2 -W 3 deb.debian.org >/dev/null 2>&1; then
+            kb_msg "Network" "\Z2\ZbThe Internet can be reached.\Zn"
+        else
+            kb_msg "Network" "\Z1\ZbThe Internet cannot be reached.\Zn\n\nPlug in a cable or connect to Wi-Fi."
+        fi
+    fi
+}
+
+# --- Appearance -----------------------------------------------------------
+
+appearance_panel() {
+    local cur items=() d name t
+    cur=$(kb_theme_name)
+    for d in "$KB_SHARE"/themes/*/; do
+        t=$(basename "$d")
+        name=$(cat "$d/name" 2>/dev/null || echo "$t")
+        items+=("$t" "$name" "$([ "$t" = "$cur" ] && echo on || echo off)")
+    done
+    t=$(kb_dialog --title " Appearance " --ok-label "Apply" --cancel-label "Back" \
+        --radiolist "Colour theme (Space selects):" 16 60 8 "${items[@]}") || return
+    echo "$t" > "$KB_CONF/theme"
+    kb_load_theme
+}
+
+# --- Display --------------------------------------------------------------
+
+display_panel() {
+    local sel face size codeset
+    sel=$(kb_dialog --title " Display " --ok-label "Apply" --cancel-label "Back" \
+        --menu "Console font. Bigger fonts help on high resolution screens." 15 64 6 \
+        VGA16   "Classic VGA 8x16 (like DOS)" \
+        VGA32   "Classic VGA 16x32 (big)" \
+        Term16  "Terminus 8x16 (sharp)" \
+        Term24  "Terminus 12x24 (large)" \
+        Term32  "Terminus 16x32 (huge)") || return
+    case $sel in
+        VGA16)  face=VGA;      size=8x16 ;;
+        VGA32)  face=VGA;      size=16x32 ;;
+        Term16) face=Terminus; size=8x16 ;;
+        Term24) face=Terminus; size=12x24 ;;
+        Term32) face=Terminus; size=16x32 ;;
+    esac
+    # VGA: the set with all DOS graphics characters. Terminus: more letters.
+    if [ "$face" = VGA ]; then codeset=FullGreek; else codeset=Uni2; fi
+    kb_sudo || return
+    sudo sed -i -e "s/^CODESET=.*/CODESET=\"$codeset\"/" -e "s/^FONTFACE=.*/FONTFACE=\"$face\"/" \
+        -e "s/^FONTSIZE=.*/FONTSIZE=\"$size\"/" /etc/default/console-setup
+    [ "$TERM" = linux ] && sudo setupcon --force --font-only 2>/dev/null
+    kb_msg "Display" "The console font is now $face $size."
+}
+
+# --- Keyboard -------------------------------------------------------------
+
+keyboard_panel() {
+    local cur sel
+    cur=$(sed -n 's/^XKBLAYOUT="\?\([^"]*\)"\?/\1/p' /etc/default/keyboard 2>/dev/null)
+    sel=$(kb_dialog --title " Keyboard " --default-item "${cur:-us}" --ok-label "Apply" --cancel-label "Back" \
+        --menu "Keyboard layout (now: ${cur:-us}):" 20 60 12 \
+        us "English (US)"   gb "English (UK)"   de "German"      at "German (Austria)" \
+        ch "Swiss"          fr "French"         be "Belgian"     es "Spanish" \
+        pt "Portuguese"     br "Portuguese (Brazil)" it "Italian" nl "Dutch" \
+        dk "Danish"         no "Norwegian"      se "Swedish"     "fi" "Finnish" \
+        pl "Polish"         cz "Czech"          hu "Hungarian"   tr "Turkish" \
+        ru "Russian"        ua "Ukrainian"      gr "Greek"       jp "Japanese" \
+        latam "Spanish (Latin America)" ca "Canadian (French)") || return
+    kb_sudo || return
+    sudo sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$sel\"/" /etc/default/keyboard
+    [ "$TERM" = linux ] && sudo setupcon --force --keyboard-only 2>/dev/null
+    kb_msg "Keyboard" "The keyboard layout is now \Zb$sel\Zn."
+}
+
+# --- Date and time --------------------------------------------------------
+
+timezone_pick() {
+    local region city items=() d
+    for d in Africa America Antarctica Arctic Asia Atlantic Australia Europe Indian Pacific; do
+        items+=("$d" "")
+    done
+    items+=(UTC "Coordinated Universal Time")
+    region=$(kb_dialog --title " Time Zone " --ok-label "Next" --cancel-label "Back" \
+        --menu "Region:" 20 50 12 "${items[@]}") || return 1
+    if [ "$region" = UTC ]; then echo UTC; return 0; fi
+    items=()
+    while IFS= read -r d; do items+=("${d#/usr/share/zoneinfo/"$region"/}" ""); done \
+        < <(find "/usr/share/zoneinfo/$region" -type f | sort)
+    city=$(kb_dialog --title " Time Zone - $region " --ok-label "Apply" --cancel-label "Back" \
+        --menu "City:" 20 50 12 "${items[@]}") || return 1
+    echo "$region/$city"
+}
+
+datetime_panel() {
+    local sel tz ntp d t
+    while true; do
+        tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
+        ntp=$(timedatectl show -p NTP --value 2>/dev/null)
+        sel=$(kb_dialog --title " Date and Time " --ok-label "Select" --cancel-label "Back" \
+            --menu "Now: \Zb$(date '+%A %d %B %Y, %H:%M')\Zn\nTime zone: ${tz:-UTC}" 14 60 3 \
+            Zone "Change the time zone" \
+            Auto "Set the clock from the Internet: $([ "$ntp" = yes ] && echo ON || echo OFF)" \
+            Set  "Set the date and time by hand") || return
+        case $sel in
+            Zone) tz=$(timezone_pick) && kb_sudo && sudo timedatectl set-timezone "$tz" ;;
+            Auto) kb_sudo && sudo timedatectl set-ntp "$([ "$ntp" = yes ] && echo false || echo true)" ;;
+            Set)
+                d=$(kb_dialog --title " Date " --date-format '%Y-%m-%d' --calendar "Pick the date:" 0 0) || continue
+                t=$(kb_dialog --title " Time " --time-format '%H:%M:%S' --timebox "Set the time:" 0 0) || continue
+                kb_sudo || continue
+                sudo timedatectl set-ntp false
+                sudo timedatectl set-time "$d $t" ;;
+        esac
+    done
+}
+
+# --- Software -------------------------------------------------------------
+
+software_search() {
+    local term items=() name desc choice
+    term=$(kb_input "Add Programs" "Search for a program (e.g. \"chess\", \"music\", \"irc\"):") || return
+    [ -n "$term" ] || return
+    kb_info "Searching..."
+    while IFS= read -r line; do
+        name=${line%% - *}; desc=${line#* - }
+        items+=("$name" "${desc:0:50}")
+    done < <(apt-cache search -- "$term" 2>/dev/null | sort | head -n 300)
+    if [ ${#items[@]} -eq 0 ]; then
+        kb_msg "Add Programs" "Nothing found for \"$term\".\n\nTip: run \"Update the list of programs\" first."
+        return
+    fi
+    choice=$(kb_dialog --title " Add Programs " --ok-label "Install" --cancel-label "Back" \
+        --menu "Found for \"$term\":" 22 76 14 "${items[@]}") || return
+    kb_sudo && kb_run_pause sudo apt-get install "$choice"
+}
+
+software_remove() {
+    local name
+    name=$(kb_input "Remove Programs" "Name of the package to remove:") || return
+    [ -n "$name" ] && kb_sudo && kb_run_pause sudo apt-get remove "$name"
+}
+
+software_panel() {
+    local sel
+    while sel=$(kb_dialog --title " Software " --ok-label "Select" --cancel-label "Back" \
+        --menu "Programs come from the Debian archive." 14 60 5 \
+        Refresh "Update the list of programs" \
+        Upgrade "Install all updates" \
+        Add     "Search and install a program" \
+        Remove  "Remove a program" \
+        List    "Show installed programs"); do
+        case $sel in
+            Refresh) kb_sudo && kb_run_pause sudo apt-get update ;;
+            Upgrade) kb_sudo && kb_run_pause sh -c 'sudo apt-get update && sudo apt-get full-upgrade' ;;
+            Add)     software_search ;;
+            Remove)  software_remove ;;
+            List)
+                dpkg-query -W -f '${Package}  ${Version}\n' > "/tmp/kb-installed.$$"
+                kb_textfile "Installed Programs" "/tmp/kb-installed.$$"
+                rm -f "/tmp/kb-installed.$$" ;;
+        esac
+    done
+}
+
+# --- About ----------------------------------------------------------------
+
+about_panel() {
+    local os cpu cores mem disk up
+    os=$(. /etc/os-release; echo "$PRETTY_NAME")
+    cpu=$(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -n 1)
+    cores=$(nproc)
+    mem=$(free -m | awk '/^Mem:/ {printf "%d MB used of %d MB", $3, $2}')
+    disk=$(df -h / | awk 'NR==2 {printf "%s used of %s (%s free)", $3, $2, $4}')
+    up=$(uptime -p | sed 's/^up //')
+    kb_msg "About This Computer" "\n\Z4\Zb  ▄▄▄▄▄▄   Kilobyte $KB_VERSION\Zn
+\Z4\Zb  █ ▄▀ █\Zn   the desktop that is not really one
+\Z4\Zb  █▀▄  █\Zn
+\Z4\Zb  ▀▀▀▀▀▀\Zn   built on $os
+
+\ZbProcessor\Zn  ${cpu:-unknown} ($cores cores)
+\ZbMemory\Zn     $mem
+\ZbDisk\Zn       $disk
+\ZbKernel\Zn     $(uname -r)
+\ZbComputer\Zn   $(hostname)
+\ZbRunning\Zn    $up" 20 74
+}
+
+# --- Kilobyte Update ------------------------------------------------------
+
+update_panel() {
+    local old new changes n
+    kb_info "Asking GitHub for the newest Kilobyte..."
+    if ! read -r old new < <("$KB_LIB/kb-update" check 2>/dev/null); then
+        kb_msg "Kilobyte Update" "\Z1\ZbGitHub cannot be reached.\Zn\n\nCheck the Internet connection in Settings > Wi-Fi." 9 60
+        return
+    fi
+    echo "$new" > "$KB_CONF/update-latest"
+    if [ "$old" = "$new" ]; then
+        kb_msg "Kilobyte Update" "\Z2\ZbKilobyte is up to date.\Zn\n\nVersion ${old:0:7} from github.com/$(. "$KB_SHARE/update.conf"; echo "$REPO")" 9 64
+        return
+    fi
+    changes=$("$KB_LIB/kb-update" changes 2>/dev/null | head -n 12 | sed 's/^/  · /')
+    n=$(printf '%s\n' "$changes" | grep -c .)
+    kb_dialog --title " Kilobyte Update " --yes-label "Update" --no-label "Later" --yesno \
+"A new Kilobyte is available.
+
+  Installed  ${old:0:7}
+  Newest     ${new:0:7}
+
+\ZbWhat is new:\Zn
+${changes:-  (no details)}
+
+Your files and settings are kept." $(( 14 + n )) 72 || return
+    kb_sudo || return
+    if kb_run_pause sudo "$KB_LIB/kb-root" kilobyte update "$new"; then
+        kb_msg "Kilobyte Update" "\Z2\ZbKilobyte was updated.\Zn\n\nThe Program Manager restarts now." 9 50
+        exit 42   # tells the Program Manager to restart itself
+    fi
+}
+
+# --- Startup --------------------------------------------------------------
+
+startup_panel() {
+    if [ -e "$KB_CONF/noautostart" ]; then
+        kb_yesno "Startup" "Kilobyte does \ZbNOT\Zn start after login.\n\nStart it automatically again?" && rm -f "$KB_CONF/noautostart"
+    else
+        kb_yesno "Startup" "Kilobyte starts automatically after you log in on a text console.\n\nTurn that off? You can still start it by typing \Zbkilobyte\Zn." && : > "$KB_CONF/noautostart"
+    fi
+}
+
+# --- main -----------------------------------------------------------------
+
+page=${1:-}
+sel=Wi-Fi
+while true; do
+    if [ -z "$page" ]; then
+        sel=$(kb_dialog --title " Settings " --item-help --default-item "$sel" \
+            --ok-label "Open" --cancel-label "Close" \
+            --menu "Settings for this computer." 0 64 0 \
+            Update     "Kilobyte Update"               "Get the newest Kilobyte from GitHub" \
+            Wi-Fi      "Wireless networks"             "Turn Wi-Fi on or off and connect to a network" \
+            Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
+            Appearance "Colour theme"                  "Blue EDIT, Norton, Windows 1.0, green or amber CRT..." \
+            Display    "Console font and size"         "Bigger letters for high resolution screens" \
+            Sound      "Sound volume"                  "alsamixer: arrows change, M mutes, Esc closes" \
+            Keyboard   "Keyboard layout"               "Choose the layout of your keyboard" \
+            Date       "Date, time and time zone"      "Set the clock and the time zone" \
+            Software   "Add or remove programs"        "Search, install and update Debian packages" \
+            Password   "Change your password"          "Change the password of $USER" \
+            Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
+            Startup    "Start Kilobyte after login"    "Turn the automatic start on or off" \
+            About      "About this computer"           "Processor, memory, disk and version") || exit 0
+    else
+        sel=$page
+    fi
+    case $sel in
+        Update)     update_panel ;;
+        Wi-Fi)      wifi_panel ;;
+        Network)    network_panel ;;
+        Appearance) appearance_panel ;;
+        Display)    display_panel ;;
+        Sound)      kb_guarded '\e' alsamixer ;;
+        Keyboard)   keyboard_panel ;;
+        Date)       datetime_panel ;;
+        Software)   software_panel ;;
+        Password)   kb_run_pause passwd ;;
+        Tasks)      kb_run htop ;;
+        Startup)    startup_panel ;;
+        About)      about_panel ;;
+    esac
+    [ -z "$page" ] || exit 0
+done

@@ -1,0 +1,120 @@
+#!/bin/bash
+# kb-update: update Kilobyte straight from its GitHub repository.
+#
+#   kb-update check     print "INSTALLED LATEST" commit ids (any user)
+#   kb-update changes   list the changes between them, one per line (any user)
+#   kb-update apply SHA install that commit (root; run through kb-root)
+#
+# The repository and branch are set in /usr/share/kilobyte/update.conf. The
+# commit this system was built from is in /usr/share/kilobyte/commit.
+#
+# An update replaces Kilobyte's own files (programs, themes, fonts, help) and
+# installs packages that were added to image/packages.txt. It never touches
+# the owner's settings: keyboard, font, host name, Wi-Fi, users.
+set -euo pipefail
+
+SHARE=/usr/share/kilobyte
+REPO=jgm240/kilobyte
+BRANCH=main
+# shellcheck source=/dev/null
+[ -r "$SHARE/update.conf" ] && . "$SHARE/update.conf"
+API="https://api.github.com/repos/$REPO"
+
+installed() { cat "$SHARE/commit" 2>/dev/null || echo unknown; }
+
+latest() {
+    curl -fsS --max-time 20 -H 'Accept: application/vnd.github.sha' "$API/commits/$BRANCH"
+}
+
+cmd_check() {
+    local new
+    new=$(latest) || { echo "kb-update: cannot reach github.com/$REPO" >&2; exit 1; }
+    [[ $new =~ ^[0-9a-f]{40}$ ]] || { echo "kb-update: unexpected answer from GitHub" >&2; exit 1; }
+    echo "$(installed) $new"
+}
+
+# One line per commit: the first line of each commit message, newest first.
+cmd_changes() {
+    local old new
+    read -r old new < <(cmd_check)
+    if [[ $old =~ ^[0-9a-f]{40}$ ]]; then
+        curl -fsS --max-time 20 "$API/compare/$old...$new" |
+            python3 -c 'import json, sys
+for c in reversed(json.load(sys.stdin).get("commits", [])):
+    print(c["commit"]["message"].splitlines()[0])'
+    else
+        curl -fsS --max-time 20 "$API/commits?sha=$BRANCH&per_page=15" |
+            python3 -c 'import json, sys
+for c in json.load(sys.stdin):
+    print(c["commit"]["message"].splitlines()[0])'
+    fi
+}
+
+cmd_apply() {
+    local sha=${1:-} tmp src d f want missing=() p
+    [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: kb-update apply COMMIT-ID" >&2; exit 2; }
+    [ "$(id -u)" -eq 0 ] || { echo "kb-update: apply needs root" >&2; exit 1; }
+
+    tmp=$(mktemp -d /tmp/kb-update.XXXXXX)
+    trap 'rm -rf "$tmp"' EXIT
+    echo "Downloading Kilobyte ${sha:0:7} from github.com/$REPO ..."
+    curl -fsSL --max-time 300 "https://codeload.github.com/$REPO/tar.gz/$sha" | tar -xz -C "$tmp"
+    src=$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -n 1)/rootfs
+    [ -x "$src/usr/bin/kilobyte" ] || [ -f "$src/usr/bin/kilobyte" ] || { echo "kb-update: download is not a Kilobyte tree" >&2; exit 1; }
+
+    echo "Checking the new files ..."
+    for f in "$src/usr/bin/kilobyte" "$src/usr/sbin/kilobyte-install" "$src"/usr/lib/kilobyte/*.sh \
+             "$src"/usr/lib/kilobyte/apps/* "$src"/usr/lib/kilobyte/kb-root "$src"/usr/lib/kilobyte/kb-play; do
+        [ -f "$f" ] && ! bash -n "$f" && { echo "kb-update: $f is broken, update stopped" >&2; exit 1; }
+    done
+    visudo -cqf "$src/etc/sudoers.d/kilobyte" || { echo "kb-update: sudoers file is broken, update stopped" >&2; exit 1; }
+
+    echo "Installing ..."
+    # Kilobyte's own directories are swapped in as a whole.
+    for d in usr/lib/kilobyte usr/share/kilobyte; do
+        rm -rf "/$d.new" "/$d.old"
+        cp -a "$src/$d" "/$d.new"
+        chown -R root:root "/$d.new"
+        mv "/$d" "/$d.old"
+        mv "/$d.new" "/$d"
+        rm -rf "/$d.old"
+    done
+    chmod 755 /usr/lib/kilobyte/kb-* /usr/lib/kilobyte/wifi-up /usr/lib/kilobyte/apps/*
+    install -m 755 "$src/usr/bin/kilobyte" /usr/bin/kilobyte
+    install -m 755 "$src/usr/sbin/kilobyte-install" /usr/sbin/kilobyte-install
+    install -m 440 "$src/etc/sudoers.d/kilobyte" /etc/sudoers.d/kilobyte
+    # System files that belong to Kilobyte (not the owner's settings).
+    for f in etc/profile.d/kilobyte.sh etc/systemd/system/kilobyte-wifi.service \
+             etc/modules-load.d/kilobyte-optical.conf etc/sysctl.d/10-kilobyte.conf \
+             etc/yt-dlp.conf etc/issue etc/systemd/network/20-wired.network \
+             etc/systemd/network/25-wireless.network; do
+        [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
+    done
+    cp -a "$src/etc/skel/." /etc/skel/ 2>/dev/null || true
+    chown -R root:root /etc/skel
+    echo "$sha" > "$SHARE/commit"
+    systemctl daemon-reload 2>/dev/null || true
+
+    # Programs added to the image since this system was built.
+    want=$(sed 's/#.*//' "$src/../image/packages.txt" 2>/dev/null | xargs -n 1 | grep -vx 'live-boot' || true)
+    for p in $want; do
+        dpkg-query -W -f '${Status}' "$p" 2>/dev/null | grep -q 'ok installed' || missing+=("$p")
+    done
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "New programs: ${missing[*]}"
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+    fi
+
+    echo
+    echo "Kilobyte is up to date (${sha:0:7})."
+    [ -d /run/live/medium ] && echo "This is the live system: the update lasts until it is restarted."
+    return 0
+}
+
+case "${1:-}" in
+    check)   cmd_check ;;
+    changes) cmd_changes ;;
+    apply)   cmd_apply "${2:-}" ;;
+    *) echo "usage: kb-update check | changes | apply COMMIT-ID" >&2; exit 2 ;;
+esac

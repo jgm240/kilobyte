@@ -1,0 +1,216 @@
+#!/bin/bash
+# Kilobyte - a desktop environment that is not really one.
+#
+# The "desktop" is the Program Manager: a dialog(1) menu that launches
+# fullscreen text-mode programs and returns when they exit.
+#
+# Ctrl-C never leaves Kilobyte: in the Program Manager it offers to shut
+# down, in a menu it goes back, in a program it closes the program (see
+# kb-guard for programs that would ignore it).
+#
+# Exit status: 0 log out, 3 the user chose "Exit to shell". Anything else is
+# unexpected, and the login script starts Kilobyte again.
+
+. /usr/lib/kilobyte/lib.sh
+
+APPS=/usr/lib/kilobyte/apps
+
+# Programs launched from the menus.
+
+run_editor() {
+    local f
+    f=$(kb_pick_file "Edit" "*") || return
+    kb_guarded '\e[21~' mcedit "$f"     # F10 quits, asking to save first
+}
+
+run_spreadsheet() {
+    local f
+    f=$(kb_pick_file "Spreadsheet" "*.sc" "*.csv" "*.tsv" "*.xlsx") || return
+    case $f in *.*) ;; *) f="$f.sc" ;; esac
+    kb_guarded '\e:q\r' sc-im "$f"
+}
+
+run_web() {
+    kb_run links "${1:-file://$KB_SHARE/start.html}"
+}
+
+run_files() {
+    kb_guarded '\e[21~' mc "$HOME" "$KB_DOCS"
+}
+
+run_terminal() {
+    clear
+    printf '\033[1;37;44m%*s\r  Kilobyte Terminal  -  type "exit" to return to the Program Manager\033[0m\n\n' "$(tput cols)" ""
+    # A real shell: Ctrl-C and Ctrl-Z keep their usual meaning in here.
+    stty susp '^Z'
+    KILOBYTE_SHELL=1 bash -i
+    stty susp undef
+    kb_load_theme
+}
+
+# Submenus. Each returns to the Program Manager when closed.
+
+submenu() { # submenu TITLE TEXT TAG DESC HELP ...; prints the chosen tag
+    local title=$1 text=$2; shift 2
+    kb_dialog --title " $title " --item-help --ok-label "Run" --cancel-label "Back" \
+        --default-item "${SUB_DEFAULT:-}" --menu "$text" 0 64 0 "$@"
+}
+
+accessories() {
+    local sel
+    while sel=$(SUB_DEFAULT=$sel submenu "Accessories" "Small helpers." \
+        Calculator "Arbitrary precision calculator" "Type an expression, get the answer (bc)" \
+        Agenda     "Calendar, appointments and to-do list" "calcurse - press ? inside for help" \
+        Clock      "Big block-letter clock" "Any key closes the clock" \
+        Cardfile   "Index cards for notes and addresses" "Notes are kept in ~/Cardfile" \
+        Month      "Pick a date on a calendar" "Shows a month calendar" \
+        Charmap    "Box drawing and block characters" "Characters for your own text art"); do
+        case $sel in
+            Calculator) "$APPS/calculator" ;;
+            Agenda)     kb_guarded q calcurse ;;
+            Clock)      "$APPS/clock" ;;
+            Cardfile)   "$APPS/cardfile" ;;
+            Month)      kb_dialog --title " Calendar " --ok-label "Close" --no-cancel --calendar "Use Tab and the arrow keys to move." 0 0 >/dev/null ;;
+            Charmap)    kb_textfile "Character Map" "$KB_SHARE/charmap.txt" ;;
+        esac
+    done
+}
+
+media() {
+    local sel
+    while sel=$(SUB_DEFAULT=$sel submenu "Media" "Videos, music and discs." \
+        Video      "Video Player"        "Videos and music as coloured blocks or the real picture" \
+        YouTube    "YouTube Downloader"  "Search, watch and save videos or their sound" \
+        Disc       "Disc Player"         "DVD films, audio CDs and data discs" \
+        Sound      "Sound volume"        "alsamixer: arrows change, M mutes, Esc closes"); do
+        case $sel in
+            Video)   "$APPS/player" ;;
+            YouTube) "$APPS/youtube" ;;
+            Disc)    "$APPS/disc" ;;
+            Sound)   kb_guarded '\e' alsamixer ;;
+        esac
+    done
+}
+
+games() {
+    local sel
+    while sel=$(SUB_DEFAULT=$sel submenu "Games" "Take a break." \
+        MoonBuggy  "Drive across the moon"     "Space jumps, a fires, q quits" \
+        Snake      "Eat the numbers, grow longer" "h j k l steer, q quits" \
+        Robots     "Outwit the killer robots"  "hjkl yubn move, t teleports, q quits" \
+        Hangman    "Guess the word"            "Type letters" \
+        Adventure  "Colossal Cave Adventure"   "Type commands such as GO NORTH; QUIT ends" \
+        Trek       "Star Trek"                 "Type help inside the game" \
+        Rain       "Screen saver: rain"        "Any key stops it" \
+        Worms      "Screen saver: worms"       "Ctrl+C stops it"); do
+        case $sel in
+            MoonBuggy) kb_guarded '' /usr/games/moon-buggy ;;
+            Snake)     kb_run /usr/games/worm ;;
+            Robots)    kb_run /usr/games/robots ;;
+            Hangman)   kb_run /usr/games/hangman ;;
+            Adventure) kb_guarded '' /usr/games/adventure ;;
+            Trek)      kb_guarded '' /usr/games/trek ;;
+            Rain)      kb_run /usr/games/rain ;;
+            Worms)     kb_run /usr/games/worms ;;
+        esac
+    done
+}
+
+shut_down() {
+    kb_yesno "Shut Down" "Turn off the computer now?" || return
+    clear
+    sudo -n "$KB_LIB/kb-root" power poweroff 2>/dev/null ||
+        kb_msg "Shut Down" "This computer cannot be turned off from Kilobyte."
+}
+
+# Returns 0 to stay, 10 to log out, 11 to drop to a shell.
+quit_menu() {
+    local sel
+    sel=$(submenu "Exit" "Leave Kilobyte." \
+        Logout   "Log out"                "End this session" \
+        Shell    "Exit to shell"          "Leave Kilobyte; type kilobyte to come back" \
+        Restart  "Restart the computer"   "Reboot" \
+        Shutdown "Shut down the computer" "Power off") || return 0
+    case $sel in
+        Logout)   return 10 ;;
+        Shell)    return 11 ;;
+        Restart)  kb_yesno "Restart" "Restart the computer now?" && { clear; sudo -n "$KB_LIB/kb-root" power reboot; } ;;
+        Shutdown) shut_down ;;
+    esac
+    return 0
+}
+
+program_manager() {
+    local sel=Editor rc items
+    while true; do
+        items=(
+            Editor      "Text editor"                "Write and edit text files (mcedit, F9 opens its menus)"
+            Spreadsheet "Spreadsheet"                "Tables and formulas (sc-im, :w saves, :q quits)"
+            Web         "Web browser"                "Browse the web in text mode (links, Esc opens its menus)"
+            Files       "File manager"               "Two-panel file manager (mc, F10 quits)"
+            Terminal    "Terminal"                   "Fullscreen command line, type exit to come back"
+            Media       "Media  »"                   "Video player, YouTube downloader, disc player"
+            Accessories "Accessories  »"             "Calculator, agenda, clock, cardfile..."
+            Games       "Games  »"                   "Moon Buggy, Snake, Robots, Adventure..."
+            Settings    "Settings"                   "Wi-Fi, theme, keyboard, date, software..."
+        )
+        kb_is_live && items+=(Install "Install Kilobyte to disk" "Copy this system to the computer's hard disk")
+        items+=(Help "Help" "How to use Kilobyte" Quit "Exit  »" "Log out, restart or shut down")
+
+        # The timeout only redraws the clock in the top line. Ctrl-C here
+        # (and only here) sets KB_CTRL_C instead of being ignored.
+        KB_CTRL_C=
+        trap 'KB_CTRL_C=1' INT QUIT
+        sel=$(kb_dialog --title " Program Manager " --timeout 30 --item-help \
+            --default-item "$sel" --ok-label " Run " --cancel-label " Exit " \
+            --menu "Choose with the arrow keys or first letter, then \ZbEnter\Zn." \
+            0 62 0 "${items[@]}")
+        rc=$?
+        trap : INT QUIT
+        if [ -n "$KB_CTRL_C" ]; then
+            sel=${sel:-Editor}
+            shut_down
+            continue
+        fi
+        case $rc in
+            "$DIALOG_TIMEOUT") sel=${sel:-Editor}; continue ;;
+            "$DIALOG_CANCEL" | "$DIALOG_ESC") sel=Quit ;;
+        esac
+        case $sel in
+            Editor)      run_editor ;;
+            Spreadsheet) run_spreadsheet ;;
+            Web)         run_web ;;
+            Files)       run_files ;;
+            Terminal)    run_terminal ;;
+            Media)       media ;;
+            Accessories) accessories ;;
+            Games)       games ;;
+            Settings)
+                "$APPS/settings"
+                # 42: Kilobyte was updated, so run the new Program Manager.
+                [ $? -eq 42 ] && { [ -n "$KB_STTY" ] && stty "$KB_STTY"; exec /usr/bin/kilobyte; } ;;
+            Install)     kb_sudo && sudo KB_THEME="$(kb_theme_name)" /usr/sbin/kilobyte-install ;;
+            Help)        kb_textfile "Help" "$KB_SHARE/help.txt" ;;
+            Quit)        quit_menu; rc=$?; [ $rc -ne 0 ] && return $rc ;;
+        esac
+    done
+}
+
+case "${1:-}" in
+    --version) echo "Kilobyte $KB_VERSION"; exit 0 ;;
+    --help)    echo "usage: kilobyte [--version]"; exit 0 ;;
+esac
+
+command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; exit 1; }
+export KILOBYTE=1
+# Ctrl-Z would suspend Kilobyte and leave a bare shell: switch it off.
+KB_STTY=$(stty -g 2>/dev/null)
+stty susp undef 2>/dev/null
+kb_update_check_later
+program_manager
+rc=$?
+[ -n "$KB_STTY" ] && stty "$KB_STTY" 2>/dev/null
+clear
+kb_palette ""   # restore the console's own colours
+[ $rc -eq 11 ] && { echo "Type kilobyte to return to the Program Manager."; exit 3; }
+exit 0

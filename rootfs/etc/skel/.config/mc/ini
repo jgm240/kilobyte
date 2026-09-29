@@ -1,0 +1,13 @@
+[Midnight-Commander]
+use_internal_edit=true
+use_internal_view=true
+confirm_exit=false
+auto_save_setup=true
+
+[Layout]
+menubar_visible=true
+keybar_visible=true
+message_visible=true
+
+[Panels]
+navigate_with_arrows=true

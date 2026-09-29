@@ -1,0 +1,97 @@
+                         KILOBYTE  -  QUICK HELP
+                         ═══════════════════════
+
+ Kilobyte is a desktop that is not really one. There is no mouse pointer
+ to chase and no windows to arrange: the Program Manager starts a program,
+ the program fills the screen, and when you close it you are back here.
+
+
+ MOVING AROUND
+ ─────────────
+   ↑ ↓            move the highlight
+   First letter   jump to an item (press again for the next one)
+   Enter          run / open / OK
+   Tab            move between the list and the buttons
+   Esc            back / cancel
+   Space          tick an option in a list with ( ) or [ ] boxes
+   Ctrl+C         in a program: close it and come back here
+                  in a menu: go back
+                  in the Program Manager: shut down (it asks first)
+                  In the Terminal Ctrl+C stops a command as usual.
+
+ The bottom line of the screen explains the highlighted item.
+
+
+ THE PROGRAMS
+ ────────────
+   Editor         mcedit. F9 opens the menu bar, F2 saves, F10 quits.
+                  Shift+arrows select, Ctrl+Ins copies, Shift+Ins pastes.
+                  Ctrl+C closes it too, asking to save changes first.
+
+   Spreadsheet    sc-im. Move with the arrow keys. Type = to enter a number
+                  or formula, e.g.  =A1+A2  or  =@sum(A1:A9)
+                  <  or  >  enter left/right aligned text, \ centred text.
+                  :w saves, :q quits, :help shows the manual.
+
+   Web browser    links. Esc opens the menu bar, g types an address,
+                  arrow keys follow links, ← goes back, q quits.
+
+   File manager   mc (Midnight Commander). Tab switches panel, F3 views,
+                  F4 edits, F5 copies, F6 moves, F7 makes a folder,
+                  F8 deletes, F9 opens menus, F10 quits.
+
+   Terminal       A fullscreen command line. Type exit to come back.
+
+   Media
+     Video Player   Plays videos and music from ~/Videos and ~/Music or a
+                    web address. "Picture" chooses how video is shown:
+                      Extreme / Fine / Medium blocks - the screen switches to
+                        a tiny font (1x2, 2x4 or 4x8 pixels per character) and
+                        the film is drawn with coloured characters
+                      Text blocks - the same in the normal font
+                      Real picture - the video itself, straight on screen
+                    Space pause, left/right seek, 9/0 volume, q stops.
+     YouTube        Search YouTube or paste a link, then watch, save the
+                    video (MP4) or save only the sound (MP3). If YouTube
+                    stops working, choose "Update the downloader".
+     Disc Player    DVD films, audio CDs and data discs. DVD menus are not
+                    shown: pick a title; the main film is marked.
+     Sound volume   alsamixer. Arrows change, M mutes, Esc closes.
+
+   Settings       Wi-Fi, colour theme, font size, keyboard layout, date and
+                  time zone, installing programs, password, task manager.
+
+
+ FILES
+ ─────
+   Your documents are kept in ~/Documents, index cards in ~/Cardfile,
+   videos in ~/Videos and music in ~/Music.
+
+
+ DVDs
+ ────
+   Most films on DVD are encrypted. Debian does not include the library
+   needed to read them (libdvdcss) because it is not legal everywhere. Where
+   it is allowed, install it in the Terminal:
+     sudo apt install libdvd-pkg && sudo dpkg-reconfigure libdvd-pkg
+   (first add "contrib" to the lines in /etc/apt/sources.list).
+   Home-made DVDs, audio CDs and data discs work without it.
+
+
+ THE MOUSE
+ ─────────
+   On the text console the mouse shows as a block. The web browser and
+   the Program Manager's text programs that support it react to clicks.
+
+
+ INSTALLING
+ ──────────
+   When Kilobyte runs from a USB stick or CD, "Install Kilobyte to disk"
+   in the Program Manager copies it onto the computer's hard disk.
+   Everything on that disk is erased.
+
+
+ CONSOLES
+ ────────
+   Ctrl+Alt+F2 ... F6 switch to other text consoles; Ctrl+Alt+F1 comes
+   back. Log in there and type kilobyte to start another Program Manager.

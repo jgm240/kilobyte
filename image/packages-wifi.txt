@@ -1,0 +1,2 @@
+# Wi-Fi firmware, left out by ./build.sh --lite
+firmware-iwlwifi firmware-atheros firmware-brcm80211 firmware-mediatek firmware-misc-nonfree

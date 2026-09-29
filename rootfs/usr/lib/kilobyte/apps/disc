@@ -1,0 +1,132 @@
+#!/bin/bash
+# Disc Player: DVD videos, audio CDs and data discs in the optical drive.
+. /usr/lib/kilobyte/lib.sh
+
+DEV=""
+
+pick_drive() {
+    local drives=() d items=()
+    for d in /dev/sr[0-9]*; do [ -b "$d" ] && drives+=("$d"); done
+    if [ ${#drives[@]} -eq 0 ]; then
+        kb_msg "Disc Player" "\Z1\ZbNo CD or DVD drive found.\Zn\n\nUSB drives work too: plug one in and try again." 9 60
+        return 1
+    fi
+    if [ ${#drives[@]} -eq 1 ]; then
+        DEV=${drives[0]}
+        return 0
+    fi
+    local live label
+    live=$(findmnt -no SOURCE /run/live/medium 2>/dev/null)
+    for d in "${drives[@]}"; do
+        label=$(lsblk -dno LABEL "$d" 2>/dev/null)
+        if [ "$d" = "$live" ]; then label="Kilobyte system disc"
+        elif [ -z "$label" ]; then label="no disc or no name"
+        fi
+        items+=("$d" "$(lsblk -dno MODEL "$d" 2>/dev/null | xargs)  -  $label")
+    done
+    DEV=$(kb_dialog --title " Disc Player " --menu "Which drive?" 12 70 4 "${items[@]}")
+}
+
+prop() { udevadm info -q property -n "$DEV" 2>/dev/null | sed -n "s/^$1=//p"; }
+
+eject_disc() {
+    eject "$DEV" 2>/dev/null || kb_msg "Disc Player" "The disc could not be ejected. Is it still in use?" 7 60
+}
+
+not_playable() {
+    kb_msg "Disc Player" "\Z1\ZbThis DVD could not be played.\Zn
+
+Most films on DVD are encrypted. Playing them needs the
+libdvdcss library, which Debian does not include. See
+Help in the Program Manager, \"DVDs\"." 12 64
+}
+
+play_dvd() {
+    local info titles=() longest line n len chapters sel rc
+    kb_info "Reading the DVD..."
+    info=$(lsdvd "$DEV" 2>/dev/null)
+    longest=$(sed -n 's/^Longest track: *0*\([0-9]*\).*/\1/p' <<< "$info")
+    while IFS= read -r line; do
+        # Title: 01, Length: 01:52:03.000 Chapters: 28, Cells: ...
+        [[ $line =~ ^Title:\ *0*([0-9]+),\ Length:\ *([0-9:]+)[^C]*Chapters:\ *0*([0-9]+) ]] || continue
+        n=${BASH_REMATCH[1]} len=${BASH_REMATCH[2]} chapters=${BASH_REMATCH[3]}
+        [ "$len" = "00:00:00" ] && continue
+        titles+=("$n" "$len  $chapters chapters$([ "$n" = "$longest" ] && echo "   « main film")")
+    done <<< "$info"
+    if [ ${#titles[@]} -eq 0 ]; then
+        not_playable
+        return
+    fi
+    sel=${longest:-1}
+    while true; do
+        sel=$(kb_dialog --title " DVD: $(prop ID_FS_LABEL) " --default-item "$sel" \
+            --ok-label "Play" --cancel-label "Back" --extra-button --extra-label "Eject" \
+            --menu "Titles on the disc. DVD menus are not shown; pick what to watch." 18 64 10 "${titles[@]}")
+        rc=$?
+        [ $rc -eq "$DIALOG_EXTRA" ] && { eject_disc; return; }
+        [ $rc -eq 0 ] || return
+        "$KB_LIB/apps/player" "dvd://$sel" --dvd-device="$DEV"
+        [ $? -eq 2 ] && not_playable    # mpv: 2 = could not play
+    done
+}
+
+play_cd() {
+    local tracks n items=() sel rc
+    tracks=$(prop ID_CDROM_MEDIA_TRACK_COUNT_AUDIO)
+    items=(All "Play the whole CD")
+    for ((n = 1; n <= ${tracks:-0}; n++)); do items+=("$n" "Track $n"); done
+    while true; do
+        sel=$(kb_dialog --title " Audio CD " --ok-label "Play" --cancel-label "Back" \
+            --extra-button --extra-label "Eject" --menu "$tracks tracks on the CD." 18 50 10 "${items[@]}")
+        rc=$?
+        [ $rc -eq "$DIALOG_EXTRA" ] && { eject_disc; return; }
+        [ $rc -eq 0 ] || return
+        if [ "$sel" = All ]; then
+            "$KB_LIB/kb-play" audio "cdda://" --cdrom-device="$DEV"
+        else
+            "$KB_LIB/kb-play" audio "cdda://" --cdrom-device="$DEV" --start="#$sel"
+        fi
+    done
+}
+
+open_data() {
+    local mnt=/media/cdrom
+    if ! mountpoint -q "$mnt"; then
+        mount "$mnt" 2>/dev/null || {
+            kb_msg "Disc Player" "The disc could not be opened." 7 50
+            return
+        }
+    fi
+    kb_guarded '\e[21~' mc "$mnt" "$HOME"
+    umount "$mnt" 2>/dev/null
+}
+
+pick_drive || exit 0
+while true; do
+    if [ "$(prop ID_CDROM_MEDIA)" != 1 ]; then
+        kb_dialog --title " Disc Player " --ok-label "Try Again" --cancel-label "Close" \
+            --extra-button --extra-label "Eject" --yesno "\nThere is no disc in the drive.\n\nPut in a DVD or CD, wait a moment, then choose Try Again." 11 60
+        case $? in
+            "$DIALOG_OK") sleep 1; continue ;;
+            "$DIALOG_EXTRA") eject_disc; continue ;;
+            *) exit 0 ;;
+        esac
+    fi
+    # A DVD film is recognised by its DVD-Video structure, whatever the disc.
+    if lsdvd "$DEV" 2>/dev/null | grep -q '^Title:'; then
+        play_dvd
+    elif [ "${TRACKS:=$(prop ID_CDROM_MEDIA_TRACK_COUNT_AUDIO)}" -gt 0 ] 2>/dev/null; then
+        play_cd
+    else
+        sel=$(kb_dialog --title " Data Disc: $(prop ID_FS_LABEL) " --ok-label "Select" --cancel-label "Close" \
+            --menu "This disc holds files." 12 60 3 \
+            Open  "Show the files" \
+            Eject "Eject the disc") || exit 0
+        case $sel in
+            Open)  open_data ;;
+            Eject) eject_disc ;;
+        esac
+    fi
+    TRACKS=""
+    kb_yesno "Disc Player" "Play another disc?" 7 40 || exit 0
+done

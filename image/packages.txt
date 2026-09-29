@@ -1,0 +1,23 @@
+# Packages in the Kilobyte image. One or more per line, # starts a comment.
+# Installed without "Recommends" to keep the system small.
+
+# --- base system ---
+systemd-sysv udev dbus kmod procps iproute2 iputils-ping netbase ca-certificates
+linux-image-amd64 initramfs-tools busybox live-boot
+sudo less nano bash-completion curl
+console-setup keyboard-configuration kbd gpm
+
+# --- network (Wi-Fi on by default) ---
+systemd-resolved systemd-timesyncd wpasupplicant rfkill wireless-regdb
+
+# --- Kilobyte and its programs ---
+dialog mc links sc-im calcurse htop bc bsdgames moon-buggy
+
+# --- media: video player, YouTube downloader, disc player, sound ---
+mpv ffmpeg python3 quickjs lsdvd eject alsa-utils alsa-ucm-conf
+
+# --- installer ---
+fdisk e2fsprogs dosfstools grub-pc-bin grub-efi-amd64-bin grub2-common efibootmgr
+
+# --- firmware ---
+firmware-linux-free firmware-realtek firmware-sof-signed

@@ -1,0 +1,270 @@
+#!/bin/bash
+# Kilobyte Setup: copy the running live system onto a disk and make it boot.
+#
+# Disk layout (GPT, boots with both BIOS and UEFI):
+#   1   1 MiB   BIOS boot partition (GRUB core image for BIOS)
+#   2 512 MiB   EFI system partition (FAT32)
+#   3  rest     root file system (ext4)
+
+. /usr/lib/kilobyte/lib.sh
+
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo KB_THEME="$(kb_theme_name)" "$0" "$@"
+fi
+
+SRC=/run/live/rootfs/filesystem.squashfs
+TARGET=/mnt/kilobyte-target
+LOG=/var/log/kilobyte-install.log
+STATUS=/run/kilobyte-install.status
+LIVE_USER=user
+
+kb_backtitle() { printf ' ■ Kilobyte %s Setup' "$KB_VERSION"; }
+
+log() { printf '%s\n' "$*" >> "$LOG"; }
+
+cleanup() {
+    for m in "$TARGET/boot/efi" "$TARGET"; do
+        mountpoint -q "$m" && umount -R "$m" 2>>"$LOG"
+    done
+}
+
+abort() {
+    kb_msg "Setup" "Setup was cancelled. Nothing was changed on your disks." 8 50
+    exit 1
+}
+
+if [ ! -d "$SRC/usr" ]; then
+    kb_msg "Setup" "\Z1Kilobyte is not running from its live medium.\Zn\n\nSetup can only install from a Kilobyte USB stick or CD." 10 60
+    exit 1
+fi
+
+# --- 1. Welcome ------------------------------------------------------------
+
+kb_dialog --title " Welcome to Kilobyte Setup " --yes-label "Continue" --no-label "Cancel" --yesno "
+Setup installs Kilobyte on this computer's disk.
+
+  \Zb■\Zn  The disk you choose is \Zb\Z1completely erased\Zn.
+  \Zb■\Zn  Installing takes a few minutes.
+  \Zb■\Zn  Settings you made in the live session (keyboard,
+     time zone, Wi-Fi networks, theme) are carried over.
+
+Press \ZbEnter\Zn to continue or \ZbEsc\Zn to cancel." 16 60 || abort
+
+# --- 2. Disk ---------------------------------------------------------------
+
+live_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /run/live/medium 2>/dev/null)" 2>/dev/null | head -n 1)
+
+disks=()
+while read -r name size type tran model; do
+    [ "$type" = disk ] || continue
+    case $name in loop* | sr* | zram* | ram* | fd*) continue ;; esac
+    [ "$name" = "$live_disk" ] && continue
+    [ "$size" -ge $((4 * 1024 * 1024 * 1024)) ] || continue
+    disks+=("/dev/$name" "$(numfmt --to=iec --suffix=B "$size")  ${tran:-}  ${model:-disk}")
+done < <(lsblk -dnbo NAME,SIZE,TYPE,TRAN,MODEL)
+
+if [ ${#disks[@]} -eq 0 ]; then
+    kb_msg "Setup" "\Z1No disk found to install on.\Zn\n\nKilobyte needs a disk of at least 4 GB that is not the stick it runs from." 10 60
+    exit 1
+fi
+
+DISK=$(kb_dialog --title " Where to install " --ok-label "Next" --cancel-label "Cancel" \
+    --menu "Choose the disk for Kilobyte. \Z1Everything on it will be erased.\Zn" 16 70 6 "${disks[@]}") || abort
+
+# --- 3. Keyboard and time zone ---------------------------------------------
+
+cur_kb=$(sed -n 's/^XKBLAYOUT="\?\([^"]*\)"\?/\1/p' /etc/default/keyboard)
+KEYMAP=$(kb_dialog --title " Keyboard " --default-item "${cur_kb:-us}" --ok-label "Next" --cancel-label "Cancel" \
+    --menu "Keyboard layout:" 20 60 12 \
+    us "English (US)"   gb "English (UK)"   de "German"      at "German (Austria)" \
+    ch "Swiss"          fr "French"         be "Belgian"     es "Spanish" \
+    pt "Portuguese"     br "Portuguese (Brazil)" it "Italian" nl "Dutch" \
+    dk "Danish"         no "Norwegian"      se "Swedish"     "fi" "Finnish" \
+    pl "Polish"         cz "Czech"          hu "Hungarian"   tr "Turkish" \
+    ru "Russian"        ua "Ukrainian"      gr "Greek"       jp "Japanese" \
+    latam "Spanish (Latin America)" ca "Canadian (French)") || abort
+
+TZONE=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
+TZONE=${TZONE:-UTC}
+while true; do
+    region=$(kb_dialog --title " Time Zone " --default-item "${TZONE%%/*}" --ok-label "Next" --cancel-label "Cancel" \
+        --menu "Region (now: $TZONE):" 20 50 12 \
+        Africa "" America "" Antarctica "" Arctic "" Asia "" Atlantic "" \
+        Australia "" Europe "" Indian "" Pacific "" UTC "Universal time") || abort
+    if [ "$region" = UTC ]; then TZONE=UTC; break; fi
+    cities=()
+    while IFS= read -r f; do cities+=("${f#/usr/share/zoneinfo/"$region"/}" ""); done \
+        < <(find "/usr/share/zoneinfo/$region" -type f | sort)
+    city=$(kb_dialog --title " Time Zone - $region " --default-item "${TZONE#*/}" --ok-label "Next" --cancel-label "Back" \
+        --menu "City:" 20 50 12 "${cities[@]}") && { TZONE="$region/$city"; break; }
+done
+
+# --- 4. Computer name and user ---------------------------------------------
+
+while true; do
+    HOST=$(kb_input "Computer Name" "A name for this computer on the network:" "${HOST:-kilobyte}") || abort
+    [[ $HOST =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] && break
+    kb_msg "Computer Name" "Use only letters, digits and dashes." 7 50
+done
+
+while true; do
+    NAME=$(kb_input "Your Account" "Your user name (lower case, e.g. \"ada\"):" "${NAME:-}") || abort
+    if [[ ! $NAME =~ ^[a-z][a-z0-9_-]{0,31}$ ]]; then
+        kb_msg "Your Account" "Start with a letter; use only lower case letters, digits, - and _." 7 60
+    elif [ "$NAME" != "$LIVE_USER" ] && grep -q "^$NAME:" "$SRC/etc/passwd"; then
+        kb_msg "Your Account" "\"$NAME\" is reserved by the system. Pick another name." 7 60
+    else
+        break
+    fi
+done
+
+while true; do
+    PW1=$(kb_password "Your Account" "Password for $NAME:") || abort
+    PW2=$(kb_password "Your Account" "Type the password again:") || abort
+    if [ -z "$PW1" ]; then
+        kb_msg "Your Account" "The password must not be empty." 7 50
+    elif [ "$PW1" != "$PW2" ]; then
+        kb_msg "Your Account" "The passwords do not match." 7 50
+    else
+        break
+    fi
+done
+
+# --- 5. Last chance --------------------------------------------------------
+
+kb_dialog --title " Ready to Install " --defaultno --yes-label "Install" --no-label "Cancel" --yesno "
+  Disk          \Zb$DISK\Zn ($(lsblk -dno SIZE,MODEL "$DISK" | xargs))
+  Keyboard      $KEYMAP
+  Time zone     $TZONE
+  Computer      $HOST
+  User          $NAME (administrator)
+
+\Z1\ZbALL DATA ON $DISK WILL BE ERASED.\Zn
+
+Choose Install to start." 17 64 || abort
+
+# --- 6. Install ------------------------------------------------------------
+
+part() { # part DISK N -> partition device (sda -> sda3, nvme0n1 -> nvme0n1p3)
+    case $1 in *[0-9]) echo "${1}p$2" ;; *) echo "$1$2" ;; esac
+}
+EFI_PART=$(part "$DISK" 2)
+ROOT_PART=$(part "$DISK" 3)
+
+progress() { printf 'XXX\n%d\n\n  %s\nXXX\n' "$1" "$2"; log "== $1% $2"; }
+
+in_target() { chroot "$TARGET" "$@" >> "$LOG" 2>&1; }
+
+install_system() {
+    set -e
+    trap 'echo "failed at line $LINENO" > "$STATUS"' ERR
+
+    progress 2 "Erasing and partitioning $DISK..."
+    swapoff -a 2>/dev/null || true
+    for p in $(lsblk -lno PATH "$DISK" | tail -n +2); do umount "$p" 2>/dev/null || true; done
+    wipefs -af "$DISK" >> "$LOG" 2>&1
+    sfdisk --wipe always --wipe-partitions always "$DISK" >> "$LOG" 2>&1 <<EOF
+label: gpt
+size=1MiB, type=21686148-6449-6E6F-744E-656564454649, name="bios"
+size=512MiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name="efi"
+type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="kilobyte"
+EOF
+    udevadm settle
+    sleep 1
+
+    progress 5 "Creating file systems..."
+    mkfs.vfat -F 32 -n EFI "$EFI_PART" >> "$LOG" 2>&1
+    mkfs.ext4 -F -q -L kilobyte "$ROOT_PART" >> "$LOG" 2>&1
+    mkdir -p "$TARGET"
+    mount "$ROOT_PART" "$TARGET"
+
+    # Copy in the background and show how far along it is.
+    local total used pct
+    total=$(du -smx "$SRC" | cut -f1)
+    cp -a "$SRC/." "$TARGET/" 2>> "$LOG" &
+    local cp_pid=$!
+    while kill -0 "$cp_pid" 2>/dev/null; do
+        used=$(df -m --output=used "$TARGET" | tail -n 1)
+        pct=$(( 8 + 70 * used / (total > 0 ? total : 1) ))
+        [ $pct -gt 78 ] && pct=78
+        progress $pct "Copying files... ($used of $total MB)"
+        sleep 2
+    done
+    wait "$cp_pid"
+
+    progress 80 "Configuring the system..."
+    mkdir -p "$TARGET/boot/efi"
+    mount "$EFI_PART" "$TARGET/boot/efi"
+    for d in dev proc sys run; do mount --rbind "/$d" "$TARGET/$d"; mount --make-rslave "$TARGET/$d"; done
+
+    cat > "$TARGET/etc/fstab" <<EOF
+# <file system>  <mount point>  <type>  <options>  <dump>  <pass>
+UUID=$(blkid -s UUID -o value "$ROOT_PART")  /          ext4  errors=remount-ro  0  1
+UUID=$(blkid -s UUID -o value "$EFI_PART")  /boot/efi  vfat  umask=0077         0  2
+/dev/sr0  /media/cdrom  udf,iso9660  ro,user,noauto  0  0
+EOF
+    echo "$HOST" > "$TARGET/etc/hostname"
+    sed -i "s/\bkilobyte\b/$HOST/g" "$TARGET/etc/hosts"
+    ln -sf "/usr/share/zoneinfo/$TZONE" "$TARGET/etc/localtime"
+    echo "$TZONE" > "$TARGET/etc/timezone"
+    sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$KEYMAP\"/" "$TARGET/etc/default/keyboard"
+    cp /etc/default/console-setup "$TARGET/etc/default/console-setup"
+    cp -a /etc/wpa_supplicant/wpa_supplicant-*.conf "$TARGET/etc/wpa_supplicant/" 2>/dev/null || true
+    [ -e /etc/kilobyte/wifi-off ] && { mkdir -p "$TARGET/etc/kilobyte"; cp /etc/kilobyte/wifi-off "$TARGET/etc/kilobyte/"; }
+
+    progress 84 "Creating your account..."
+    # Remove everything that only makes sense on the live medium.
+    rm -f "$TARGET/etc/sudoers.d/live"
+    rm -rf "$TARGET/etc/systemd/system/getty@tty1.service.d"
+    in_target userdel -r "$LIVE_USER" || true
+    local groups g
+    groups=$(for g in sudo users netdev audio video plugdev cdrom; do grep -q "^$g:" "$TARGET/etc/group" && printf '%s,' "$g"; done)
+    in_target useradd -m -s /bin/bash -G "${groups%,}" "$NAME"
+    printf '%s:%s\n' "$NAME" "$PW1" | chroot "$TARGET" chpasswd
+    in_target passwd -l root
+    local theme_dir="$TARGET/home/$NAME/.config/kilobyte"
+    mkdir -p "$theme_dir"
+    kb_theme_name > "$theme_dir/theme"
+    in_target chown -R "$NAME:$NAME" "/home/$NAME"
+
+    progress 88 "Removing the live system tools..."
+    in_target dpkg --purge live-boot live-boot-initramfs-tools || true
+    in_target update-initramfs -u -k all
+
+    progress 94 "Installing the boot loader..."
+    in_target grub-install --target=i386-pc "$DISK"
+    in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=kilobyte --removable --no-nvram
+    if [ -d /sys/firmware/efi ]; then
+        in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=kilobyte || true
+    fi
+    in_target update-grub
+
+    progress 98 "Finishing..."
+    sync
+    cleanup
+    progress 100 "Done."
+    echo ok > "$STATUS"
+    sleep 1
+}
+
+: > "$LOG"
+rm -f "$STATUS"
+# From here on the disk is being written: Ctrl-C must not stop that halfway.
+trap '' INT QUIT
+install_system | kb_dialog --title " Installing Kilobyte " --gauge "\n  Starting..." 9 70 0
+
+if [ "$(cat "$STATUS" 2>/dev/null)" != ok ]; then
+    cleanup
+    kb_dialog --title " Setup Failed " --exit-label "Close" --textbox "$LOG" 0 0
+    kb_msg "Setup Failed" "\Z1\ZbKilobyte could not be installed\Zn ($(cat "$STATUS" 2>/dev/null)).\n\nThe log is in $LOG." 10 60
+    exit 1
+fi
+
+if kb_dialog --title " Kilobyte is Installed " --yes-label "Restart" --no-label "Later" --yesno "
+\Z2\ZbKilobyte is now installed on $DISK.\Zn
+
+Remove the USB stick or CD, then restart the computer.
+Log in as \Zb$NAME\Zn with the password you chose." 11 60; then
+    clear
+    systemctl reboot
+fi

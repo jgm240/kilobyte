@@ -1,0 +1,90 @@
+#!/bin/bash
+# Video Player: videos and music from ~/Videos and ~/Music, or a web address,
+# shown as coloured character blocks or as the real picture (see kb-play).
+#   player                 the file list
+#   player SOURCE [OPTS]   play SOURCE (file, address, dvd://N, cdda://) at once
+. /usr/lib/kilobyte/lib.sh
+
+MEDIA_EXT='mp4|m4v|mkv|webm|avi|mov|mpg|mpeg|ogv|wmv|flv|3gp|ts|mp3|m4a|ogg|opus|flac|wav|aac|wma'
+AUDIO_EXT='mp3|m4a|ogg|opus|flac|wav|aac|wma'
+mkdir -p "$HOME/Videos" "$HOME/Music"
+
+player_mode() { cat "$KB_CONF/player-mode" 2>/dev/null || echo medium; }
+
+mode_name() {
+    case $1 in
+        extreme) echo "Extreme blocks (1x2 pixels)" ;;
+        fine)    echo "Fine blocks (2x4 pixels)" ;;
+        medium)  echo "Medium blocks (4x8 pixels)" ;;
+        text)    echo "Text blocks (normal letters)" ;;
+        real)    echo "Real picture" ;;
+    esac
+}
+
+choose_mode() {
+    local cur m items=()
+    cur=$(player_mode)
+    for m in extreme fine medium text real; do
+        items+=("$m" "$(mode_name $m)" "$([ "$m" = "$cur" ] && echo on || echo off)")
+    done
+    m=$(kb_dialog --title " Picture " --ok-label "Use" --cancel-label "Back" --radiolist \
+"How videos are shown. The block modes draw the picture with coloured
+characters; smaller pixels mean a sharper but slower picture.
+Real picture shows the video itself, without blocks." 16 66 5 "${items[@]}") || return
+    echo "$m" > "$KB_CONF/player-mode"
+}
+
+# play SOURCE [MPV-OPTIONS...]: show the keys, then play.
+play() {
+    local src=$1 mode
+    shift
+    mode=$(player_mode)
+    if [[ ${src,,} =~ \.($AUDIO_EXT)$ ]]; then
+        mode=audio
+    else
+        kb_info "Space pause   ←/→ seek   9/0 volume   q or Ctrl+C stops"
+        sleep 2
+    fi
+    "$KB_LIB/kb-play" "$mode" "$src" "$@"
+}
+
+open_address() {
+    local url
+    url=$(kb_input "Open Address" "Web address of a video (YouTube and most video sites work):") || return
+    [ -n "$url" ] || return
+    kb_info "Opening $url ..."
+    play "$url"
+}
+
+# player SOURCE [MPV-OPTIONS...]: just play that, with the chosen picture mode.
+if [ $# -gt 0 ]; then
+    play "$@"
+    exit
+fi
+
+sel=""
+while true; do
+    items=(
+        Address "Play a video from the web"
+        Browse  "Open a file anywhere on the system"
+        Picture "Picture: $(mode_name "$(player_mode)")"
+    )
+    # Files are numbered; the names go in the wide description column.
+    files=()
+    while IFS= read -r f; do
+        files+=("$f")
+        items+=("${#files[@]}" "${f#"$HOME"/}")
+    done < <(find "$HOME/Videos" "$HOME/Music" "$HOME/Documents" -maxdepth 2 -type f 2>/dev/null \
+             | grep -iE "\.($MEDIA_EXT)$" | sort)
+
+    sel=$(kb_dialog --title " Video Player " --default-item "$sel" --ok-label "Play" --cancel-label "Close" \
+        --menu "Videos and music in ~/Videos and ~/Music:" 20 76 12 "${items[@]}") || exit 0
+    case $sel in
+        Address) open_address ;;
+        Picture) choose_mode ;;
+        Browse)
+            f=$(kb_dialog --title " Open Video " --fselect "$HOME/" 14 64) || continue
+            [ -f "$f" ] && play "$f" ;;
+        *) play "${files[sel - 1]}" ;;
+    esac
+done
