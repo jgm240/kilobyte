@@ -76,6 +76,24 @@ APP_KEYS = {
 }
 
 
+# Escape sequences that reach us unparsed (split by a slow machine): the
+# Linux console's and xterm's spellings, mapped to the keys above.
+RAW_KEYS = {}
+for _key, _seqs in (
+        (curses.KEY_UP, ("[A", "OA")), (curses.KEY_DOWN, ("[B", "OB")),
+        (curses.KEY_RIGHT, ("[C", "OC")), (curses.KEY_LEFT, ("[D", "OD")),
+        (curses.KEY_HOME, ("[H", "OH", "[1~", "[7~")), (curses.KEY_END, ("[F", "OF", "[4~", "[8~")),
+        (curses.KEY_IC, ("[2~",)), (curses.KEY_DC, ("[3~",)),
+        (curses.KEY_PPAGE, ("[5~",)), (curses.KEY_NPAGE, ("[6~",)), (curses.KEY_BTAB, ("[Z",)),
+        (curses.KEY_F1, ("[[A", "OP", "[11~")), (curses.KEY_F2, ("[[B", "OQ", "[12~")),
+        (curses.KEY_F3, ("[[C", "OR", "[13~")), (curses.KEY_F4, ("[[D", "OS", "[14~")),
+        (curses.KEY_F5, ("[[E", "[15~")), (curses.KEY_F6, ("[17~",)), (curses.KEY_F7, ("[18~",)),
+        (curses.KEY_F8, ("[19~",)), (curses.KEY_F9, ("[20~",)), (curses.KEY_F10, ("[21~",)),
+        (curses.KEY_F11, ("[23~",)), (curses.KEY_F12, ("[24~",))):
+    for _s in _seqs:
+        RAW_KEYS["\x1b" + _s] = _key
+
+
 class Gpm:
     """The console mouse straight from gpm (libgpm): every movement, drag,
     press, release and wheel turn. ncurses' own gpm support reports only
@@ -602,20 +620,7 @@ class Desk:
             return
         win = self.active()
         if k == "\x1b":
-            # Alt+Tab arrives as Esc followed by Tab.
-            self.s.scr.timeout(15)
-            try:
-                nxt = self.s.scr.get_wch()
-            except curses.error:
-                nxt = None
-            self.s.scr.nodelay(True)
-            if nxt == "\t":
-                self.cycle()
-                return
-            if win:
-                win.send(b"\x1b")
-                if nxt is not None:
-                    self.key(nxt)
+            self.escape(win)
             return
         if not win:
             return
@@ -625,6 +630,59 @@ class Desk:
             win.send(APP_KEYS[k])
         elif k in KEYS:
             win.send(KEYS[k])
+
+    def escape(self, win):
+        """An Esc arrived on its own: curses did not recognise what follows
+        (on a slow machine a key's escape sequence can come in pieces). Read
+        the rest of the sequence here and pass the whole key on in one write,
+        so the program never sees a lone Esc (which closes dialogs)."""
+        scr = self.s.scr
+        seq, extra = "\x1b", None
+
+        def more(ms):
+            scr.timeout(ms)
+            try:
+                return scr.get_wch()
+            except curses.error:
+                return None
+
+        c = more(80)
+        if isinstance(c, str):
+            seq += c
+            if c == "O":                        # ESC O x: one more character
+                c = more(80)
+                if isinstance(c, str):
+                    seq += c
+                else:
+                    extra = c
+            elif c == "[":                      # CSI: up to its final byte
+                while len(seq) < 16:
+                    c = more(80)
+                    if not isinstance(c, str):
+                        extra = c
+                        break
+                    seq += c
+                    if seq == "\x1b[[":         # the console's F1-F5: ESC [ [ A
+                        continue
+                    if "\x40" <= c <= "\x7e":
+                        break
+        elif c is not None:
+            extra = c
+        scr.nodelay(True)
+        if seq == "\x1b\t":
+            self.cycle()
+        elif RAW_KEYS.get(seq) == curses.KEY_F12:
+            self.menu = {"sel": 0}
+        elif win:
+            key = RAW_KEYS.get(seq)
+            if key is not None and key in APP_KEYS and DECCKM in win.screen.mode:
+                win.send(APP_KEYS[key])
+            elif key is not None and key in KEYS:
+                win.send(KEYS[key])
+            else:
+                win.send(seq.encode("utf-8"))
+        if extra is not None:
+            self.key(extra)
 
     def run(self):
         while True:
@@ -673,7 +731,7 @@ class Desk:
 
 if __name__ == "__main__":
     argv = sys.argv[1:] or ["kilobyte"]
-    os.environ.setdefault("ESCDELAY", "25")
+    os.environ.setdefault("ESCDELAY", "100")
     # On the console Kilobyte Windows reads gpm itself; the curses mouse must
     # stay off there, or ncurses opens gpm too and takes events from the same
     # connection.
