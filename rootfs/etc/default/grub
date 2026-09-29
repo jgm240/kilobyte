@@ -1,8 +1,12 @@
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=3
 GRUB_DISTRIBUTOR="Kilobyte"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 consoleblank=0"
+# No "quiet": every start-up message shows, under the Kilobyte logo.
+GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"
 GRUB_CMDLINE_LINUX=""
-GRUB_TERMINAL=console
+# The Kilobyte menu in graphics mode; GRUB falls back to text by itself.
+GRUB_TERMINAL_OUTPUT=gfxterm
+GRUB_GFXMODE=1024x768,800x600,auto
+GRUB_THEME=/usr/share/kilobyte/grub/theme.txt
 GRUB_GFXPAYLOAD_LINUX=keep
 GRUB_DISABLE_OS_PROBER=true

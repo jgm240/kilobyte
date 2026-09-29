@@ -1,0 +1,19 @@
+#!/bin/sh
+# The Kilobyte logo at the top of the console during start-up (made by
+# tools/make-bootlogo.py). The kernel's and systemd's messages scroll in the
+# lines below it (a scroll region), so the whole start is visible.
+# Runs in the initramfs (scripts/*/kilobyte-logo) and again after the
+# console font is loaded (kilobyte-bootlogo.service).
+v=""
+read -r v 2>/dev/null < /usr/lib/kilobyte/version || v=$(sed -n 's/^KB_VERSION="\(.*\)"/\1/p' /usr/lib/kilobyte/lib.sh 2>/dev/null)
+# "bootlogo again" draws it over whatever is on the screen (after the console
+# changed size or font) and carries on at the bottom.
+[ "$1" = again ] || printf '\033[0m\033[2J'
+printf '\033[0m\033[r\033[H\033[44m\033[K\n'
+printf '\033[44m\033[K   \033[1;36m█ ▄▀ ▀█▀ █    ▄▀▀▄ █▀▀▄ ▀▄ ▄▀ ▀▀█▀▀ █▀▀▀\033[0;44m\n'
+printf '\033[44m\033[K   \033[1;36m█▀▄   █  █    █  █ █▀▀▄   █     █   █▀▀\033[0;44m\n'
+printf '\033[44m\033[K   \033[1;36m▀  ▀ ▀▀▀ ▀▀▀▀  ▀▀  ▀▀▀    ▀     ▀   ▀▀▀▀\033[0;44m\n'
+printf '\033[44m\033[K   \033[0;37;44mKilobyte %s - starting up\033[0;44m\n' "$v"
+printf '\033[44m\033[K\033[0m\n\033[K'
+# Everything from line 8 down scrolls; the logo stays.
+if [ "$1" = again ]; then printf '\033[8r\033[999;1H'; else printf '\033[8r\033[8;1H'; fi

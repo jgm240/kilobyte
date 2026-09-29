@@ -110,7 +110,8 @@ install_tree() {
         amd64 | i386) kind=pc ;;
         *)            kind=pi ;;
     esac
-    new_pkgs=$(package_list "$src/../image/packages.txt" "$src/../image/packages-$kind.txt")
+    new_pkgs=$(package_list "$src/../image/packages.txt" "$src/../image/packages-$kind.txt" \
+        "$src/../image/packages-$(dpkg --print-architecture).txt")
     grep -qx firmware-iwlwifi <<< "$old_pkgs" &&   # not a --lite image
         new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-wifi.txt")" | sort -u)
 
@@ -126,6 +127,7 @@ install_tree() {
     done
     chmod 755 /usr/lib/kilobyte/kb-* /usr/lib/kilobyte/wifi-up /usr/lib/kilobyte/post \
         /usr/lib/kilobyte/resize-root /usr/lib/kilobyte/apps/*
+    [ -f /usr/lib/kilobyte/bootlogo ] && chmod 755 /usr/lib/kilobyte/bootlogo
     install -m 755 "$src/usr/bin/kilobyte" /usr/bin/kilobyte
     install -m 755 "$src/usr/sbin/kilobyte-install" /usr/sbin/kilobyte-install
     install -m 755 "$src/usr/sbin/kilobyte-firstboot" /usr/sbin/kilobyte-firstboot
@@ -136,9 +138,24 @@ install_tree() {
              etc/modules-load.d/kilobyte-optical.conf etc/sysctl.d/10-kilobyte.conf \
              etc/yt-dlp.conf etc/elinks/elinks.conf etc/gpm.conf etc/issue etc/systemd/network/20-wired.network \
              etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
-             etc/systemd/network/25-wireless.network; do
+             etc/systemd/network/25-wireless.network etc/systemd/system/kilobyte-bootlogo.service \
+             etc/X11/Xwrapper.config etc/X11/xorg.conf.d/10-kilobyte.conf; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
     done
+    # The start-up logo in the initramfs.
+    local initramfs_changed=
+    for f in etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/scripts/init-top/kilobyte-logo \
+             etc/initramfs-tools/scripts/init-bottom/kilobyte-logo; do
+        [ -f "$src/$f" ] || continue
+        cmp -s "$src/$f" "/$f" || initramfs_changed=1
+        install -D -m 755 "$src/$f" "/$f"
+    done
+    # Installed PCs: Kilobyte's boot menu (not on the live system).
+    if [ -f "$src/etc/default/grub" ] && [ ! -d /run/live/medium ] && command -v update-grub >/dev/null &&
+       ! cmp -s "$src/etc/default/grub" /etc/default/grub; then
+        install -m 644 "$src/etc/default/grub" /etc/default/grub
+        update-grub >/dev/null 2>&1 || true
+    fi
     cp -a "$src/etc/skel/." /etc/skel/ 2>/dev/null || true
     chown -R root:root /etc/skel
     echo "$sha" > "$SHARE/commit"
@@ -157,6 +174,10 @@ install_tree() {
     if [ ${#missing[@]} -gt 0 ]; then
         echo "New programs: ${missing[*]}"
         export DEBIAN_FRONTEND=noninteractive
+        # 32-bit packages on a 64-bit PC (Wine for 32-bit Windows programs).
+        if printf '%s\n' "${missing[@]}" | grep -q ':i386$' && ! dpkg --print-foreign-architectures | grep -qx i386; then
+            dpkg --add-architecture i386
+        fi
         apt-get update -qq || true
         if ! apt-get install -y -q --no-install-recommends "${missing[@]}"; then
             # Install one by one so one unavailable package does not block the rest.
@@ -168,7 +189,11 @@ install_tree() {
     fi
 
     # New services and groups that came with the update.
-    systemctl enable kilobyte-post.service 2>/dev/null || true
+    systemctl enable kilobyte-post.service kilobyte-bootlogo.service 2>/dev/null || true
+    if [ -n "$initramfs_changed" ] && [ ! -d /run/live/medium ]; then
+        echo "Updating the start-up files ..."
+        update-initramfs -u -k all >/dev/null 2>&1 || true
+    fi
     systemctl try-restart gpm.service 2>/dev/null || true      # new mouse settings
     # shellcheck source=/dev/null
     . /usr/lib/kilobyte/setup-questions.sh

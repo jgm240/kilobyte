@@ -1,0 +1,10 @@
+#!/bin/sh
+# The Kilobyte logo in the initramfs (see /usr/lib/kilobyte/bootlogo).
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+mkdir -p "$DESTDIR/usr/lib/kilobyte"
+cp /usr/lib/kilobyte/bootlogo "$DESTDIR/usr/lib/kilobyte/"
+sed -n 's/^KB_VERSION="\(.*\)"/\1/p' /usr/lib/kilobyte/lib.sh > "$DESTDIR/usr/lib/kilobyte/version"
+[ -e "$DESTDIR/bin/printf" ] || [ -e "$DESTDIR/usr/bin/printf" ] || copy_exec /usr/bin/printf /bin/printf

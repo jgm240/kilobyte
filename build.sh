@@ -56,6 +56,7 @@ for ARCH in $ARCHES; do
     }
 
     stage debs --platform "$PLATFORM"
+    [ "$ARCH" = armhf ] && stage box86 --platform "$NATIVE"
     stage rootfs --privileged --platform "$PLATFORM"
     case $ARCH in
         amd64 | i386)

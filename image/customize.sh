@@ -51,8 +51,12 @@ mkdir -p /media/cdrom
 grep -q /media/cdrom /etc/fstab 2>/dev/null ||
     echo '/dev/sr0  /media/cdrom  udf,iso9660  ro,user,noauto  0  0' >> /etc/fstab
 
+# --- Windows programs: X only for Wine, startable from anywhere (kb-x)
+echo "xserver-xorg-legacy xserver-xorg-legacy/xwrapper/allowed_users select Anybody" | debconf-set-selections
+chmod 644 /etc/X11/Xwrapper.config 2>/dev/null || true
+
 # --- services
-systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post
+systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post kilobyte-bootlogo
 systemctl disable wpa_supplicant.service hostapd.service 2>/dev/null || true   # started on demand
 systemctl mask systemd-networkd-wait-online.service
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf

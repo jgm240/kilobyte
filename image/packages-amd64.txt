@@ -1,0 +1,2 @@
+# 64-bit PC: Wine for 64-bit and (with i386 multiarch) 32-bit Windows programs.
+wine wine64 wine32:i386

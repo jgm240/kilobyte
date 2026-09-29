@@ -1,0 +1,49 @@
+# Kilobyte boot menu (made by tools/make-bootlogo.py)
+title-text: ""
+desktop-color: "#0000aa"
+terminal-font: "Unifont Regular 16"
+terminal-box: "menu_*.png"
+
++ image {
+    left = 50%-324
+    top = 8%
+    file = "logo.png"
+}
++ label {
+    left = 0
+    top = 8%+104
+    width = 100%
+    align = "center"
+    color = "#aaaaaa"
+    font = "Unifont Regular 16"
+    text = "The text-mode desktop - Debian GNU/Linux"
+}
++ boot_menu {
+    left = 50%-300
+    top = 8%+144
+    width = 600
+    height = 176
+    item_font = "Unifont Regular 16"
+    item_color = "#ffffff"
+    selected_item_font = "Unifont Regular 16"
+    selected_item_color = "#0000aa"
+    selected_item_pixmap_style = "sel_*.png"
+    menu_pixmap_style = "menu_*.png"
+    item_height = 24
+    item_padding = 8
+    item_spacing = 4
+    icon_width = 0
+    icon_height = 0
+    item_icon_space = 0
+    scrollbar = false
+}
++ label {
+    id = "__timeout__"
+    left = 0
+    top = 8%+338
+    width = 100%
+    align = "center"
+    color = "#55ffff"
+    font = "Unifont Regular 16"
+    text = "Starting in %d seconds. Arrow keys choose, Enter starts, E edits."
+}

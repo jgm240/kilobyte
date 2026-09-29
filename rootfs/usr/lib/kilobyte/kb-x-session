@@ -1,0 +1,3 @@
+#!/bin/sh
+# Inside kb-x's X server: the program, nothing else (no window manager).
+exec "$@"

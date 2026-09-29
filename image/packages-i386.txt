@@ -1,0 +1,2 @@
+# 32-bit PC: Wine for 32-bit Windows programs.
+wine wine32

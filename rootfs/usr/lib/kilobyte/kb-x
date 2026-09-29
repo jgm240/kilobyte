@@ -1,0 +1,10 @@
+#!/bin/sh
+# kb-x PROGRAM [ARGS...]: run one graphical program full screen in its own
+# X server on a free console, and come back here when it ends.
+# Ctrl+Alt+Backspace ends it at once. Used for Windows programs (Wine).
+[ $# -gt 0 ] || { echo "usage: kb-x PROGRAM [ARGS...]" >&2; exit 2; }
+command -v xinit >/dev/null || { echo "kb-x: the X server is not installed" >&2; exit 1; }
+d=0
+while [ -e "/tmp/.X$d-lock" ] || [ -e "/tmp/.X11-unix/X$d" ]; do d=$((d + 1)); done
+exec xinit /usr/lib/kilobyte/kb-x-session "$@" -- ":$d" "vt$((7 + d))" -nolisten tcp -quiet -keeptty \
+    > "${XDG_CACHE_HOME:-$HOME/.cache}/kilobyte-x.log" 2>&1

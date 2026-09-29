@@ -19,12 +19,13 @@ VERSION=$(sed -n 's/^KB_VERSION="\(.*\)"/\1/p' /src/rootfs/usr/lib/kilobyte/lib.
 WORK=/work
 
 case $ARCH in
-    amd64) SUITE=trixie   KERNEL=linux-image-amd64 KIND=pc EFI=grub-efi-amd64-bin ;;
+    amd64) SUITE=trixie   KERNEL=linux-image-amd64 KIND=pc EFI=grub-efi-amd64-bin EFI32=grub-efi-ia32-bin FOREIGN=i386 ;;
     i386)  SUITE=bookworm KERNEL=linux-image-686   KIND=pc EFI=grub-efi-ia32-bin ;;   # Debian 13 has no 32-bit PC kernel
     arm64) SUITE=trixie   KERNEL=linux-image-arm64 KIND=pi EFI= ;;
     armhf) SUITE=trixie   KERNEL=linux-image-armmp KIND=pi EFI= ;;
     *) echo "unknown ARCH $ARCH" >&2; exit 2 ;;
 esac
+EFI32=${EFI32:-} FOREIGN=${FOREIGN:-}
 if [ $KIND = pc ]; then
     NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}"
 else
@@ -87,9 +88,57 @@ stage_debs() {
     ls -1 "$WORK/debs"
 }
 
+# box86 (armhf only): not in Debian, so it is built from its source here,
+# cross-compiled in a native container (fast) instead of an emulated one.
+BOX86_VERSION=v0.3.8
+stage_box86() {
+    local b="$WORK/box86" v=${BOX86_VERSION#v}
+    mkdir -p "$WORK/debs"
+    if ls "$WORK/debs/box86_$v-"*.deb >/dev/null 2>&1; then
+        echo "(box86 $v already built)"
+        return 0
+    fi
+    echo "==> Building box86 $v for armhf"
+    tools ca-certificates curl cmake make python3 gcc-arm-linux-gnueabihf libc6-dev-armhf-cross dpkg-dev
+    rm -rf "$b" && mkdir -p "$b/src" && cd "$b/src"
+    curl -fsSL "https://github.com/ptitSeb/box86/archive/refs/tags/$BOX86_VERSION.tar.gz" | tar -xz --strip-components=1
+    mkdir build && cd build
+    cmake .. -DRPI2=1 -DNOGIT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=armv7l \
+        -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc -DCMAKE_ASM_COMPILER=arm-linux-gnueabihf-gcc > "$b/cmake.log" 2>&1 ||
+        { tail -n 30 "$b/cmake.log"; return 1; }
+    make -j"$(nproc)" > "$b/make.log" 2>&1 || { tail -n 30 "$b/make.log"; return 1; }
+    make install DESTDIR="$b/pkg" > "$b/install.log" 2>&1 || true
+    [ -x "$b/pkg/usr/bin/box86" ] || { tail -n 30 "$b/install.log"; return 1; }
+    arm-linux-gnueabihf-strip "$b/pkg/usr/bin/box86"
+    mkdir -p "$b/pkg/DEBIAN" "$b/pkg/usr/lib/binfmt.d"
+    # Registered for i386 programs at boot by systemd-binfmt.
+    [ -f "$b/pkg/etc/binfmt.d/box86.conf" ] && mv "$b/pkg/etc/binfmt.d/box86.conf" "$b/pkg/usr/lib/binfmt.d/"
+    rmdir "$b/pkg/etc/binfmt.d" 2>/dev/null || true
+    cat > "$b/pkg/DEBIAN/control" <<CONTROL
+Package: box86
+Version: $v-1+kilobyte1
+Architecture: armhf
+Maintainer: Kilobyte <kilobyte@users.noreply.github.com>
+Depends: libc6
+Section: otherosfs
+Priority: optional
+Homepage: https://github.com/ptitSeb/box86
+Description: Linux userspace x86 emulator with a twist
+ Runs x86 (i386) Linux programs on 32-bit ARM, translating the code as it
+ runs and handing common libraries to their native ARM versions.
+ Built for Kilobyte from box86 $v (MIT licence).
+CONTROL
+    [ -f "$b/pkg/etc/box86.box86rc" ] && echo /etc/box86.box86rc > "$b/pkg/DEBIAN/conffiles"
+    dpkg-deb --root-owner-group -b "$b/pkg" "$WORK/debs/box86_$v-1+kilobyte1_armhf.deb"
+    ls -l "$WORK/debs/"
+}
+
 stage_rootfs() {
     local packages
-    packages="$(pkgs /src/image/packages.txt /src/image/packages-$KIND.txt),$KERNEL${EFI:+,$EFI}"
+    local lists=(/src/image/packages.txt "/src/image/packages-$KIND.txt")
+    [ -f "/src/image/packages-$ARCH.txt" ] && lists+=("/src/image/packages-$ARCH.txt")
+    packages="$(pkgs "${lists[@]}"),$KERNEL${EFI:+,$EFI}${EFI32:+,$EFI32}"
     [ -n "${LITE:-}" ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
 
     echo "==> Installing build tools"
@@ -100,7 +149,7 @@ stage_rootfs() {
     export KB_PACKAGES="$packages"   # recorded in the image for Kilobyte Update
     KB_VARIANT=$([ $KIND = pc ] && echo live || echo pi)
     export KB_VARIANT
-    mmdebstrap --variant=minbase --mode=root --architectures="$ARCH" \
+    mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
         --components="main non-free-firmware" \
         --include="$packages" \
         --aptopt='APT::Install-Recommends "false"' \
@@ -120,6 +169,7 @@ stage_rootfs() {
         --customize-hook='echo "${KB_COMMIT:-unknown}" > "$1/usr/share/kilobyte/commit"' \
         --customize-hook='echo "$KB_PACKAGES" | tr , "\n" | sort -u > "$1/usr/share/kilobyte/packages.txt"' \
         --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && cp /work/debs/*.deb "$1/tmp/kb-debs/" && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
+        --customize-hook='bash /src/image/wine-x86.sh "$1"' \
         --customize-hook='cp /src/image/customize.sh "$1/tmp/customize.sh"' \
         --customize-hook='chroot "$1" bash /tmp/customize.sh "$KB_VARIANT"' \
         "$SUITE" "$WORK/rootfs" \
@@ -141,11 +191,15 @@ stage_squash() {
 stage_iso() {
     local iso="/out/$NAME.iso"
     echo "==> Writing $iso (boots with BIOS and UEFI)"
-    tools xorriso grub-pc-bin "$EFI" grub-common mtools dosfstools
+    # 64-bit ISOs also carry 32-bit EFI GRUB: old EFI 1.x PCs and early Intel
+    # Macs have 32-bit firmware on a 64-bit processor (the kernel runs there).
+    tools xorriso grub-pc-bin "$EFI" ${EFI32:+"$EFI32"} grub-common mtools dosfstools
     mkdir -p "$WORK/iso/boot/grub" /out
     cp "$WORK"/rootfs/boot/vmlinuz-* "$WORK/iso/live/vmlinuz"
     cp "$WORK"/rootfs/boot/initrd.img-* "$WORK/iso/live/initrd.img"
     cp /src/image/grub.cfg "$WORK/iso/boot/grub/grub.cfg"
+    mkdir -p "$WORK/iso/boot/grub/themes"
+    cp -r /src/rootfs/usr/share/kilobyte/grub "$WORK/iso/boot/grub/themes/kilobyte"
     grub-mkrescue -o "$iso.tmp" "$WORK/iso" -- -volid KILOBYTE 2>&1 | grep -v '^xorriso : UPDATE' || true
     mv "$iso.tmp" "$iso"
     ls -lh "$iso"
@@ -189,9 +243,10 @@ EOF
 
 case "${1:-}" in
     debs)    stage_debs ;;
+    box86)   stage_box86 ;;
     rootfs)  stage_rootfs ;;
     squash)  stage_squash ;;
     iso)     stage_iso ;;
     piimage) stage_piimage ;;
-    *) echo "usage: $0 debs|rootfs|squash|iso|piimage" >&2; exit 2 ;;
+    *) echo "usage: $0 debs|box86|rootfs|squash|iso|piimage" >&2; exit 2 ;;
 esac

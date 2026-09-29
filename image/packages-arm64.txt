@@ -1,0 +1,6 @@
+# 64-bit Raspberry Pi: box64 runs x86-64 Linux programs, here Wine for PCs
+# (put in /opt/wine by the image build). The ARM libraries box64 hands
+# Wine's graphics, font, sound and TLS calls to:
+box64
+libfreetype6 libfontconfig1 libx11-6 libxext6 libxrender1 libxrandr2 libxi6 libxcursor1
+libxinerama1 libxcomposite1 libxfixes3 libgnutls30t64 libasound2t64 libglib2.0-0t64 libdbus-1-3

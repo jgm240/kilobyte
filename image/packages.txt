@@ -26,5 +26,9 @@ cups cups-client cups-filters ipp-usb avahi-daemon libnss-mdns
 # --- USB sticks and disks ---
 fdisk e2fsprogs dosfstools exfatprogs
 
+# --- Windows programs: Wine (per architecture, see packages-ARCH.txt) gets an
+# X server of its own only while a graphical Windows program runs ---
+xserver-xorg-core xserver-xorg-legacy xserver-xorg-input-libinput xserver-xorg-video-fbdev xinit
+
 # --- firmware ---
 firmware-linux-free firmware-realtek

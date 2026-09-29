@@ -188,12 +188,20 @@ EOF
 
     progress 94 "Installing the boot loader..."
     # BIOS, and UEFI in the flavour of this build (64-bit, or 32-bit PCs).
-    local efi=x86_64-efi
+    # 64-bit systems also get 32-bit EFI GRUB (EFI/BOOT/BOOTIA32.EFI) for old
+    # EFI 1.x machines and early Intel Macs, whose firmware is 32-bit.
+    local efi=x86_64-efi efi32=
     [ "$(dpkg --print-architecture)" = i386 ] && efi=i386-efi
+    [ $efi = x86_64-efi ] && [ -d "$TARGET/usr/lib/grub/i386-efi" ] && efi32=i386-efi
     in_target grub-install --target=i386-pc "$DISK"
     in_target grub-install --target=$efi --efi-directory=/boot/efi --bootloader-id=kilobyte --removable --no-nvram
+    [ -n "$efi32" ] && { in_target grub-install --target=$efi32 --efi-directory=/boot/efi \
+        --bootloader-id=kilobyte --removable --no-nvram || true; }
     if [ -d /sys/firmware/efi ]; then
-        in_target grub-install --target=$efi --efi-directory=/boot/efi --bootloader-id=kilobyte || true
+        # Register with the firmware in its own flavour (32-bit on a 64-bit PC).
+        local fw=$efi
+        [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = 32 ] && [ -n "$efi32" ] && fw=$efi32
+        in_target grub-install --target=$fw --efi-directory=/boot/efi --bootloader-id=kilobyte || true
     fi
     in_target update-grub
 

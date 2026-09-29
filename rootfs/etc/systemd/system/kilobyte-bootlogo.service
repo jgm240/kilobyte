@@ -1,0 +1,18 @@
+[Unit]
+Description=Kilobyte logo during start-up
+DefaultDependencies=no
+After=systemd-vconsole-setup.service console-setup.service systemd-udev-trigger.service
+Before=kilobyte-post.service getty@tty1.service
+ConditionKernelCommandLine=!quiet
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/bootlogo again
+StandardInput=null
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=no
+TTYVHangup=no
+
+[Install]
+WantedBy=sysinit.target

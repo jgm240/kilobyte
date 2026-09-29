@@ -1,0 +1,95 @@
+#!/bin/bash
+# Windows programs: run .exe and .msi files with Wine.
+# PCs use Debian's Wine (64- and 32-bit programs). On a Raspberry Pi, Wine for
+# x86 runs through box64 (64-bit Pi OS: 64-bit programs) or box86 (32-bit Pi
+# OS: 32-bit programs), which translate x86 code to ARM as it runs.
+# Graphical programs get their own X server (kb-x) in a Windows desktop.
+. /usr/lib/kilobyte/lib.sh
+
+T="Windows Programs"
+export WINEDEBUG=-all
+export WINEDLLOVERRIDES="mscoree,mshtml="      # no Mono/Gecko download questions
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}"
+
+have_wine() {
+    command -v wine >/dev/null && return 0
+    kb_msg "$T" "\Z1\ZbWine is not installed.\Zn\n\nInstall it in Settings > Software (package \"wine\")." 9 60
+    return 1
+}
+
+# First use: make the C: drive (~/.wine). Takes a minute, longer on a Pi.
+prepare() {
+    [ -f "${WINEPREFIX:-$HOME/.wine}/system.reg" ] && return 0
+    kb_dialog --title " $T " --infobox "Preparing Windows for the first time...\n\nThis takes a minute (a few on a Raspberry Pi)." 7 60
+    wineboot -i > "${XDG_CACHE_HOME:-$HOME/.cache}/kilobyte-wine.log" 2>&1 ||
+        wine wineboot -i >> "${XDG_CACHE_HOME:-$HOME/.cache}/kilobyte-wine.log" 2>&1
+}
+
+screen_size() {
+    local s
+    s=$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)
+    [ -n "$s" ] && echo "${s/,/x}" || echo 1024x768
+}
+
+# Graphical: a Windows desktop the size of the screen, in its own X server.
+run_x() {
+    kb_dialog --title " $T " --infobox "Starting the program...\n\nCtrl+Alt+Backspace returns here at any time." 7 60
+    /usr/lib/kilobyte/kb-x "$(command -v wine)" explorer "/desktop=Kilobyte,$(screen_size)" "$@" ||
+        kb_msg "$T" "The graphics screen could not start.\n\nDetails are in ~/.cache/kilobyte-x.log." 9 60
+}
+
+# Text programs run right here in the terminal.
+run_text() {
+    clear
+    echo "Running $(basename "$1") - Ctrl+C stops it."
+    echo
+    (cd "$(dirname "$1")" && wine "$@")
+    echo
+    read -r -n 1 -s -p "Press any key to return to Kilobyte." || true
+}
+
+pick_exe() {
+    kb_pick_file "$T - Open a program" "*.exe" "*.EXE" "*.msi" "*.MSI" "*.bat" "*.com"
+}
+
+about() {
+    local how
+    case $(dpkg --print-architecture) in
+        amd64) how="Debian's Wine runs 64-bit and 32-bit Windows programs." ;;
+        i386)  how="Debian's Wine runs 32-bit Windows programs." ;;
+        arm64) how="Wine for 64-bit PCs runs through box64, which translates PC code to ARM as it goes. 64-bit Windows programs only; expect it to be slower than a PC." ;;
+        armhf) how="Wine for 32-bit PCs runs through box86, which translates PC code to ARM as it goes. 32-bit Windows programs only; expect it to be slower than a PC." ;;
+    esac
+    kb_msg "$T" "Wine runs many Windows programs without Windows.\n\n$how\n\nGraphical programs open full screen in a Windows desktop; when they close you are back here. Ctrl+Alt+Backspace leaves at once.\n\nPrograms you install are kept in ~/.wine (drive C:)." 18 66
+}
+
+sel=""
+while sel=$(kb_dialog --title " $T " --default-item "$sel" --cancel-label "Close" \
+        --menu "Run Windows programs with Wine." 0 64 0 \
+        Run      "Run a Windows program (.exe, .msi)" \
+        Text     "Run a text-mode program in this terminal" \
+        Desktop  "Windows desktop and Start menu" \
+        Files    "Browse drive C: (Wine file manager)" \
+        Settings "Wine settings (winecfg)" \
+        Remove   "Uninstall Windows programs" \
+        About    "About Windows programs on Kilobyte"); do
+    case $sel in
+        About) about; continue ;;
+    esac
+    have_wine || continue
+    prepare
+    case $sel in
+        Run)
+            f=$(pick_exe) || continue
+            case $f in
+                *.msi | *.MSI) run_x msiexec /i "$f" ;;
+                *)             run_x "$f" ;;
+            esac ;;
+        Text)     f=$(pick_exe) && run_text "$f" ;;
+        Desktop)  run_x ;;
+        Files)    run_x winefile ;;
+        Settings) run_x winecfg ;;
+        Remove)   run_x uninstaller ;;
+    esac
+done
+exit 0

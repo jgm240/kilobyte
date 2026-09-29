@@ -11,6 +11,7 @@ if [ -z "${KILOBYTE:-}" ] && [ -z "${KILOBYTE_SHELL:-}" ] && [ -t 0 ] \
             fi
             # Log out when Kilobyte ends, stay in the shell only when the
             # user asked for it, and restart Kilobyte after anything else.
+            printf '\033[r'     # the start-up logo's scroll region ends here
             while :; do
                 kilobyte
                 case $? in

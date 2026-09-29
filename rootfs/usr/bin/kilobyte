@@ -143,6 +143,7 @@ accessories() {
         Print      "Print a document"          "Send a file to the printer" \
         USB        "USB sticks"                "Open, safely remove or format a USB stick" \
         Backup     "Back up your files"        "Copy documents and settings to a USB stick" \
+        Windows    "Windows programs (Wine)"   "Run .exe and .msi programs (box64/box86 on a Raspberry Pi)" \
         Saver      "Screen saver"              "Start the screen saver now"); do
         case $sel in
             Paint)      kb_run "$APPS/paint" ;;
@@ -156,6 +157,7 @@ accessories() {
             Print)      "$APPS/print" ;;
             USB)        "$APPS/usb" ;;
             Backup)     "$APPS/backup" ;;
+            Windows)    "$APPS/wine" ;;
             Saver)      run_saver ;;
         esac
     done

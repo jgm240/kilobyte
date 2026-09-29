@@ -1,0 +1,5 @@
+# 32-bit Raspberry Pi: box86 (built by the image build, not in Debian) runs
+# i386 Linux programs, here Wine for PCs (in /opt/wine). The ARM libraries
+# box86 hands Wine's graphics, font, sound and TLS calls to:
+libfreetype6 libfontconfig1 libx11-6 libxext6 libxrender1 libxrandr2 libxi6 libxcursor1
+libxinerama1 libxcomposite1 libxfixes3 libgnutls30t64 libasound2t64 libglib2.0-0t64 libdbus-1-3
