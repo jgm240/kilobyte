@@ -190,6 +190,7 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 | Image | For | Build |
 |---|---|---|
 | `kilobyte-1.3-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
+| `kilobyte-1.3-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
 | `kilobyte-1.3-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
 | `kilobyte-1.3-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
 | `kilobyte-1.3-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
@@ -203,6 +204,15 @@ The 64-bit image boots from 64-bit UEFI and falls back to 32-bit EFI GRUB
 (`BOOTIA32.EFI`) on machines whose firmware is 32-bit although the processor
 is 64-bit (old EFI 1.x PCs, the first Intel Macs); Setup installs both, at
 the removable-media paths that every firmware looks at.
+
+**Intel Macs** (and UEFI PCs that don't list the ISO stick in their boot
+menu): write `kilobyte-1.3-amd64-usb.img` to the stick instead (`dd`, Etcher),
+hold ⌥ Option at the chime and choose **EFI Boot**. It is a plain stick: one
+FAT32 EFI partition with GRUB, the kernel and the live system, listed in both
+a GPT and a hybrid MBR, which is what Apple's firmware looks for. The hybrid
+ISO carries a blessed HFS+ volume too, so macOS shows it under Startup Disk,
+but the firmware of Macs from around 2008 does not start it from a USB stick.
+The USB image is UEFI only; BIOS PCs use the ISO.
 
 The PC images are hybrid ISOs. Burn one to a DVD or write it to a USB stick
 (`dd`, Etcher, Rufus in DD mode). Secure Boot must be off. The 32-bit image is
