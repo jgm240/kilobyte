@@ -71,64 +71,16 @@ fi
 DISK=$(kb_dialog --title " Where to install " --ok-label "Next" --cancel-label "Cancel" \
     --menu "Choose the disk for Kilobyte. \Z1Everything on it will be erased.\Zn" 16 70 6 "${disks[@]}") || abort
 
-# --- 3. Keyboard and time zone ---------------------------------------------
+# --- 3. Keyboard, time zone, computer name, account -------------------------
 
-cur_kb=$(sed -n 's/^XKBLAYOUT="\?\([^"]*\)"\?/\1/p' /etc/default/keyboard)
-KEYMAP=$(kb_dialog --title " Keyboard " --default-item "${cur_kb:-us}" --ok-label "Next" --cancel-label "Cancel" \
-    --menu "Keyboard layout:" 20 60 12 \
-    us "English (US)"   gb "English (UK)"   de "German"      at "German (Austria)" \
-    ch "Swiss"          fr "French"         be "Belgian"     es "Spanish" \
-    pt "Portuguese"     br "Portuguese (Brazil)" it "Italian" nl "Dutch" \
-    dk "Danish"         no "Norwegian"      se "Swedish"     "fi" "Finnish" \
-    pl "Polish"         cz "Czech"          hu "Hungarian"   tr "Turkish" \
-    ru "Russian"        ua "Ukrainian"      gr "Greek"       jp "Japanese" \
-    latam "Spanish (Latin America)" ca "Canadian (French)") || abort
-
-TZONE=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
-TZONE=${TZONE:-UTC}
-while true; do
-    region=$(kb_dialog --title " Time Zone " --default-item "${TZONE%%/*}" --ok-label "Next" --cancel-label "Cancel" \
-        --menu "Region (now: $TZONE):" 20 50 12 \
-        Africa "" America "" Antarctica "" Arctic "" Asia "" Atlantic "" \
-        Australia "" Europe "" Indian "" Pacific "" UTC "Universal time") || abort
-    if [ "$region" = UTC ]; then TZONE=UTC; break; fi
-    cities=()
-    while IFS= read -r f; do cities+=("${f#/usr/share/zoneinfo/"$region"/}" ""); done \
-        < <(find "/usr/share/zoneinfo/$region" -type f | sort)
-    city=$(kb_dialog --title " Time Zone - $region " --default-item "${TZONE#*/}" --ok-label "Next" --cancel-label "Back" \
-        --menu "City:" 20 50 12 "${cities[@]}") && { TZONE="$region/$city"; break; }
-done
-
-# --- 4. Computer name and user ---------------------------------------------
-
-while true; do
-    HOST=$(kb_input "Computer Name" "A name for this computer on the network:" "${HOST:-kilobyte}") || abort
-    [[ $HOST =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] && break
-    kb_msg "Computer Name" "Use only letters, digits and dashes." 7 50
-done
-
-while true; do
-    NAME=$(kb_input "Your Account" "Your user name (lower case, e.g. \"ada\"):" "${NAME:-}") || abort
-    if [[ ! $NAME =~ ^[a-z][a-z0-9_-]{0,31}$ ]]; then
-        kb_msg "Your Account" "Start with a letter; use only lower case letters, digits, - and _." 7 60
-    elif [ "$NAME" != "$LIVE_USER" ] && grep -q "^$NAME:" "$SRC/etc/passwd"; then
-        kb_msg "Your Account" "\"$NAME\" is reserved by the system. Pick another name." 7 60
-    else
-        break
-    fi
-done
-
-while true; do
-    PW1=$(kb_password "Your Account" "Password for $NAME:") || abort
-    PW2=$(kb_password "Your Account" "Type the password again:") || abort
-    if [ -z "$PW1" ]; then
-        kb_msg "Your Account" "The password must not be empty." 7 50
-    elif [ "$PW1" != "$PW2" ]; then
-        kb_msg "Your Account" "The passwords do not match." 7 50
-    else
-        break
-    fi
-done
+. /usr/lib/kilobyte/setup-questions.sh
+RESERVED_USERS_FROM="$SRC/etc/passwd"
+ask_keyboard  || abort
+ask_timezone  || abort
+ask_hostname  || abort
+ask_user      || abort
+ask_password  || abort
+ask_autologin
 
 # --- 5. Last chance --------------------------------------------------------
 
@@ -137,7 +89,7 @@ kb_dialog --title " Ready to Install " --defaultno --yes-label "Install" --no-la
   Keyboard      $KEYMAP
   Time zone     $TZONE
   Computer      $HOST
-  User          $NAME (administrator)
+  User          $NAME (administrator), automatic login: $AUTOLOGIN
 
 \Z1\ZbALL DATA ON $DISK WILL BE ERASED.\Zn
 
@@ -218,14 +170,15 @@ EOF
     rm -rf "$TARGET/etc/systemd/system/getty@tty1.service.d"
     in_target userdel -r "$LIVE_USER" || true
     local groups g
-    groups=$(for g in sudo users netdev audio video plugdev cdrom; do grep -q "^$g:" "$TARGET/etc/group" && printf '%s,' "$g"; done)
-    in_target useradd -m -s /bin/bash -G "${groups%,}" "$NAME"
+    groups=$(user_groups "$TARGET/etc/group")
+    in_target useradd -m -s /bin/bash -G "$groups" "$NAME"
     printf '%s:%s\n' "$NAME" "$PW1" | chroot "$TARGET" chpasswd
     in_target passwd -l root
     local theme_dir="$TARGET/home/$NAME/.config/kilobyte"
     mkdir -p "$theme_dir"
     kb_theme_name > "$theme_dir/theme"
     in_target chown -R "$NAME:$NAME" "/home/$NAME"
+    [ "$AUTOLOGIN" = yes ] && write_autologin "$TARGET" "$NAME"
 
     in_target setupcon --save-only --force    # font and keyboard at boot
 
@@ -234,10 +187,13 @@ EOF
     in_target update-initramfs -u -k all
 
     progress 94 "Installing the boot loader..."
+    # BIOS, and UEFI in the flavour of this build (64-bit, or 32-bit PCs).
+    local efi=x86_64-efi
+    [ "$(dpkg --print-architecture)" = i386 ] && efi=i386-efi
     in_target grub-install --target=i386-pc "$DISK"
-    in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=kilobyte --removable --no-nvram
+    in_target grub-install --target=$efi --efi-directory=/boot/efi --bootloader-id=kilobyte --removable --no-nvram
     if [ -d /sys/firmware/efi ]; then
-        in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=kilobyte || true
+        in_target grub-install --target=$efi --efi-directory=/boot/efi --bootloader-id=kilobyte || true
     fi
     in_target update-grub
 

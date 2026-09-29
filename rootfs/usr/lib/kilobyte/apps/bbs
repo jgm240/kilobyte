@@ -1,0 +1,68 @@
+#!/bin/bash
+# BBS Dialer: visit bulletin board systems that still run today, with the
+# sound of a dial-up modem. Boards speak the IBM PC character set (CP437);
+# luit translates it for the console.
+. /usr/lib/kilobyte/lib.sh
+
+# name|host|port|protocol|description
+BOARDS=(
+    "Vertrauen|vert.synchro.net|23|telnet|Home of Synchronet BBS software"
+    "Level 29|bbs.fozztexx.com|23|telnet|Retro computing, runs on vintage hardware"
+    "20 For Beers|20forbeers.com|1337|telnet|Door games and message bases"
+    "Black Flag|blackflag.acid.org|23|telnet|ACiD Productions, ANSI art"
+    "Electronic Chicken|bbs.electronicchicken.com|23|telnet|Classic Synchronet board"
+    "The Cave|cavebbs.homeip.net|23|telnet|Friendly retro board"
+    "Xibalba|xibalba.l33t.codes|44510|telnet|ANSI art and door games"
+    "Vertrauen (SSH)|vert.synchro.net|22|ssh|The same, when telnet is blocked"
+)
+
+dial() { # dial NAME HOST PORT PROTOCOL
+    local name=$1 host=$2 port=$3 proto=$4 digits line
+    digits=$(printf '%s' "$host" | cksum | cut -c1-7)
+    [ -e "$KB_CONF/sounds-off" ] || aplay -q "$KB_SHARE/sounds/modem.wav" 2>/dev/null &
+    local sound=$!
+    for line in "ATZ" "OK" "ATDT ${digits:0:3}-${digits:3:4}" "" "RING" "RING" "CONNECT 14400/ARQ/V.42bis"; do
+        kb_dialog --title " $name " --infobox "\n  $line" 6 50
+        sleep 1
+    done &
+    local show=$!
+    # Is anyone answering? (The modem show runs meanwhile.)
+    timeout 7 bash -c "exec 3<>/dev/tcp/$host/$port" 2>/dev/null
+    local up=$?
+    wait $show 2>/dev/null
+    kill $sound 2>/dev/null
+    if [ $up -ne 0 ]; then
+        kb_msg " $name " "\n  \Z1\ZbNO CARRIER\Zn\n\n  $host did not answer. The board may be down, or this\n  network may block the port. Try another board, or the SSH entry." 11 66
+        return
+    fi
+    clear
+    if [ "$proto" = ssh ]; then
+        printf 'Log in as a new user, or with your account on %s.\n\n' "$name"
+        kb_guarded '' luit -encoding CP437 -- ssh -o StrictHostKeyChecking=accept-new -p "$port" "guest@$host"
+    else
+        TERM=ansi kb_guarded '' luit -encoding CP437 -- telnet "$host" "$port"
+    fi
+}
+
+sel=1
+while true; do
+    items=()
+    for i in "${!BOARDS[@]}"; do
+        IFS='|' read -r name host port proto desc <<< "${BOARDS[$i]}"
+        items+=("$((i + 1))" "$(printf '%-20s %s' "$name" "$desc")")
+    done
+    items+=(Other "Dial any address" Find "Find more boards (Telnet BBS Guide)")
+    sel=$(kb_dialog --title " BBS Dialer " --default-item "$sel" --ok-label "Dial" --cancel-label "Close" \
+        --menu "Bulletin board systems you can still call today.\nCtrl+C hangs up." 20 76 11 "${items[@]}") || exit 0
+    case $sel in
+        Other)
+            addr=$(kb_input "Dial" "Address, e.g. bbs.example.org or bbs.example.org:2323:" "") || continue
+            [ -n "$addr" ] || continue
+            dial "$addr" "${addr%%:*}" "$( [[ $addr == *:* ]] && echo "${addr##*:}" || echo 23)" telnet ;;
+        Find)
+            kb_run links "https://www.telnetbbsguide.com/bbs/list/" ;;
+        *)
+            IFS='|' read -r name host port proto desc <<< "${BOARDS[$((sel - 1))]}"
+            dial "$name" "$host" "$port" "$proto" ;;
+    esac
+done

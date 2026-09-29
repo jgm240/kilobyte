@@ -5,31 +5,35 @@
 Kilobyte is a small Debian-based Linux system whose desktop is drawn entirely
 with coloured character cells: box-drawing lines, block characters and
 shadows, like EDIT.COM, Norton Commander, Windows 1.0 or `raspi-config`. It
-has no graphics server, no window system and no toolkit. It is a set of shell
-scripts on top of [`dialog`](https://invisible-island.net/dialog/), plus
-classic text-mode programs.
+has no graphics server, no window system and no toolkit. It is shell scripts
+on top of [`dialog`](https://invisible-island.net/dialog/) and classic
+text-mode programs, plus a few small Python programs for the real-time parts
+(games, Paint, screen saver).
+
+It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
 ```
- ■ Kilobyte 1.0   │   user@kilobyte   │   Tue 29 Sep 2026  14:02
- ──────────────────────────────────────────────────────────────────
+ ■ Kilobyte 1.1  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
+ ─────────────────────────────────────────────────────────────────────────
 
-            ┌──────────── Program Manager ────────────┐
-            │ Pick a program with the arrow keys or   │
-            │ its first letter, then press Enter.     │
-            │ ┌─────────────────────────────────────┐ │
-            │ │ Editor       Text editor            │ │
-            │ │ Spreadsheet  Spreadsheet            │ │
-            │ │ Web          Web browser            │ │
-            │ │ Files        File manager           │ │
-            │ │ Terminal     Terminal               │ │
-            │ │ Accessories  Accessories  ►         │ │
-            │ │ Games        Games  ►               │ │
-            │ │ Settings     Settings               │ │
-            │ └─────────────────────────────────────┘ │
-            ├─────────────────────────────────────────┤
-            │        <  Run  >      < Exit  >         │
-            └─────────────────────────────────────────┘▒▒
-              ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+         ┌──────────── Program Manager ────────────┐   ┌─── Weather ───────
+         │ Choose with the arrow keys or first      │   │ Vienna, Austria
+         │ letter, then Enter.                      │   │ Sunny        19°C
+         │ ┌──────────────────────────────────────┐ │   │ Tue  13°  23°
+         │ │ Editor       Text editor             │ │   └───────────────────
+         │ │ Spreadsheet  Spreadsheet             │ │   ┌─── News ──────────
+         │ │ Web          Web browser             │ │   │ · Headline one
+         │ │ Mail         Email                   │ │   │ · Headline two
+         │ │ Internet     Internet  »             │ │   └───────────────────
+         │ │ Files        File manager            │ │
+         │ │ Terminal     Terminal                │ │
+         │ │ Media        Media  »                │ │
+         │ │ Accessories  Accessories  »          │ │
+         │ │ Games        Games  »                │ │
+         │ │ Settings     Settings                │ │
+         │ └──────────────────────────────────────┘ │
+         │         <  Run  >      < Exit  >         │
+         └──────────────────────────────────────────┘▒▒
  Write and edit text files (mcedit, F9 opens its menus)
 ```
 
@@ -40,55 +44,82 @@ classic text-mode programs.
 | Editor | `mcedit` | EDIT.COM-style editor with a menu bar (F9) |
 | Spreadsheet | `sc-im` | formulas, CSV/XLSX import, `:w` saves |
 | Web | `links` | text-mode web browser with menus (Esc) |
-| Files | `mc` | Midnight Commander, a Norton Commander clone |
 | Email | `alpine` | Pine's successor; a setup wizard knows Gmail, Outlook, iCloud, Yahoo, GMX, WEB.DE, Posteo, mailbox.org |
-| Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
-| Media › YouTube Downloader | `yt-dlp` + QuickJS | search, watch, save video (MP4) or sound (MP3) |
-| Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
-| Media › Sound volume | `alsamixer` | |
+| Internet › Chat | `weechat` | IRC: pick a network and a room |
+| Internet › BBS Dialer | `telnet`, `ssh`, `luit` | bulletin boards that still run today, with modem sounds and CP437 ANSI art |
+| Internet › YouTube Downloader | `yt-dlp` + QuickJS | search, watch, save video (MP4) or sound (MP3) |
+| Files | `mc` | Midnight Commander, a Norton Commander clone |
 | Terminal | `bash` | fullscreen shell, `exit` returns |
-| Accessories | Kilobyte | calculator (bc), agenda (calcurse), big block clock, cardfile, calendar, battery meter, character map |
-| Games | bsdgames, moon-buggy | Moon Buggy, Snake, Robots, Hangman, Adventure, Trek... |
-| Settings | Kilobyte | Kilobyte Update, Wi-Fi, network, colour theme, console font, battery, email account, sound, keyboard, date/time zone, add/remove programs, password, task manager (htop), autostart, about |
-| Install | `kilobyte-install` | installs the live system to disk (live medium only) |
+| Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
+| Media › Pictures | `mpv` | photos in coloured blocks or the real picture; opens them in Paint |
+| Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
+| Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
+| Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure, Trek |
+| Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme, font, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
+| Install | `kilobyte-install` | installs the live system to disk (PC live medium only) |
 
 **Themes** (Settings › Appearance): Classic Blue (EDIT.COM), Norton
-Commander, Windows 1.0, Green Screen, Amber Screen, Hot Dog Stand. On the
-Linux console the phosphor themes reprogram the 16-colour palette, so every
-program turns green or amber.
+Commander, Windows 1.0, Commodore 64, Amiga Workbench 1.3, Mac System 1,
+Green Screen, Amber Screen and Hot Dog Stand. On the Linux console the themes
+reprogram the 16-colour palette, so the phosphor, C64, Amiga and Mac themes
+recolour every program.
 
-**Video as coloured blocks.** The video player switches the text console to
-one of Kilobyte's pixel fonts while a film plays. These fonts are generated
-by `tools/make-fonts.py` with 1×2, 2×4 or 4×8 pixels per character. libcaca
-(through mpv) draws each cell with a foreground colour, a background colour
-and a character from the ramp ` .:;t%SX@8`. In these fonts each ramp
-character is an ordered-dither pattern with exactly that much "ink". On a
-1280×800 screen the 1×2 font gives 1280×400 cells, so the picture is made of
-single pixels in the 16 console colours. Afterwards the normal font comes
-back. If a screen is too large for the console's cell limit, the next larger
-size is used. "Real picture" plays through DRM straight onto the screen,
+**Paint** draws with half blocks: every character cell is two square
+pixels in 16 colours. It has pencil, line, box, ellipse, fill, eraser and
+colour picker, undo and mouse support. It saves PNG, exports ANSI art (`.ans`)
+and imports any picture.
+
+**Video and pictures as coloured blocks.** The video player switches the
+console to one of Kilobyte's pixel fonts while a film plays. These fonts are
+generated by `tools/make-fonts.py` with 1×2, 2×4 or 4×8 pixels per character.
+libcaca (through mpv) draws each cell with a foreground colour, a background
+colour and a character from the ramp ` .:;t%SX@8`, and in these fonts each
+ramp character is an ordered-dither pattern with exactly that much ink. With
+the 1×2 font on a 1280×800 screen the picture is 1280×400 cells, made of
+single pixels. "Real picture" plays through DRM straight onto the screen,
 still without any graphical desktop.
 
+**Screen saver**: Starfield, bouncing lines or flying floppies, in the 2×4
+pixel font, after a few idle minutes in the Program Manager.
+
+**Start-up**: a BIOS-style power-on screen with the real processor, memory
+test, drives, network and sound, then the POST beep. Kilobyte plays its own
+8-bit start-up and shut-down tunes, generated by `tools/make-sounds.py`.
+Each can be switched off.
+
+**Desktop tiles**: on screens at least 132 characters wide, the weather
+(wttr.in) and news headlines (any RSS feed) appear beside the Program
+Manager.
+
+**Wi-Fi is on by default.** At boot `kilobyte-wifi.service` unblocks the
+radios and starts `wpa_supplicant` on every wireless adapter;
+`systemd-networkd` gets addresses over DHCP for cable and Wi-Fi. Settings ›
+Wi-Fi scans, connects and forgets networks. The **hotspot** turns the Wi-Fi
+adapter into an access point that shares the computer's other connection
+(`hostapd` plus networkd's DHCP server and masquerading). **Bluetooth**
+pairs keyboards, mice, headphones and speakers; sound goes to headphones
+through BlueALSA.
+
+**Printing** is driverless (IPP Everywhere, AirPrint, IPP over USB): CUPS
+finds printers on the network and on USB.
+
+**USB sticks** open, safely remove and format (FAT32 or exFAT) without a
+password, but only removable drives. **Backup** copies documents, pictures,
+music, index cards and settings to a stick as a `.tar.gz`, and restores them.
+
 **YouTube** changes often, so the image ships the current `yt-dlp` release
-from GitHub rather than Debian's. The downloader can update itself, which
-needs no password. QuickJS runs YouTube's JavaScript challenges.
+from GitHub rather than Debian's. The downloader can update itself. QuickJS
+runs YouTube's JavaScript challenges.
 
 **Optical drives**: `cdrom`, `sr_mod`, `usb_storage`, `uas`, `isofs` and
 `udf` load at boot. Users are in the `cdrom` group, and `/media/cdrom` can be
-mounted without root. `eject` and `lsdvd` are included. Encrypted commercial
-DVDs need `libdvdcss`, which Debian does not ship (see Help › DVDs).
+mounted without root. Encrypted commercial DVDs need `libdvdcss`, which
+Debian does not ship (see Help › DVDs).
 
 **Battery**: on laptops the top line shows the charge (`Battery 87%`, `+`
 while charging), and Kilobyte warns once below 10%. Accessories › Battery
-shows block gauges for charge and capacity (how much of its design capacity
-the battery still holds), time left or time to full, and charge cycles.
-
-**Wi-Fi is on by default.** At boot `kilobyte-wifi.service` unblocks the
-radios and starts `wpa_supplicant` on every wireless adapter.
-`systemd-networkd` gets addresses over DHCP for both cable and Wi-Fi.
-Settings › Wi-Fi scans, connects, forgets networks and turns the radio on or
-off. Firmware for Intel, Realtek, Atheros, Broadcom and MediaTek adapters is
-included.
+shows the charge, the capacity (how much of its design capacity the battery
+still holds), time left and charge cycles.
 
 **Ctrl-C never drops you into a shell.** In a program it closes the program
 and returns to the Program Manager. mcedit, mc, sc-im, calcurse and a few
@@ -99,28 +130,37 @@ ends the program on the second. In a menu Ctrl-C goes back. In the Program
 Manager it opens the Shut Down dialog. Ctrl-Z is disabled. In the Terminal,
 Ctrl-C keeps its usual meaning.
 
-**Font**: the console uses the IBM VGA font with the full DOS graphics set
-(`FullGreek-VGA16`): blocks, shades, double lines, arrows and card suits.
+**Font**: the console uses Kilobyte's VGA font (`tools/make-console-font.py`).
+It is Debian's IBM VGA font with every DOS graphics character and the Western
+European letters combined.
 
 **Mouse**: `gpm` provides a block pointer on the text console. Programs that
 run under `kb-guard` are on a pseudo terminal and get no mouse.
 
-## Build
+## Downloads and builds
 
-You need Docker. Debian is installed in an x86-64 `debian:trixie`
-container, which is emulated on Apple Silicon. Compression, the slow part,
-runs in a native container.
+| Image | For | Build |
+|---|---|---|
+| `kilobyte-1.1-amd64.iso` | 64-bit PCs (BIOS and UEFI) | `./build.sh` |
+| `kilobyte-1.1-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
+| `kilobyte-1.1-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
+| `kilobyte-1.1-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
 
-```bash
-./build.sh
-```
+`./build.sh --arch all` builds all four. You need Docker. Debian is installed
+in a container of the target architecture (emulated when your computer has a
+different one); compression runs natively. `--lite` leaves out the large
+Wi-Fi firmware (about 70 MB).
 
-The ISO is written to `out/kilobyte-1.0-amd64.iso`. It is a hybrid image:
-burn it to a CD or write it to a USB stick (`dd`, Etcher, Rufus in DD mode),
-and it boots on BIOS and UEFI PCs. Secure Boot must be off.
+The PC images are hybrid ISOs. Burn one to a DVD or write it to a USB stick
+(`dd`, Etcher, Rufus in DD mode). Secure Boot must be off. The 32-bit image is
+built on Debian 12, because Debian 13 no longer ships a 32-bit PC kernel.
+There, YouTube may not work: Debian 12's QuickJS is too old for YouTube's
+challenges.
 
-`./build.sh --lite` leaves out the large Wi-Fi firmware, which makes the ISO
-about 70 MB smaller.
+Write the Raspberry Pi images to an SD card with Raspberry Pi Imager
+("Use custom") or `xzcat … | dd`. On the first start Kilobyte grows the root
+partition to fill the card and asks for keyboard, time zone, computer name
+and your account.
 
 ## Try it in QEMU
 
@@ -129,19 +169,14 @@ test/qemu.sh
 ```
 
 Choose **Install Kilobyte** in the boot menu, or run Setup from the Program
-Manager. It installs to the empty test disk. Afterwards boot the result:
-
-```bash
-test/qemu.sh --disk
-```
-
-`--bios` uses a legacy BIOS instead of UEFI.
+Manager. It installs to the empty test disk. Afterwards boot the result with
+`test/qemu.sh --disk`. `--bios` uses a legacy BIOS instead of UEFI.
 
 ## Installing
 
 Setup (`kilobyte-install`) is a dialog wizard like the rest. It asks for the
-disk, keyboard layout, time zone, computer name, user name and password. It
-then:
+disk, keyboard layout, time zone, computer name, user name, password, and
+whether to log in automatically. It then:
 
 1. erases the disk and creates a GPT with a BIOS boot partition, a 512 MB EFI
    partition and an ext4 root, so the disk boots with BIOS or UEFI;
@@ -150,6 +185,7 @@ then:
    removes the live-boot tools and installs GRUB for both BIOS and UEFI.
 
 The live session's keyboard, font, Wi-Fi networks and theme are carried over.
+Automatic login can be changed later in Settings › Login and startup.
 
 ## Updates
 
@@ -161,52 +197,57 @@ built from in `/usr/share/kilobyte/commit`. The update:
 1. asks the GitHub API for the newest commit and lists what changed;
 2. downloads that commit, checks the shell scripts and the sudoers file;
 3. swaps in Kilobyte's own files (`/usr/lib/kilobyte`, `/usr/share/kilobyte`,
-   `kilobyte`, `kilobyte-install` and Kilobyte's files in `/etc`);
-4. installs packages that were added to `image/packages.txt`;
+   the programs in `/usr/bin` and `/usr/sbin`, Kilobyte's files in `/etc`);
+4. installs packages that were added to the package lists since this system
+   was built (programs you removed stay removed);
 5. restarts the Program Manager.
 
 The owner's settings (keyboard, font, host name, Wi-Fi, accounts, theme) are
 never touched. Kilobyte checks once a day in the background and shows
-`▲ Update available` in the top line. Debian packages are updated separately,
-in Settings › Software. On the live system an update lasts until a restart.
+`▲ Update available` in the top line. Debian packages are updated in
+Settings › Software. On the live system an update lasts until a restart.
 
 So publishing an update means pushing to `main`.
 
 ## Live session
 
-The live system logs in as `user` (password `live`) on tty1 and starts the
+The PC live system logs in as `user` (password `live`) on tty1 and starts the
 Program Manager. Ctrl+Alt+F2...F6 give ordinary login consoles. Kilobyte
 starts automatically after any login on tty1-tty6; this can be turned off in
-Settings › Startup.
+Settings › Login and startup.
 
 ## Layout
 
 ```
-build.sh                    host entry point (Docker)
+build.sh                     host entry point (Docker), --arch amd64|i386|arm64|armhf|all
 image/
-  build-in-container.sh     mmdebstrap -> squashfs -> grub-mkrescue
-  customize.sh              runs in the chroot: live user, services, cleanup
-  packages.txt              everything in the image
-  packages-wifi.txt         Wi-Fi firmware (skipped by --lite)
-  grub.cfg                  live medium boot menu
-rootfs/                     copied over the Debian root file system
-  usr/bin/kilobyte          the Program Manager
-  usr/lib/kilobyte/lib.sh   shared dialog helpers and theming
-  usr/lib/kilobyte/apps/    settings, calculator, clock, cardfile, player,
-                            youtube, disc
-  usr/lib/kilobyte/kb-play  mpv in block, real-picture or audio mode
+  build-in-container.sh      mmdebstrap -> squashfs -> grub-mkrescue, or -> Pi SD image
+  customize.sh               runs in the chroot: live user or Pi first start, services
+  packages.txt               packages on every architecture
+  packages-pc.txt            PCs: live-boot, GRUB, laptop sound firmware
+  packages-pi.txt            Raspberry Pi: boot firmware, SD card resize
+  packages-wifi.txt          Wi-Fi firmware (skipped by --lite)
+  grub.cfg                   live medium boot menu
+rootfs/                      copied over the Debian root file system
+  usr/bin/kilobyte           the Program Manager
+  usr/lib/kilobyte/lib.sh    shared dialog helpers, theming, sounds, USB
+  usr/lib/kilobyte/apps/     settings, player, pictures, youtube, disc, mail,
+                             chat, bbs, paint, mines, solitaire, reversi, saver,
+                             usb, backup, print, battery, calculator, clock...
+  usr/lib/kilobyte/py/       kbui.py (half-block canvas for the Python programs), tiles.py
+  usr/lib/kilobyte/kb-root   the few root actions allowed without a password
+  usr/lib/kilobyte/kb-guard  makes Ctrl-C close programs that ignore it
+  usr/lib/kilobyte/kb-play   mpv in block, real-picture or audio mode
   usr/lib/kilobyte/kb-update Kilobyte Update from GitHub
-  usr/share/kilobyte/fonts/ the pixel fonts for block video
-  usr/lib/kilobyte/kb-root  the few root actions allowed without a password
-  usr/lib/kilobyte/kb-guard makes Ctrl-C close programs that ignore it
-  usr/lib/kilobyte/wifi-up  boot-time Wi-Fi
-  usr/sbin/kilobyte-install the installer
-  usr/share/kilobyte/       themes, help, start page, character map
-tools/make-themes.py        regenerates the theme files
-tools/make-fonts.py         regenerates the pixel fonts
-test/qemu.sh                boot the ISO or the installed disk in QEMU
+  usr/lib/kilobyte/kb-hotspot, kb-tiles, post, wifi-up, resize-root
+  usr/sbin/kilobyte-install  the PC installer
+  usr/sbin/kilobyte-firstboot  the Raspberry Pi first start
+  usr/share/kilobyte/        themes, pixel fonts, sounds, help, start page
+  usr/share/consolefonts/    Kilobyte's VGA console font
+tools/                       generators for themes, fonts, sounds, console font
+test/qemu.sh                 boot the ISO or the installed disk in QEMU
 ```
 
 On any Debian or Ubuntu machine, Kilobyte also runs without the image: install
-`dialog mc links sc-im calcurse htop bc`, copy `rootfs/usr` into place and run
+the packages from `image/packages.txt`, copy `rootfs/usr` into place and run
 `kilobyte`.

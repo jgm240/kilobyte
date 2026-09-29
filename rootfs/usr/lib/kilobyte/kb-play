@@ -43,7 +43,7 @@ play_blocks() {
         fi
     fi
     tput civis 2>/dev/null
-    CACA_DRIVER=ncurses mpv --vo=caca "${opts[@]}" "$@" "$src"
+    CACA_DRIVER=ncurses mpv --vo=caca "${opts[@]}" "$src" "$@"
     local rc=$?
     if [ -n "$saved" ]; then
         setfont "$saved" 2>/dev/null
@@ -62,7 +62,7 @@ case $mode in
     real)
         printf '\033]R'
         tput civis 2>/dev/null
-        mpv --vo=drm "${opts[@]}" "$@" "$src"
+        mpv --vo=drm "${opts[@]}" "$src" "$@"
         rc=$?
         tput cnorm 2>/dev/null
         clear
@@ -76,7 +76,7 @@ case $mode in
     audio)
         printf '\033[1;37;44m%*s\r  Playing: %s   (Space pause, arrows seek, 9/0 volume, q stops)\033[0m\n\n' \
             "$(tput cols)" "" "$(basename "$src")"
-        mpv --no-video --term-osd-bar "$@" "$src"
+        mpv --no-video --term-osd-bar "$src" "$@"
         ;;
     *) echo "kb-play: unknown mode $mode" >&2; exit 2 ;;
 esac

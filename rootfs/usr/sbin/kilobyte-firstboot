@@ -1,0 +1,49 @@
+#!/bin/bash
+# Kilobyte's first start on a ready-made image (Raspberry Pi): asks for the
+# keyboard, time zone, computer name and account, then logs in normally.
+# Runs as root on tty1 instead of the login prompt until it has finished
+# (getty@tty1.service.d/firstboot.conf).
+
+. /usr/lib/kilobyte/lib.sh
+. /usr/lib/kilobyte/setup-questions.sh
+
+kb_backtitle() { printf ' ■ Kilobyte %s  │  First start' "$KB_VERSION"; }
+trap '' INT QUIT TSTP
+export TERM=${TERM:-linux}
+setupcon --force 2>/dev/null   # the VGA font from the start
+
+while true; do
+    kb_dialog --title " Welcome to Kilobyte " --msgbox "
+Welcome! A few questions, and your computer is ready:
+
+  ■  keyboard and time zone
+  ■  a name for this computer
+  ■  your account and password
+
+Press \ZbEnter\Zn to begin." 13 60
+    if ask_keyboard; then
+        sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$KEYMAP\"/" /etc/default/keyboard
+        setupcon --force --keyboard-only 2>/dev/null   # the password is typed with it
+    else
+        continue
+    fi
+    ask_timezone && ask_hostname && ask_user && ask_password && ask_autologin && break
+done
+
+kb_info "Setting up your computer..."
+setupcon --save-only --force 2>/dev/null
+ln -sf "/usr/share/zoneinfo/$TZONE" /etc/localtime
+echo "$TZONE" > /etc/timezone
+echo "$HOST" > /etc/hostname
+sed -i "s/^127\.0\.1\.1.*/127.0.1.1   $HOST/" /etc/hosts
+hostname "$HOST"
+useradd -m -s /bin/bash -G "$(user_groups /etc/group)" "$NAME"
+printf '%s:%s\n' "$NAME" "$PW1" | chpasswd
+[ "$AUTOLOGIN" = yes ] && write_autologin "" "$NAME"
+rm -f /etc/systemd/system/getty@tty1.service.d/firstboot.conf
+systemctl daemon-reload
+
+kb_sound login wait
+kb_dialog --title " Ready " --msgbox "\n\ZbYour computer is ready.\Zn\n\n$( [ "$AUTOLOGIN" = yes ] && echo "Kilobyte starts now." || echo "Log in as $NAME to start Kilobyte.")" 10 50
+clear
+exit 0

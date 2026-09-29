@@ -1,0 +1,81 @@
+#!/bin/bash
+# Backup: copy your files and settings to a USB stick, and bring them back.
+#   backup [PARTITION]
+. /usr/lib/kilobyte/lib.sh
+
+part=${1:-}
+if [ -z "$part" ]; then
+    items=()
+    while IFS='|' read -r p desc; do items+=("$p" "$desc"); done < <(kb_usb_list)
+    if [ ${#items[@]} -eq 0 ]; then
+        kb_msg "Backup" "Plug in a USB stick to back up to, then try again." 7 56
+        exit 0
+    fi
+    part=$(kb_dialog --title " Backup " --ok-label "Use" --cancel-label "Close" \
+        --menu "Which USB stick?" 14 74 6 "${items[@]}") || exit 0
+fi
+mnt=$(kb_usb_mount "$part") || { kb_msg "Backup" "The stick could not be opened." 7 50; exit 0; }
+DEST="$mnt/Kilobyte-Backups"
+
+# progress_gauge TITLE TOTAL: turns lines on stdin into a progress bar
+progress_gauge() {
+    local n=0 total=$2
+    while read -r _; do
+        n=$((n + 1))
+        (( n % 20 == 0 )) && printf '%d\n' $(( n * 100 / (total > 0 ? total : 1) ))
+    done | kb_dialog --title " $1 " --gauge "\nPlease wait..." 8 60 0
+}
+
+do_backup() {
+    local choices items=() what=() name total
+    choices=$(kb_dialog --title " Back Up " --ok-label "Back up" --cancel-label "Back" --checklist \
+        "What to copy to the stick:" 16 64 7 \
+        Documents "Documents"                    on \
+        Pictures  "Pictures"                     on \
+        Music     "Music"                        on \
+        Videos    "Videos (can be very big)"     off \
+        Cardfile  "Cardfile index cards"         on \
+        Settings  "Kilobyte, email, chat and agenda settings" on) || return
+    for c in $choices; do
+        case $c in
+            Settings) for f in .config/kilobyte .pinerc .config/mc .config/weechat .local/share/calcurse .config/calcurse; do
+                          [ -e "$HOME/$f" ] && what+=("$f"); done ;;
+            *) [ -e "$HOME/$c" ] && what+=("$c") ;;
+        esac
+    done
+    [ ${#what[@]} -gt 0 ] || { kb_msg "Backup" "Nothing to back up." 7 40; return; }
+    mkdir -p "$DEST" || { kb_msg "Backup" "Cannot write to the stick." 7 40; return; }
+    name="$DEST/$(hostname)-$USER-$(date +%Y-%m-%d-%H%M).tar.gz"
+    total=$(cd "$HOME" && find "${what[@]}" | wc -l)
+    (cd "$HOME" && tar -czvf "$name" "${what[@]}" 2>/dev/null) | progress_gauge "Backing up" "$total"
+    sync
+    if tar -tzf "$name" >/dev/null 2>&1; then
+        kb_msg "Backup" "\ZbBackup finished.\Zn\n\n$(basename "$name")\n$(du -h "$name" | cut -f1) on the stick" 10 64
+    else
+        kb_msg "Backup" "\Z1The backup failed.\Zn Is the stick full?" 7 50
+    fi
+}
+
+do_restore() {
+    local items=() f file total
+    while IFS= read -r f; do items+=("$(basename "$f")" "$(du -h "$f" | cut -f1)"); done \
+        < <(ls -1t "$DEST"/*.tar.gz 2>/dev/null)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "Restore" "There are no Kilobyte backups on this stick." 7 56; return; }
+    file=$(kb_dialog --title " Restore " --ok-label "Restore" --cancel-label "Back" \
+        --menu "Backups on the stick, newest first:" 16 70 8 "${items[@]}") || return
+    kb_dialog --title " Restore " --defaultno --yes-label "Restore" --no-label "Cancel" --yesno \
+        "\nRestore $file?\n\nFiles with the same name in your home folder are replaced." 10 64 || return
+    total=$(tar -tzf "$DEST/$file" | wc -l)
+    tar -xzvf "$DEST/$file" -C "$HOME" 2>/dev/null | progress_gauge "Restoring" "$total"
+    kb_msg "Restore" "\ZbYour files are back.\Zn" 7 40
+}
+
+while sel=$(kb_dialog --title " Backup: $(lsblk -no LABEL "$part" | xargs) " --ok-label "Select" --cancel-label "Close" \
+    --menu "Backups are kept in Kilobyte-Backups on the stick." 12 60 2 \
+    Backup  "Back up my files to the stick" \
+    Restore "Bring files back from the stick"); do
+    case $sel in
+        Backup)  do_backup ;;
+        Restore) do_restore ;;
+    esac
+done

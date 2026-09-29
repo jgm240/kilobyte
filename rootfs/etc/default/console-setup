@@ -1,8 +1,10 @@
-# Console font: the IBM VGA font, like DOS. Change it in Settings > Display.
-# The FullGreek set is the one that has every DOS graphics character.
+# Console font: the IBM VGA font like DOS, with every DOS graphics character
+# and the Western European letters (tools/make-console-font.py).
+# Change it in Settings > Display.
 ACTIVE_CONSOLES="/dev/tty[1-6]"
 CHARMAP="UTF-8"
-CODESET="FullGreek"
-FONTFACE="VGA"
+CODESET="Uni2"
+FONTFACE="Terminus"
 FONTSIZE="8x16"
+FONT="Kilobyte-VGA16.psf.gz"
 VIDEOMODE=

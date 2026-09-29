@@ -1,0 +1,45 @@
+#!/bin/bash
+# kb-tiles: the weather and news shown beside the Program Manager.
+#   kb-tiles refresh          fetch both if older than 30 minutes (quietly)
+#   kb-tiles weather|news     print the saved text
+# Settings: $KB_CONF/tiles-city (empty: guess from the Internet address),
+# $KB_CONF/tiles-feed (RSS address), $KB_CONF/tiles-fahrenheit.
+. /usr/lib/kilobyte/lib.sh
+
+DIR="$KB_CONF/tiles"
+mkdir -p "$DIR"
+
+fresh() { [ -n "$(find "$1" -mmin -30 2>/dev/null)" ]; }
+
+weather() {
+    local city unit
+    city=$(cat "$KB_CONF/tiles-city" 2>/dev/null)
+    unit=C
+    [ -e "$KB_CONF/tiles-fahrenheit" ] && unit=F
+    curl -fsS --max-time 15 "https://wttr.in/${city// /+}?format=j1" 2>/dev/null |
+        python3 "$KB_LIB/py/tiles.py" weather "$unit" > "$DIR/weather.new" 2>/dev/null &&
+        [ -s "$DIR/weather.new" ] && mv "$DIR/weather.new" "$DIR/weather"
+    rm -f "$DIR/weather.new"
+}
+
+news() {
+    local feed
+    feed=$(cat "$KB_CONF/tiles-feed" 2>/dev/null)
+    feed=${feed:-https://feeds.bbci.co.uk/news/world/rss.xml}
+    curl -fsSL --max-time 15 "$feed" 2>/dev/null |
+        python3 "$KB_LIB/py/tiles.py" news > "$DIR/news.new" 2>/dev/null &&
+        [ -s "$DIR/news.new" ] && mv "$DIR/news.new" "$DIR/news"
+    rm -f "$DIR/news.new"
+}
+
+case "${1:-}" in
+    refresh)
+        # At most one try every 10 minutes, even when the network is down.
+        [ -n "$(find "$DIR/attempt" -mmin -10 2>/dev/null)" ] && exit 0
+        touch "$DIR/attempt"
+        fresh "$DIR/weather" || weather
+        fresh "$DIR/news" || news ;;
+    weather|news)
+        cat "$DIR/$1" 2>/dev/null ;;
+    *) echo "usage: kb-tiles refresh | weather | news" >&2; exit 2 ;;
+esac

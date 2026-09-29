@@ -1,0 +1,60 @@
+#!/bin/bash
+# USB Sticks: open, safely remove and format USB sticks and memory cards.
+. /usr/lib/kilobyte/lib.sh
+
+ROOT="sudo -n $KB_LIB/kb-root"
+
+choose_part() { # prints the chosen partition, or fails
+    local items=() p
+    while IFS='|' read -r p desc; do items+=("$p" "$desc"); done < <(kb_usb_list)
+    if [ ${#items[@]} -eq 0 ]; then
+        kb_msg "USB Sticks" "No USB stick or memory card found.\n\nPlug one in, wait a moment and try again." 9 56
+        return 1
+    fi
+    kb_dialog --title " USB Sticks " --ok-label "Select" --cancel-label "Close" \
+        --menu "Plugged in:" 16 74 8 "${items[@]}"
+}
+
+format_disk() { # format_disk PARTITION
+    local disk fs label
+    disk=/dev/$(lsblk -no PKNAME "$1" 2>/dev/null | head -n 1)
+    [ "$disk" = /dev/ ] && disk=$1
+    fs=$(kb_dialog --title " Format " --ok-label "Next" --cancel-label "Cancel" --menu \
+        "Format $disk ($(lsblk -dno SIZE,MODEL "$disk" | xargs)).\n\Z1\ZbEverything on it will be erased.\Zn" 13 64 2 \
+        fat32 "FAT32 - works everywhere (files up to 4 GB)" \
+        exfat "exFAT - for big files; newer computers and TVs") || return
+    label=$(kb_input "Format" "Name for the stick (up to 11 letters):" "KILOBYTE") || return
+    label=$(printf '%s' "$label" | tr -cd 'A-Za-z0-9_-' | cut -c1-11)
+    kb_dialog --title " Format " --defaultno --yes-label "Erase" --no-label "Cancel" --yesno \
+        "\nErase \Zb$disk\Zn and format it as $fs named \"${label:-KILOBYTE}\"?" 9 60 || return
+    kb_info "Formatting $disk ..."
+    if $ROOT usb format "$disk" "$fs" "${label:-KILOBYTE}" > /tmp/kb-format.$$ 2>&1; then
+        kb_msg "USB Sticks" "\ZbThe stick is ready.\Zn" 7 40
+    else
+        kb_msg "USB Sticks" "\Z1Formatting failed:\Zn\n\n$(tail -n 3 /tmp/kb-format.$$)" 11 64
+    fi
+    rm -f /tmp/kb-format.$$
+}
+
+while part=$(choose_part); do
+    mnt=$(findmnt -no TARGET "$part" 2>/dev/null)
+    sel=$(kb_dialog --title " $part " --ok-label "Select" --cancel-label "Back" --menu \
+        "$(lsblk -no LABEL,SIZE,FSTYPE "$part" | xargs)  ${mnt:+(open at $mnt)}" 14 64 5 \
+        Open   "Show the files" \
+        Remove "Safely remove (then unplug it)" \
+        Backup "Back up or restore your files" \
+        Format "Erase and format") || continue
+    case $sel in
+        Open)
+            mnt=$(kb_usb_mount "$part") || { kb_msg "USB Sticks" "The stick could not be opened." 7 50; continue; }
+            kb_guarded '\e[21~' mc "$mnt" "$HOME" ;;
+        Remove)
+            if $ROOT usb eject "$part" >/dev/null 2>&1; then
+                kb_msg "USB Sticks" "\ZbYou can unplug the stick now.\Zn" 7 44
+            else
+                kb_msg "USB Sticks" "The stick is still in use. Close programs using it and try again." 8 60
+            fi ;;
+        Backup) "$KB_LIB/apps/backup" "$part" ;;
+        Format) format_disk "$part" ;;
+    esac
+done

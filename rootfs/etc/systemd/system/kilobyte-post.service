@@ -1,0 +1,17 @@
+[Unit]
+Description=Kilobyte start-up screen
+After=systemd-vconsole-setup.service console-setup.service
+Before=getty@tty1.service
+ConditionPathExists=!/etc/kilobyte/post-off
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/post
+StandardInput=null
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TimeoutSec=20
+
+[Install]
+WantedBy=multi-user.target

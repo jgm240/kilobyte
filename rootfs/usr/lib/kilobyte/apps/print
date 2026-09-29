@@ -1,0 +1,27 @@
+#!/bin/bash
+# Print: send a document to the printer.
+#   print [FILE]
+. /usr/lib/kilobyte/lib.sh
+
+if ! lpstat -d 2>/dev/null | grep -q ':'; then
+    if lpstat -e 2>/dev/null | grep -q .; then
+        :   # printers exist, just no default: lp asks CUPS to pick
+    else
+        kb_msg "Print" "No printer is set up yet.\n\nAdd one in Settings > Printers." 9 50
+        exit 0
+    fi
+fi
+
+file=${1:-}
+if [ -z "$file" ]; then
+    file=$(kb_pick_file "Print" "*") || exit 0
+fi
+[ -f "$file" ] || { kb_msg "Print" "\"$file\" is not a file." 7 50; exit 0; }
+
+copies=$(kb_input "Print" "Print $(basename "$file")\n\nNumber of copies:" 1) || exit 0
+[[ $copies =~ ^[0-9]+$ ]] || copies=1
+if out=$(lp -n "$copies" -- "$file" 2>&1); then
+    kb_msg "Print" "\ZbSent to the printer.\Zn\n\n$out" 9 64
+else
+    kb_msg "Print" "\Z1Printing failed:\Zn\n\n$out" 10 64
+fi

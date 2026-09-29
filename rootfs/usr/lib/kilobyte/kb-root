@@ -3,13 +3,85 @@
 # /etc/sudoers.d/kilobyte). Anything else goes through a normal sudo prompt.
 set -e
 
+# Only removable drives (USB sticks, memory cards), never the system disk.
+usb_disk_of() {
+    local dev=$1 disk
+    [ -b "$dev" ] || { echo "no such device: $dev" >&2; return 1; }
+    disk=$(lsblk -no PKNAME "$dev" 2>/dev/null | head -n 1)
+    [ -n "$disk" ] || disk=${dev#/dev/}
+    case $disk in sr* | loop* | zram*) echo "not a stick: $dev" >&2; return 1 ;; esac
+    if [ "$(cat "/sys/block/$disk/removable" 2>/dev/null)" != 1 ] &&
+       [ "$(lsblk -dno TRAN "/dev/$disk" 2>/dev/null)" != usb ]; then
+        echo "not a removable drive: $dev" >&2; return 1
+    fi
+    if lsblk -lno MOUNTPOINT "/dev/$disk" | grep -qx -e / -e /boot -e /boot/efi -e /run/live/medium; then
+        echo "that drive holds the running system" >&2; return 1
+    fi
+    echo "$disk"
+}
+
 wifi_ifaces() {
     for d in /sys/class/net/*/wireless; do
         [ -d "$d" ] && basename "$(dirname "$d")"
     done
 }
 
+user=${SUDO_USER:-}
+
 case "${1:-} ${2:-}" in
+    "autologin on" | "autologin off")
+        [ -n "$user" ] && [ "$user" != root ] || { echo "run through sudo as the user" >&2; exit 1; }
+        dir=/etc/systemd/system/getty@tty1.service.d
+        if [ "$2" = on ]; then
+            mkdir -p "$dir"
+            printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM\n' "$user" > "$dir/autologin.conf"
+        else
+            rm -f "$dir/autologin.conf"
+        fi
+        systemctl daemon-reload
+        ;;
+    "bluetooth on")
+        rfkill unblock bluetooth || true
+        systemctl start bluetooth.service
+        ;;
+    "sounds on")  rm -f /etc/kilobyte/sounds-off ;;
+    "sounds off") mkdir -p /etc/kilobyte; : > /etc/kilobyte/sounds-off ;;
+    "post on")    rm -f /etc/kilobyte/post-off ;;
+    "post off")   mkdir -p /etc/kilobyte; : > /etc/kilobyte/post-off ;;
+    "usb mount")
+        dev=${3:-}; usb_disk_of "$dev" >/dev/null
+        label=$(lsblk -no LABEL "$dev" | head -n 1 | tr -cd 'A-Za-z0-9._ -')
+        mnt="/media/$user/${label:-$(basename "$dev")}"
+        mkdir -p "$mnt"
+        uid=$(id -u "$user") gid=$(id -g "$user")
+        case $(lsblk -no FSTYPE "$dev" | head -n 1) in
+            vfat | exfat) mount -o "uid=$uid,gid=$gid,umask=022,flush" "$dev" "$mnt" ;;
+            ntfs)         mount -t ntfs3 -o "uid=$uid,gid=$gid,umask=022" "$dev" "$mnt" ;;
+            *)            mount "$dev" "$mnt" ;;
+        esac
+        echo "$mnt"
+        ;;
+    "usb eject")
+        disk=$(usb_disk_of "${3:-}")
+        sync
+        for p in $(lsblk -lnpo NAME "/dev/$disk"); do
+            mountpoint=$(findmnt -no TARGET "$p" 2>/dev/null) || continue
+            umount "$p"
+            rmdir "$mountpoint" 2>/dev/null || true
+        done
+        echo 1 > "/sys/block/$disk/device/delete"
+        ;;
+    "usb format")
+        disk=$(usb_disk_of "${3:-}")
+        fs=${4:-fat32}; label=${5:-KILOBYTE}
+        for p in $(lsblk -lnpo NAME "/dev/$disk"); do umount "$p" 2>/dev/null || true; done
+        wipefs -aq "/dev/$disk"
+        if [ "$fs" = exfat ]; then type=7; else type=c; fi
+        echo "type=$type" | sfdisk -q --label dos "/dev/$disk"
+        udevadm settle
+        part=$(lsblk -lnpo NAME "/dev/$disk" | sed -n 2p)
+        if [ "$fs" = exfat ]; then mkfs.exfat -q -L "$label" "$part"; else mkfs.vfat -F 32 -n "$label" "$part" >/dev/null; fi
+        ;;
     "kilobyte update")
         exec /usr/lib/kilobyte/kb-update apply "${3:-}"
         ;;
@@ -29,5 +101,7 @@ case "${1:-} ${2:-}" in
         ;;
     "power reboot")   systemctl reboot ;;
     "power poweroff") systemctl poweroff ;;
-    *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2; exit 2 ;;
+    *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2
+       echo "       autologin on|off | sounds on|off | post on|off | usb mount|eject DEV | usb format DISK fat32|exfat LABEL" >&2
+       exit 2 ;;
 esac

@@ -144,6 +144,50 @@ THEMES = {
         sel_key="(BLACK,YELLOW,OFF)", arrow="(YELLOW,BLACK,ON)", status="(BLACK,YELLOW,OFF)",
         gauge="(YELLOW,BLACK,ON)",
     ),
+    # Commodore 64: light blue on blue. The palette puts the C64's light blue
+    # into the cyan slot, so it can also be a background (selection bar).
+    "c64": dict(
+        name="Commodore 64", mc="default", shadow_on="OFF",
+        palette="000000 883932 55a049 bfce72 40318d 8b3f96 7869c4 9f9f9f "
+                "626262 b86962 94e089 bfce72 7869c4 8b3f96 7869c4 ffffff",
+        screen="(CYAN,BLUE,ON)", dialog="(CYAN,BLUE,ON)", title="(WHITE,BLUE,ON)",
+        border="(CYAN,BLUE,ON)", border2="(CYAN,BLUE,ON)",
+        btn_on="(BLUE,CYAN,OFF)", btn_off="(CYAN,BLUE,ON)",
+        btn_key_on="(WHITE,CYAN,ON)", btn_key_off="(WHITE,BLUE,ON)",
+        input="(WHITE,BLUE,ON)", item="(CYAN,BLUE,ON)", sel="(BLUE,CYAN,OFF)",
+        tag="(WHITE,BLUE,ON)", sel_tag="(BLUE,CYAN,OFF)", key="(WHITE,BLUE,ON)",
+        sel_key="(WHITE,CYAN,ON)", arrow="(WHITE,BLUE,ON)", status="(BLUE,CYAN,OFF)",
+        gauge="(WHITE,BLUE,ON)",
+    ),
+    # Amiga Workbench 1.3: white on Workbench blue, orange highlights.
+    "amiga": dict(
+        name="Amiga Workbench 1.3", mc="default",
+        palette="000022 ff8800 0055aa ff8800 0055aa ff8800 0055aa ffffff "
+                "000022 ff8800 ffffff ff8800 0055aa ff8800 ffffff ffffff",
+        screen="(WHITE,BLUE,ON)", dialog="(WHITE,BLUE,ON)", title="(BLUE,WHITE,OFF)",
+        border="(WHITE,BLUE,ON)", border2="(BLACK,BLUE,OFF)",
+        btn_on="(BLACK,YELLOW,OFF)", btn_off="(WHITE,BLUE,ON)",
+        btn_key_on="(BLUE,YELLOW,OFF)", btn_key_off="(YELLOW,BLUE,OFF)",
+        input="(BLACK,WHITE,OFF)", item="(WHITE,BLUE,ON)", sel="(BLACK,YELLOW,OFF)",
+        tag="(WHITE,BLUE,ON)", sel_tag="(BLACK,YELLOW,OFF)", key="(YELLOW,BLUE,OFF)",
+        sel_key="(BLUE,YELLOW,OFF)", arrow="(YELLOW,BLUE,OFF)", status="(BLUE,WHITE,OFF)",
+        gauge="(YELLOW,BLUE,OFF)",
+    ),
+    # The first Macintosh: black on white windows over a grey desktop. The
+    # palette makes every colour black, white or grey.
+    "mac": dict(
+        name="Mac System 1", mc="default",
+        palette="000000 000000 000000 000000 000000 000000 a0a0a0 ffffff "
+                "555555 000000 000000 000000 000000 000000 a0a0a0 ffffff",
+        screen="(BLACK,CYAN,OFF)", dialog="(BLACK,WHITE,OFF)", title="(WHITE,BLACK,ON)",
+        border="(BLACK,WHITE,OFF)", border2="(BLACK,WHITE,OFF)",
+        btn_on="(WHITE,BLACK,ON)", btn_off="(BLACK,WHITE,OFF)",
+        btn_key_on="(WHITE,BLACK,ON)", btn_key_off="(BLACK,WHITE,OFF)",
+        input="(BLACK,WHITE,OFF)", item="(BLACK,WHITE,OFF)", sel="(WHITE,BLACK,ON)",
+        tag="(BLACK,WHITE,OFF)", sel_tag="(WHITE,BLACK,ON)", key="(BLACK,WHITE,OFF)",
+        sel_key="(WHITE,BLACK,ON)", arrow="(BLACK,WHITE,OFF)", status="(BLACK,WHITE,OFF)",
+        gauge="(BLACK,WHITE,OFF)",
+    ),
     # Windows 3.1's most famous colour scheme.
     "hotdog": dict(
         name="Hot Dog Stand", mc="default",

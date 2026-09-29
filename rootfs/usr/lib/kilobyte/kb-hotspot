@@ -1,0 +1,67 @@
+#!/bin/bash
+# kb-hotspot: share this computer's Internet connection over Wi-Fi.
+#   kb-hotspot start ADAPTER NAME PASSWORD
+#   kb-hotspot stop
+#   kb-hotspot status
+# Runs as root (through sudo). The Wi-Fi adapter becomes an access point;
+# systemd-networkd hands out addresses and forwards to the other connection.
+set -euo pipefail
+
+RUN=/run/kilobyte
+NET=/run/systemd/network/10-kilobyte-hotspot.network
+
+case "${1:-}" in
+    start)
+        if="$2" ssid="$3" pass="$4"
+        [ -d "/sys/class/net/$if/wireless" ] || { echo "not a Wi-Fi adapter: $if" >&2; exit 1; }
+        [ ${#pass} -ge 8 ] || { echo "the password needs at least 8 characters" >&2; exit 1; }
+        mkdir -p "$RUN" /run/systemd/network
+        systemctl stop "wpa_supplicant@$if.service" 2>/dev/null || true
+        rfkill unblock wifi || true
+        umask 077
+        cat > "$RUN/hostapd.conf" <<EOF
+interface=$if
+driver=nl80211
+ssid=$ssid
+hw_mode=g
+channel=6
+country_code=${KB_COUNTRY:-00}
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+wpa_passphrase=$pass
+EOF
+        cat > "$NET" <<EOF
+[Match]
+Name=$if
+
+[Network]
+Address=10.42.0.1/24
+DHCPServer=yes
+IPMasquerade=ipv4
+
+[DHCPServer]
+PoolOffset=10
+PoolSize=100
+EmitDNS=yes
+DNS=9.9.9.9 1.1.1.1
+EOF
+        echo "$if" > "$RUN/hotspot"
+        networkctl reload
+        hostapd -B -P "$RUN/hostapd.pid" "$RUN/hostapd.conf" >/dev/null
+        networkctl reconfigure "$if" 2>/dev/null || true
+        echo "Hotspot \"$ssid\" is on."
+        ;;
+    stop)
+        [ -f "$RUN/hostapd.pid" ] && kill "$(cat "$RUN/hostapd.pid")" 2>/dev/null || true
+        if=$(cat "$RUN/hotspot" 2>/dev/null || true)
+        rm -f "$NET" "$RUN/hostapd.conf" "$RUN/hostapd.pid" "$RUN/hotspot"
+        networkctl reload
+        [ -n "$if" ] && systemctl start "wpa_supplicant@$if.service" 2>/dev/null || true
+        echo "Hotspot is off."
+        ;;
+    status)
+        [ -f "$RUN/hotspot" ] && echo "on $(cat "$RUN/hotspot")" || echo off
+        ;;
+    *) echo "usage: kb-hotspot start ADAPTER NAME PASSWORD | stop | status" >&2; exit 2 ;;
+esac

@@ -58,7 +58,7 @@ cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
 package_list() { sed 's/#.*//' "$@" 2>/dev/null | xargs -n 1 | sort -u; }
 
 cmd_apply() {
-    local sha=${1:-} src d f old_pkgs new_pkgs added=() missing=() failed=() p
+    local sha=${1:-} src d f old_pkgs new_pkgs added=() missing=() failed=() p kind
     [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: kb-update apply COMMIT-ID" >&2; exit 2; }
     [ "$(id -u)" -eq 0 ] || { echo "kb-update: apply needs root" >&2; exit 1; }
 
@@ -78,7 +78,12 @@ cmd_apply() {
 
     # The package list this system has (from its image or last update).
     old_pkgs=$(package_list "$SHARE/packages.txt")
-    new_pkgs=$(package_list "$src/../image/packages.txt")
+    # Common packages plus those for PCs or the Raspberry Pi.
+    case $(dpkg --print-architecture) in
+        amd64 | i386) kind=pc ;;
+        *)            kind=pi ;;
+    esac
+    new_pkgs=$(package_list "$src/../image/packages.txt" "$src/../image/packages-$kind.txt")
     grep -qx firmware-iwlwifi <<< "$old_pkgs" &&   # not a --lite image
         new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-wifi.txt")" | sort -u)
 
@@ -92,14 +97,18 @@ cmd_apply() {
         mv "/$d.new" "/$d"
         rm -rf "/$d.old"
     done
-    chmod 755 /usr/lib/kilobyte/kb-* /usr/lib/kilobyte/wifi-up /usr/lib/kilobyte/apps/*
+    chmod 755 /usr/lib/kilobyte/kb-* /usr/lib/kilobyte/wifi-up /usr/lib/kilobyte/post \
+        /usr/lib/kilobyte/resize-root /usr/lib/kilobyte/apps/*
     install -m 755 "$src/usr/bin/kilobyte" /usr/bin/kilobyte
     install -m 755 "$src/usr/sbin/kilobyte-install" /usr/sbin/kilobyte-install
+    install -m 755 "$src/usr/sbin/kilobyte-firstboot" /usr/sbin/kilobyte-firstboot
+    install -D -m 644 -t /usr/share/consolefonts "$src"/usr/share/consolefonts/Kilobyte-*
     install -m 440 "$src/etc/sudoers.d/kilobyte" /etc/sudoers.d/kilobyte
     # System files that belong to Kilobyte (not the owner's settings).
     for f in etc/profile.d/kilobyte.sh etc/systemd/system/kilobyte-wifi.service \
              etc/modules-load.d/kilobyte-optical.conf etc/sysctl.d/10-kilobyte.conf \
              etc/yt-dlp.conf etc/issue etc/systemd/network/20-wired.network \
+             etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
              etc/systemd/network/25-wireless.network; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
     done
@@ -130,6 +139,14 @@ cmd_apply() {
         fi
         [ ${#failed[@]} -eq 0 ] || echo "Could not install: ${failed[*]} (try again later in Settings > Software)"
     fi
+
+    # New services and groups that came with the update.
+    systemctl enable kilobyte-post.service 2>/dev/null || true
+    # shellcheck source=/dev/null
+    . /usr/lib/kilobyte/setup-questions.sh
+    for u in $(awk -F: '$3 >= 1000 && $3 < 60000 {print $1}' /etc/passwd); do
+        usermod -aG "$(user_groups /etc/group)" "$u" 2>/dev/null || true
+    done
 
     echo
     echo "Kilobyte is up to date (${sha:0:7})."

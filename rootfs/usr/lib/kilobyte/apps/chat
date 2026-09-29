@@ -1,0 +1,51 @@
+#!/bin/bash
+# Chat: IRC with WeeChat, set up by choosing a network and a room.
+. /usr/lib/kilobyte/lib.sh
+
+CONF="$KB_CONF/chat"
+
+net=$(cat "$CONF.net" 2>/dev/null || echo libera)
+net=$(kb_dialog --title " Chat " --default-item "$net" --ok-label "Next" --cancel-label "Close" \
+    --menu "Choose a chat network (IRC). Each has thousands of rooms." 15 66 5 \
+    libera "Libera.Chat - free software, Linux, hobbies" \
+    oftc   "OFTC - Debian and other projects" \
+    efnet  "EFnet - the oldest network, since 1990" \
+    other  "Another network") || exit 0
+
+case $net in
+    libera) host=irc.libera.chat room="##chat" ;;
+    oftc)   host=irc.oftc.net room="#debian" ;;
+    efnet)  host=irc.efnet.org room="#linux" ;;
+    other)
+        host=$(kb_input "Chat Network" "Server address (TLS on port 6697):" "$(cat "$CONF.host" 2>/dev/null)") || exit 0
+        [ -n "$host" ] || exit 0
+        room="#chat" ;;
+esac
+[ -r "$CONF.room.$net" ] && room=$(cat "$CONF.room.$net")
+
+room=$(kb_input "Chat Room" "Room (channel) to join, e.g. $room:" "$room") || exit 0
+case $room in \#*) ;; *) room="#$room" ;; esac
+
+nick=$(cat "$CONF.nick" 2>/dev/null)
+[ -n "$nick" ] || nick="${USER}_$((RANDOM % 900 + 100))"
+nick=$(kb_input "Chat Name" "Your nickname (letters and digits, no spaces):" "$nick") || exit 0
+nick=${nick// /_}
+
+echo "$net" > "$CONF.net"
+echo "$room" > "$CONF.room.$net"
+echo "$nick" > "$CONF.nick"
+[ "$net" = other ] && echo "$host" > "$CONF.host"
+
+kb_msg "Chat" "WeeChat opens and joins \Zb$room\Zn on $host.
+
+  Type a message and press Enter to talk.
+  Alt+1, Alt+2 ... switch between windows.
+  /join #room enters another room, /part leaves it.
+  /quit or Ctrl+C closes the chat." 13 64
+
+server="kb-$net"
+kb_guarded '/quit\r' weechat -r "/server add $server $host/6697 -tls;\
+/set irc.server.$server.addresses $host/6697;\
+/set irc.server.$server.nicks $nick,${nick}_,${nick}__;\
+/set irc.server.$server.autojoin $room;\
+/connect $server"

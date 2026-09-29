@@ -1,0 +1,48 @@
+#!/bin/bash
+# Pictures: photos and drawings shown with the video player's block engine
+# (or the real picture), and opened in Paint.
+. /usr/lib/kilobyte/lib.sh
+
+PIC_EXT='jpg|jpeg|png|gif|bmp|webp|tif|tiff'
+mkdir -p "$HOME/Pictures"
+
+show() { # show INDEX: view that picture; < and > page through the others
+    local i=$1 n=${#files[@]} list=() j
+    for ((j = 0; j < n; j++)); do list+=("${files[(i + j) % n]}"); done
+    kb_info "< and > page through the pictures, q or Ctrl+C closes"
+    sleep 2
+    "$KB_LIB/kb-play" "$(cat "$KB_CONF/player-mode" 2>/dev/null || echo medium)" "${list[@]}" \
+        --image-display-duration=inf --loop-playlist=inf
+}
+
+sel=""
+while true; do
+    files=()
+    items=(Browse "Open a picture anywhere on the system" Picture "How pictures are shown (the Video Player setting)")
+    while IFS= read -r f; do
+        files+=("$f")
+        items+=("${#files[@]}" "${f#"$HOME"/}")
+    done < <(find "$HOME/Pictures" "$HOME/Documents" "$HOME/Downloads" -maxdepth 2 -type f 2>/dev/null \
+             | grep -iE "\.($PIC_EXT)$" | sort)
+
+    sel=$(kb_dialog --title " Pictures " --default-item "$sel" --ok-label "View" --cancel-label "Close" \
+        --extra-button --extra-label "Paint" \
+        --menu "Pictures in ~/Pictures:" 20 76 12 "${items[@]}")
+    rc=$?
+    case $rc in
+        "$DIALOG_OK" | "$DIALOG_EXTRA") ;;
+        *) exit 0 ;;
+    esac
+    case $sel in
+        Picture) "$KB_LIB/apps/player" --choose-mode; continue ;;
+        Browse)
+            f=$(kb_dialog --title " Open Picture " --fselect "$HOME/" 14 64) || continue
+            [ -f "$f" ] || continue
+            files=("$f"); sel=1 ;;
+    esac
+    if [ $rc -eq "$DIALOG_EXTRA" ]; then
+        kb_run "$KB_LIB/apps/paint" "${files[sel - 1]}"
+    else
+        show $((sel - 1))
+    fi
+done

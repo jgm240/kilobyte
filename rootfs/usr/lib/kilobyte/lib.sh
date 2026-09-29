@@ -3,7 +3,7 @@
 # Everything on screen is drawn by dialog(1): coloured character cells, line
 # drawing and block glyphs, the same way EDIT.COM or raspi-config look.
 
-KB_VERSION="1.0"
+KB_VERSION="1.1"
 KB_SHARE=/usr/share/kilobyte
 KB_LIB=/usr/lib/kilobyte
 KB_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/kilobyte"
@@ -83,6 +83,48 @@ kb_battery() {
         return 0
     done
     return 1
+}
+
+# --- sounds ---------------------------------------------------------------
+
+# kb_sound NAME [wait]: play one of Kilobyte's sounds unless switched off.
+kb_sound() {
+    [ -e /etc/kilobyte/sounds-off ] || [ -e "$KB_CONF/sounds-off" ] && return 0
+    local f="$KB_SHARE/sounds/$1.wav"
+    [ -r "$f" ] || return 0
+    if [ "${2:-}" = wait ]; then
+        timeout 4 aplay -q "$f" >/dev/null 2>&1
+    else
+        (aplay -q "$f" >/dev/null 2>&1 &)
+    fi
+}
+
+# --- USB sticks -------------------------------------------------------------
+
+# Removable drives, one "PARTITION|description" line each.
+kb_usb_list() {
+    local live NAME TYPE TRAN RM SIZE MODEL PKNAME LABEL FSTYPE MOUNTPOINT disk
+    live=$(lsblk -no PKNAME "$(findmnt -no SOURCE /run/live/medium 2>/dev/null)" 2>/dev/null | head -n 1)
+    while read -r line; do
+        eval "$line"
+        [ -n "$FSTYPE" ] || continue
+        [ "$TYPE" = part ] && disk=$PKNAME || disk=${NAME#/dev/}
+        disk=${disk#/dev/}
+        [ "$disk" = "$live" ] && continue
+        case $disk in sr* | loop* | zram*) continue ;; esac
+        [ "$(cat "/sys/block/$disk/removable" 2>/dev/null)" = 1 ] ||
+            [ "$(lsblk -dno TRAN "/dev/$disk" 2>/dev/null)" = usb ] || continue
+        printf '%s|%-12s %6s  %-6s %s%s
+' "$NAME" "${LABEL:-no name}" "$SIZE" "$FSTYPE"             "$(lsblk -dno MODEL "/dev/$disk" | xargs)" "${MOUNTPOINT:+  (open)}"
+    done < <(lsblk -Ppno NAME,TYPE,TRAN,RM,SIZE,MODEL,PKNAME,LABEL,FSTYPE,MOUNTPOINT 2>/dev/null)
+}
+
+# Mount a stick (if needed) and print where it is.
+kb_usb_mount() {
+    local mnt
+    mnt=$(findmnt -no TARGET "$1" 2>/dev/null | head -n 1)
+    [ -n "$mnt" ] || mnt=$(sudo -n "$KB_LIB/kb-root" usb mount "$1" 2>/dev/null) || return 1
+    [ -d "$mnt" ] && printf '%s\n' "$mnt"
 }
 
 # --- updates from GitHub --------------------------------------------------

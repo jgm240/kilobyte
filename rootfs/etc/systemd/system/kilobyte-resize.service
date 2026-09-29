@@ -1,0 +1,12 @@
+[Unit]
+Description=Grow the root file system to fill the SD card
+ConditionPathExists=/etc/kilobyte/resize-root
+After=local-fs.target
+Before=getty@tty1.service kilobyte-post.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/resize-root
+
+[Install]
+WantedBy=multi-user.target

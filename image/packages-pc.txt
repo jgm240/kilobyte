@@ -1,0 +1,3 @@
+# PCs (amd64, i386): live system, installer, boot loader, laptop sound.
+live-boot efibootmgr grub2-common grub-pc-bin
+firmware-sof-signed

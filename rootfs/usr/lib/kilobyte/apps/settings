@@ -181,7 +181,7 @@ appearance_panel() {
 # --- Display --------------------------------------------------------------
 
 display_panel() {
-    local sel face size codeset
+    local sel face size font
     sel=$(kb_dialog --title " Display " --ok-label "Apply" --cancel-label "Back" \
         --menu "Console font. Bigger fonts help on high resolution screens." 15 64 6 \
         VGA16   "Classic VGA 8x16 (like DOS)" \
@@ -190,17 +190,17 @@ display_panel() {
         Term24  "Terminus 12x24 (large)" \
         Term32  "Terminus 16x32 (huge)") || return
     case $sel in
-        VGA16)  face=VGA;      size=8x16 ;;
-        VGA32)  face=VGA;      size=16x32 ;;
-        Term16) face=Terminus; size=8x16 ;;
-        Term24) face=Terminus; size=12x24 ;;
-        Term32) face=Terminus; size=16x32 ;;
+        VGA16)  font=Kilobyte-VGA16.psf.gz;    face=VGA;      size=8x16 ;;
+        VGA32)  font=Kilobyte-VGA32x16.psf.gz; face=VGA;      size=16x32 ;;
+        Term16) font="";                       face=Terminus; size=8x16 ;;
+        Term24) font="";                       face=Terminus; size=12x24 ;;
+        Term32) font="";                       face=Terminus; size=16x32 ;;
     esac
-    # VGA: the set with all DOS graphics characters. Terminus: more letters.
-    if [ "$face" = VGA ]; then codeset=FullGreek; else codeset=Uni2; fi
+    # VGA: Kilobyte's merged VGA font (FONT wins over the other settings).
     kb_sudo || return
-    sudo sed -i -e "s/^CODESET=.*/CODESET=\"$codeset\"/" -e "s/^FONTFACE=.*/FONTFACE=\"$face\"/" \
-        -e "s/^FONTSIZE=.*/FONTSIZE=\"$size\"/" /etc/default/console-setup
+    sudo sed -i -e "s/^FONT=.*/FONT=\"$font\"/" -e "s/^CODESET=.*/CODESET=\"Uni2\"/" \
+        -e "s/^FONTFACE=.*/FONTFACE=\"$face\"/" -e "s/^FONTSIZE=.*/FONTSIZE=\"$size\"/" /etc/default/console-setup
+    grep -q '^FONT=' /etc/default/console-setup || echo "FONT=\"$font\"" | sudo tee -a /etc/default/console-setup >/dev/null
     sudo setupcon --save-only --force 2>/dev/null   # keep it after a restart
     [ "$TERM" = linux ] && sudo setupcon --force --font-only 2>/dev/null
     kb_msg "Display" "The console font is now $face $size."
@@ -373,14 +373,254 @@ Your files and settings are kept." $(( 14 + n )) 72 || return
     fi
 }
 
-# --- Startup --------------------------------------------------------------
+# --- Login and startup ----------------------------------------------------
 
-startup_panel() {
-    if [ -e "$KB_CONF/noautostart" ]; then
-        kb_yesno "Startup" "Kilobyte does \ZbNOT\Zn start after login.\n\nStart it automatically again?" && rm -f "$KB_CONF/noautostart"
-    else
-        kb_yesno "Startup" "Kilobyte starts automatically after you log in on a text console.\n\nTurn that off? You can still start it by typing \Zbkilobyte\Zn." && : > "$KB_CONF/noautostart"
+autologin_on() { grep -qs -- "--autologin $USER " /etc/systemd/system/getty@tty1.service.d/autologin.conf; }
+
+login_panel() {
+    local sel a b c
+    while true; do
+        a=$(autologin_on && echo ON || echo OFF)
+        b=$([ -e "$KB_CONF/noautostart" ] && echo OFF || echo ON)
+        c=$([ -e /etc/kilobyte/post-off ] && echo OFF || echo ON)
+        sel=$(kb_dialog --title " Login and Startup " --ok-label "Switch" --cancel-label "Back" \
+            --menu "Choose a setting to switch it on or off." 12 66 3 \
+            Autologin "Log in automatically as $USER: $a" \
+            Autostart "Start Kilobyte after login: $b" \
+            Post      "Show the start-up screen: $c") || return
+        case $sel in
+            Autologin)
+                if [ "$a" = ON ]; then
+                    sudo -n "$KB_LIB/kb-root" autologin off
+                else
+                    kb_yesno "Automatic Login" "Anyone who turns on this computer will be logged in as \Zb$USER\Zn without a password.\n\nSwitch automatic login on?" 10 64 &&
+                        sudo -n "$KB_LIB/kb-root" autologin on
+                fi ;;
+            Autostart)
+                if [ "$b" = ON ]; then : > "$KB_CONF/noautostart"; else rm -f "$KB_CONF/noautostart"; fi ;;
+            Post)
+                sudo -n "$KB_LIB/kb-root" post "$([ "$c" = ON ] && echo off || echo on)" ;;
+        esac
+    done
+}
+
+# --- Sound -----------------------------------------------------------------
+
+sound_panel() {
+    local sel on
+    while true; do
+        on=$([ -e /etc/kilobyte/sounds-off ] && echo OFF || echo ON)
+        sel=$(kb_dialog --title " Sound " --ok-label "Select" --cancel-label "Back" --menu \
+            "Volume, and Kilobyte's own sounds." 12 64 3 \
+            Volume "Volume and mixer (alsamixer)" \
+            Sounds "Start-up and shut-down sounds: $on" \
+            Test   "Play the start-up sound") || return
+        case $sel in
+            Volume) kb_guarded '\e' alsamixer ;;
+            Sounds) sudo -n "$KB_LIB/kb-root" sounds "$([ "$on" = ON ] && echo off || echo on)" ;;
+            Test)   kb_info "Playing..."; aplay -q "$KB_SHARE/sounds/startup.wav" 2>/dev/null ;;
+        esac
+    done
+}
+
+# --- Screen saver ----------------------------------------------------------
+
+saver_panel() {
+    local mode min items=() m
+    mode=$(cat "$KB_CONF/saver-mode" 2>/dev/null || echo random)
+    for m in random starfield lines floppies off; do
+        items+=("$m" "$(case $m in random) echo "A different one each time" ;; starfield) echo "Flying through the stars" ;;
+            lines) echo "Bouncing coloured lines" ;; floppies) echo "Flying floppy disks" ;; off) echo "No screen saver" ;; esac)" \
+            "$([ "$m" = "$mode" ] && echo on || echo off)")
+    done
+    m=$(kb_dialog --title " Screen Saver " --ok-label "Next" --cancel-label "Back" --extra-button --extra-label "Preview" \
+        --radiolist "The screen saver starts when the Program Manager is left alone." 14 60 5 "${items[@]}")
+    case $? in
+        "$DIALOG_EXTRA") "$KB_LIB/apps/saver" "${m:-$mode}"; kb_load_theme; return ;;
+        "$DIALOG_OK") ;;
+        *) return ;;
+    esac
+    echo "$m" > "$KB_CONF/saver-mode"
+    [ "$m" = off ] && return
+    min=$(cat "$KB_CONF/saver-minutes" 2>/dev/null || echo 5)
+    min=$(kb_dialog --title " Screen Saver " --default-item "$min" --ok-label "Save" --cancel-label "Back" \
+        --menu "Start after how many minutes?" 14 40 6 1 "minute" 2 "minutes" 5 "minutes" 10 "minutes" 15 "minutes" 30 "minutes") || return
+    echo "$min" > "$KB_CONF/saver-minutes"
+}
+
+# --- Desktop tiles ---------------------------------------------------------
+
+tiles_panel() {
+    local sel on city feed unit
+    while true; do
+        on=$([ -e "$KB_CONF/tiles-off" ] && echo OFF || echo ON)
+        city=$(cat "$KB_CONF/tiles-city" 2>/dev/null)
+        unit=$([ -e "$KB_CONF/tiles-fahrenheit" ] && echo "°F" || echo "°C")
+        sel=$(kb_dialog --title " Desktop Tiles " --ok-label "Select" --cancel-label "Back" --menu \
+            "Weather and news beside the Program Manager\n(on screens at least 132 characters wide)." 14 68 4 \
+            Show  "Show the tiles: $on" \
+            City  "Weather for: ${city:-where I am (guessed)}" \
+            Units "Temperatures in $unit" \
+            News  "News source") || return
+        case $sel in
+            Show)  if [ "$on" = ON ]; then : > "$KB_CONF/tiles-off"; else rm -f "$KB_CONF/tiles-off"; fi ;;
+            City)  city=$(kb_input "Weather" "City (leave empty to guess from your Internet address):" "$city") &&
+                       { printf '%s\n' "$city" > "$KB_CONF/tiles-city"; rm -f "$KB_CONF/tiles/weather" "$KB_CONF/tiles/attempt"; } ;;
+            Units) if [ "$unit" = "°C" ]; then : > "$KB_CONF/tiles-fahrenheit"; else rm -f "$KB_CONF/tiles-fahrenheit"; fi
+                   rm -f "$KB_CONF/tiles/weather" "$KB_CONF/tiles/attempt" ;;
+            News)
+                feed=$(kb_dialog --title " News Source " --ok-label "Use" --cancel-label "Back" --menu "Headlines from:" 16 70 8 \
+                    https://feeds.bbci.co.uk/news/world/rss.xml "BBC World" \
+                    https://feeds.npr.org/1001/rss.xml "NPR News" \
+                    https://www.theguardian.com/world/rss "The Guardian: World" \
+                    https://www.tagesschau.de/index~rss2.xml "tagesschau (German)" \
+                    https://www.derstandard.at/rss "Der Standard (German)" \
+                    https://hnrss.org/frontpage "Hacker News" \
+                    https://www.debian.org/News/news "Debian News" \
+                    other "Another RSS address") || continue
+                [ "$feed" = other ] && { feed=$(kb_input "News Source" "RSS address:" "") || continue; }
+                printf '%s\n' "$feed" > "$KB_CONF/tiles-feed"
+                rm -f "$KB_CONF/tiles/news" "$KB_CONF/tiles/attempt" ;;
+        esac
+    done
+}
+
+# --- Printers --------------------------------------------------------------
+
+printer_add() {
+    local items=() kind uri name line
+    kb_info "Looking for printers (10 seconds)..."
+    while read -r kind uri; do
+        case $uri in dnssd://* | ipp://* | ipps://* | usb://*) ;; *) continue ;; esac
+        name=$(printf '%s' "${uri#*://}" | sed 's/%20/ /g; s/[._]*ipp.*//; s/[?/].*//' | cut -c1-40)
+        items+=("$uri" "${name:-printer}")
+    done < <(lpinfo --timeout 10 -v 2>/dev/null)
+    items+=(address "Type the printer's network address")
+    uri=$(kb_dialog --title " Add Printer " --ok-label "Add" --cancel-label "Back" \
+        --menu "Printers found. Most printers made since about 2012 work without a driver." 16 76 8 "${items[@]}") || return
+    if [ "$uri" = address ]; then
+        line=$(kb_input "Add Printer" "Address of the printer (e.g. 192.168.1.40):" "") || return
+        uri="ipp://$line/ipp/print"
     fi
+    name=$(kb_input "Add Printer" "A short name for this printer (no spaces):" "Printer") || return
+    name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9_-')
+    kb_info "Setting up $name ..."
+    if out=$(lpadmin -p "${name:-Printer}" -E -v "$uri" -m everywhere 2>&1); then
+        lpoptions -d "${name:-Printer}" >/dev/null 2>&1
+        kb_msg "Printers" "\Zb${name:-Printer} is ready\Zn and is now the default printer." 8 60
+    else
+        kb_msg "Printers" "\Z1The printer could not be set up:\Zn\n\n$out\n\nOlder printers may need a driver package (Settings > Software: printer-driver-gutenprint or hplip)." 14 70
+    fi
+}
+
+printers_panel() {
+    local sel p items=() default
+    while true; do
+        default=$(lpstat -d 2>/dev/null | sed -n 's/.*: //p')
+        items=(Add "Add a printer")
+        while IFS= read -r p; do items+=("$p" "$([ "$p" = "$default" ] && echo "(default)")"); done < <(lpstat -e 2>/dev/null)
+        sel=$(kb_dialog --title " Printers " --ok-label "Select" --cancel-label "Back" \
+            --menu "Printers on this computer:" 15 60 7 "${items[@]}") || return
+        if [ "$sel" = Add ]; then printer_add; continue; fi
+        p=$sel
+        sel=$(kb_dialog --title " $p " --ok-label "Select" --cancel-label "Back" --menu "" 13 50 4 \
+            Test    "Print a test page" \
+            Default "Make it the default printer" \
+            Queue   "Cancel everything waiting to print" \
+            Remove  "Remove this printer") || continue
+        case $sel in
+            Test)    lp -d "$p" /usr/share/cups/data/testprint >/dev/null 2>&1 && kb_msg "Printers" "Test page sent." 6 30 ;;
+            Default) lpoptions -d "$p" >/dev/null ;;
+            Queue)   cancel -a "$p" 2>/dev/null; kb_msg "Printers" "The queue is empty." 6 30 ;;
+            Remove)  kb_yesno "Printers" "Remove $p?" 7 40 && lpadmin -x "$p" ;;
+        esac
+    done
+}
+
+# --- Hotspot ---------------------------------------------------------------
+
+hotspot_panel() {
+    local IF ssid pass state
+    IF=$(wifi_iface) || { kb_msg "Hotspot" "\Z1No Wi-Fi adapter found.\Zn" 7 40; return; }
+    state=$(cat /run/kilobyte/hotspot 2>/dev/null)
+    if [ -n "$state" ]; then
+        kb_yesno "Hotspot" "The hotspot is \ZbON\Zn: $(cat "$KB_CONF/hotspot-name" 2>/dev/null)\nPassword: $(cat "$KB_CONF/hotspot-pass" 2>/dev/null)\n\nSwitch it off?" 10 60 || return
+        kb_sudo && kb_info "Switching the hotspot off..." && sudo "$KB_LIB/kb-hotspot" stop >/dev/null 2>&1
+        return
+    fi
+    ssid=$(cat "$KB_CONF/hotspot-name" 2>/dev/null || echo "Kilobyte-$(hostname)")
+    pass=$(cat "$KB_CONF/hotspot-pass" 2>/dev/null || tr -dc 'a-km-z2-9' < /dev/urandom | head -c 10)
+    kb_msg "Hotspot" "The hotspot shares this computer's Internet connection (cable or USB phone tethering) with phones and other computers over Wi-Fi.\n\nWhile it is on, this computer's own Wi-Fi cannot connect to other networks." 12 66
+    ssid=$(kb_input "Hotspot" "Name of the hotspot:" "$ssid") || return
+    pass=$(kb_input "Hotspot" "Password (at least 8 characters):" "$pass") || return
+    [ ${#pass} -ge 8 ] || { kb_msg "Hotspot" "The password needs at least 8 characters." 7 50; return; }
+    printf '%s\n' "$ssid" > "$KB_CONF/hotspot-name"
+    (umask 077; printf '%s\n' "$pass" > "$KB_CONF/hotspot-pass")
+    kb_sudo || return
+    kb_info "Starting the hotspot..."
+    if out=$(sudo "$KB_LIB/kb-hotspot" start "$IF" "$ssid" "$pass" 2>&1); then
+        kb_msg "Hotspot" "\ZbThe hotspot is on.\Zn\n\nOn your phone, connect to \Zb$ssid\Zn\nwith the password \Zb$pass\Zn" 11 60
+    else
+        kb_msg "Hotspot" "\Z1The hotspot could not start:\Zn\n\n$out\n\nNot every Wi-Fi adapter can be a hotspot." 12 64
+    fi
+}
+
+# --- Bluetooth -------------------------------------------------------------
+
+bt() { bluetoothctl "$@" 2>/dev/null; }
+
+bt_device() { # bt_device MAC NAME
+    local mac=$1 name=$2 sel
+    sel=$(kb_dialog --title " $name " --ok-label "Select" --cancel-label "Back" --menu "$mac" 14 60 5 \
+        Connect    "Connect" \
+        Disconnect "Disconnect" \
+        Sound      "Play sound through it (headphones, speakers)" \
+        Local      "Play sound through this computer again" \
+        Remove     "Forget this device") || return
+    case $sel in
+        Connect)    kb_info "Connecting to $name..."; bt connect "$mac" >/dev/null ;;
+        Disconnect) bt disconnect "$mac" >/dev/null ;;
+        Sound)
+            printf 'defaults.bluealsa.device "%s"\ndefaults.bluealsa.profile "a2dp"\npcm.!default bluealsa\nctl.!default bluealsa\n' "$mac" > "$HOME/.asoundrc"
+            kb_msg "Bluetooth" "Sound now plays through \Zb$name\Zn." 7 56 ;;
+        Local)      rm -f "$HOME/.asoundrc"; kb_msg "Bluetooth" "Sound plays through this computer again." 7 56 ;;
+        Remove)     bt remove "$mac" >/dev/null ;;
+    esac
+}
+
+bluetooth_panel() {
+    local sel powered items=() mac name
+    if ! bt show | grep -q Controller; then
+        sudo -n "$KB_LIB/kb-root" bluetooth on >/dev/null 2>&1
+        sleep 1
+        bt show | grep -q Controller || { kb_msg "Bluetooth" "\Z1No Bluetooth adapter found.\Zn" 7 44; return; }
+    fi
+    while true; do
+        powered=$(bt show | sed -n 's/.*Powered: //p' | head -n 1)
+        items=(Power "Bluetooth is $([ "$powered" = yes ] && echo ON || echo OFF)" Find "Find and pair a new device")
+        while read -r _ mac name; do items+=("$mac" "$name"); done < <(bt devices Paired)
+        sel=$(kb_dialog --title " Bluetooth " --ok-label "Select" --cancel-label "Back" \
+            --menu "Keyboards, mice, headphones and speakers:" 16 64 8 "${items[@]}") || return
+        case $sel in
+            Power)
+                if [ "$powered" = yes ]; then bt power off >/dev/null; else sudo -n "$KB_LIB/kb-root" bluetooth on >/dev/null 2>&1; bt power on >/dev/null; fi ;;
+            Find)
+                bt power on >/dev/null
+                kb_info "Searching for 12 seconds. Put your device into pairing mode now..."
+                bt --timeout 12 scan on >/dev/null
+                items=()
+                while read -r _ mac name; do
+                    [ "$name" = "${mac//:/-}" ] && continue    # nameless beacons
+                    items+=("$mac" "$name")
+                done < <(bt devices)
+                [ ${#items[@]} -gt 0 ] || { kb_msg "Bluetooth" "No devices found." 7 40; continue; }
+                mac=$(kb_dialog --title " Pair " --ok-label "Pair" --cancel-label "Back" --menu "Devices nearby:" 16 64 8 "${items[@]}") || continue
+                kb_run_pause sh -c "echo 'Pairing. If a code appears, type it on the device and press Enter there.'; echo;
+                    bluetoothctl --agent KeyboardDisplay pair $mac && bluetoothctl trust $mac && bluetoothctl connect $mac" ;;
+            *)
+                bt_device "$sel" "$(bt info "$sel" | sed -n 's/.*Name: //p')" ;;
+        esac
+    done
 }
 
 # --- main -----------------------------------------------------------------
@@ -394,18 +634,23 @@ while true; do
             --menu "Settings for this computer." 0 64 0 \
             Update     "Kilobyte Update"               "Get the newest Kilobyte from GitHub" \
             Wi-Fi      "Wireless networks"             "Turn Wi-Fi on or off and connect to a network" \
+            Hotspot    "Wi-Fi hotspot"                 "Share this computer's Internet connection over Wi-Fi" \
+            Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
-            Appearance "Colour theme"                  "Blue EDIT, Norton, Windows 1.0, green or amber CRT..." \
+            Appearance "Colour theme"                  "EDIT, Norton, Windows 1.0, C64, Amiga, Mac, CRT..." \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
+            Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
+            Tiles      "Desktop tiles"                 "Weather and news beside the Program Manager" \
+            Sound      "Sound"                         "Volume, start-up and shut-down sounds" \
+            Printers   "Printers"                      "Add a printer, print a test page" \
             Battery    "Battery"                       "Charge, time left and battery health (laptops)" \
             Email      "Email account"                 "Set up the account the Email program uses" \
-            Sound      "Sound volume"                  "alsamixer: arrows change, M mutes, Esc closes" \
             Keyboard   "Keyboard layout"               "Choose the layout of your keyboard" \
             Date       "Date, time and time zone"      "Set the clock and the time zone" \
             Software   "Add or remove programs"        "Search, install and update Debian packages" \
+            Login      "Login and startup"             "Automatic login, start-up screen, autostart" \
             Password   "Change your password"          "Change the password of $USER" \
             Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
-            Startup    "Start Kilobyte after login"    "Turn the automatic start on or off" \
             About      "About this computer"           "Processor, memory, disk and version") || exit 0
     else
         sel=$page
@@ -413,18 +658,23 @@ while true; do
     case $sel in
         Update)     update_panel ;;
         Wi-Fi)      wifi_panel ;;
+        Hotspot)    hotspot_panel ;;
+        Bluetooth)  bluetooth_panel ;;
         Network)    network_panel ;;
         Appearance) appearance_panel ;;
         Display)    display_panel ;;
+        Saver)      saver_panel ;;
+        Tiles)      tiles_panel ;;
+        Sound)      sound_panel ;;
+        Printers)   printers_panel ;;
         Battery)    "$KB_LIB/apps/battery" ;;
         Email)      "$KB_LIB/apps/mail" --setup ;;
-        Sound)      kb_guarded '\e' alsamixer ;;
         Keyboard)   keyboard_panel ;;
         Date)       datetime_panel ;;
         Software)   software_panel ;;
+        Login)      login_panel ;;
         Password)   kb_run_pause passwd ;;
         Tasks)      kb_run htop ;;
-        Startup)    startup_panel ;;
         About)      about_panel ;;
     esac
     [ -z "$page" ] || exit 0

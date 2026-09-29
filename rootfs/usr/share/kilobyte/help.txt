@@ -67,6 +67,19 @@
                   time zone, installing programs, password, task manager.
 
 
+ MORE PROGRAMS
+ ─────────────
+   Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem
+                  sounds), YouTube Downloader.
+   Accessories    Paint: arrows move, Space draws, , and . change colour,
+                  P L B X C O F E K choose the tool, S saves, U undoes.
+                  Print, USB sticks, Backup, Screen saver and more.
+   Games          Mines, Solitaire, Reversi, Moon Buggy, Snake and others.
+                  Each shows its keys on the bottom line.
+   Settings       Also: Wi-Fi hotspot, Bluetooth, printers, screen saver,
+                  weather and news tiles, sounds, automatic login.
+
+
  FILES
  ─────
    Your documents are kept in ~/Documents, index cards in ~/Cardfile,

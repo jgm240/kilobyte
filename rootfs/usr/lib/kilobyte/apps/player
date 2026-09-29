@@ -56,6 +56,11 @@ open_address() {
     play "$url"
 }
 
+# player --choose-mode: only the picture setting (used by Pictures)
+if [ "${1:-}" = --choose-mode ]; then
+    choose_mode
+    exit
+fi
 # player SOURCE [MPV-OPTIONS...]: just play that, with the chosen picture mode.
 if [ $# -gt 0 ]; then
     play "$@"

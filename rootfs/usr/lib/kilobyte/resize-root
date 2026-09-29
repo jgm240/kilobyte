@@ -1,0 +1,9 @@
+#!/bin/sh
+# First start of an SD card image: grow the root partition and its file
+# system to fill the whole card (kilobyte-resize.service).
+root=$(findmnt -no SOURCE /)
+disk=/dev/$(lsblk -no PKNAME "$root")
+part=$(cat "/sys/class/block/$(basename "$root")/partition")
+growpart "$disk" "$part" || true
+resize2fs "$root"
+rm -f /etc/kilobyte/resize-root
