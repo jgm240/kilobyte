@@ -107,7 +107,7 @@ cmd_apply() {
     # System files that belong to Kilobyte (not the owner's settings).
     for f in etc/profile.d/kilobyte.sh etc/systemd/system/kilobyte-wifi.service \
              etc/modules-load.d/kilobyte-optical.conf etc/sysctl.d/10-kilobyte.conf \
-             etc/yt-dlp.conf etc/issue etc/systemd/network/20-wired.network \
+             etc/yt-dlp.conf etc/elinks/elinks.conf etc/issue etc/systemd/network/20-wired.network \
              etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
              etc/systemd/network/25-wireless.network; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"

@@ -3,7 +3,7 @@
 # Everything on screen is drawn by dialog(1): coloured character cells, line
 # drawing and block glyphs, the same way EDIT.COM or raspi-config look.
 
-KB_VERSION="1.1"
+KB_VERSION="1.2"
 KB_SHARE=/usr/share/kilobyte
 KB_LIB=/usr/lib/kilobyte
 KB_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/kilobyte"

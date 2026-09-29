@@ -60,7 +60,7 @@ while true; do
             [ -n "$addr" ] || continue
             dial "$addr" "${addr%%:*}" "$( [[ $addr == *:* ]] && echo "${addr##*:}" || echo 23)" telnet ;;
         Find)
-            kb_run links "https://www.telnetbbsguide.com/bbs/list/" ;;
+            kb_run elinks "https://www.telnetbbsguide.com/bbs/list/" ;;
         *)
             IFS='|' read -r name host port proto desc <<< "${BOARDS[$((sel - 1))]}"
             dial "$name" "$host" "$port" "$proto" ;;

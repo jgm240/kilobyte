@@ -104,7 +104,7 @@ office_sheet() {
 }
 
 run_web() {
-    kb_run links "${1:-file://$KB_SHARE/start.html}"
+    kb_run elinks "${1:-file://$KB_SHARE/start.html}"
 }
 
 run_files() {
@@ -164,7 +164,7 @@ accessories() {
 internet() {
     local sel
     while sel=$(SUB_DEFAULT=$sel submenu "Internet" "On-line, the text way." \
-        Web     "Web browser"         "Browse the web in text mode (links)" \
+        Web     "Web browser"         "Web pages with CSS and JavaScript (ELinks)" \
         Mail    "Email"               "Read and write email (Alpine)" \
         Chat    "Chat"                "Talk in chat rooms (IRC with WeeChat)" \
         BBS     "BBS Dialer"          "Call bulletin board systems that still run today" \
@@ -308,7 +308,7 @@ program_manager() {
         items=(
             Editor      "Text editor"                "Text files and documents (also DOCX, ODT); F9 opens the menus"
             Spreadsheet "Spreadsheet"                "Tables and formulas, also XLSX and ODS (sc-im: :w saves, :q quits)"
-            Web         "Web browser"                "Browse the web in text mode (links, Esc opens its menus)"
+            Web         "Web browser"                "Web pages with CSS and JavaScript (ELinks; Esc opens its menus)"
             Mail        "Email"                      "Read and write email (Alpine; the first start sets up your account)"
             Internet    "Internet  »"                "Chat, BBS dialer, YouTube downloader..."
             Files       "File manager"               "Two-panel file manager (mc, F10 quits)"

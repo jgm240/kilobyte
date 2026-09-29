@@ -38,28 +38,42 @@ tools() {
 
 pkgs() { sed 's/#.*//' "$@" | xargs | tr ' ' ','; }
 
-# Debian packages Kilobyte patches (image/patches/PACKAGE-*.patch): built from
-# Debian's source with a "+kilobyte1" version and installed over the original.
+# Debian packages Kilobyte rebuilds (image/debs/PACKAGE/): Debian's source,
+# with the *.patch files applied and prepare.sh run in it, gets a "+kilobyte1"
+# version and is installed over the original. A package that fails to build
+# is left out (the image keeps Debian's version).
 stage_debs() {
-    local p pkg dir v
-    echo "==> Building patched packages"
+    local pkg dir p v
+    echo "==> Building Kilobyte's versions of Debian packages"
     echo "deb-src $MIRROR $SUITE main" > /etc/apt/sources.list.d/kilobyte-src.list
     tools dpkg-dev build-essential fakeroot patch
     rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src"
-    for pkg in $(ls /src/image/patches/*.patch | xargs -n 1 basename | sed 's/-.*//' | sort -u); do
-        DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq "$pkg" >/dev/null
-        (cd "$WORK/src" && apt-get source -qq "$pkg" >/dev/null)
-        dir=$(find "$WORK/src" -mindepth 1 -maxdepth 1 -type d -name "$pkg-*" | head -n 1)
-        for p in /src/image/patches/"$pkg"-*.patch; do
-            patch -d "$dir" -p1 < "$p"
-        done
-        v=$(cd "$dir" && dpkg-parsechangelog -S Version)
-        { printf '%s (%s+kilobyte1) %s; urgency=medium\n\n  * Kilobyte patches: %s\n\n -- Kilobyte <kilobyte@users.noreply.github.com>  %s\n\n' \
-              "$pkg" "$v" "$SUITE" "$(cd /src/image/patches && ls "$pkg"-*.patch | xargs)" "$(date -R)"
-          cat "$dir/debian/changelog"; } > "$dir/debian/changelog.new"
-        mv "$dir/debian/changelog.new" "$dir/debian/changelog"
-        (cd "$dir" && DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -b -us -uc >/dev/null 2>&1)
-        cp "$WORK"/src/"$pkg"_*+kilobyte1_*.deb "$WORK/debs/"
+    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+    for pkg in $(ls /src/image/debs); do
+        (
+            set -e
+            cd "$WORK/src" && apt-get source -qq "$pkg" >/dev/null
+            dir=$(find "$WORK/src" -mindepth 1 -maxdepth 1 -type d -name "$pkg-*" | head -n 1)
+            cd "$dir"
+            for p in /src/image/debs/"$pkg"/*.patch; do
+                [ -e "$p" ] && patch -p1 < "$p"
+            done
+            if [ -x "/src/image/debs/$pkg/prepare.sh" ]; then "/src/image/debs/$pkg/prepare.sh"; fi
+            # Build dependencies of the prepared source (prepare.sh may drop some).
+            DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq . >/dev/null
+            v=$(dpkg-parsechangelog -S Version)
+            { printf '%s (%s+kilobyte1) %s; urgency=medium\n\n  * Kilobyte build (image/debs/%s).\n\n -- Kilobyte <kilobyte@users.noreply.github.com>  %s\n\n' \
+                  "$pkg" "$v" "$SUITE" "$pkg" "$(date -R)"
+              cat debian/changelog; } > debian/changelog.new
+            mv debian/changelog.new debian/changelog
+            DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -b -us -uc > "$WORK/src/$pkg.log" 2>&1 ||
+                { tail -n 20 "$WORK/src/$pkg.log"; exit 1; }
+            # Only the packages Debian also installs (no -doc, -dbgsym).
+            for deb in "$WORK"/src/*+kilobyte1_*.deb; do
+                case $deb in *-dbgsym_* | *-doc_* | *-dev_*) continue ;; esac
+                cp "$deb" "$WORK/debs/"
+            done
+        ) || echo "WARNING: $pkg could not be rebuilt; the image keeps Debian's version"
     done
     ls -1 "$WORK/debs"
 }
@@ -96,7 +110,7 @@ stage_rootfs() {
         --customize-hook='curl -fsSL -o "$1/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 "$1/usr/local/bin/yt-dlp"' \
         --customize-hook='echo "${KB_COMMIT:-unknown}" > "$1/usr/share/kilobyte/commit"' \
         --customize-hook='echo "$KB_PACKAGES" | tr , "\n" | sort -u > "$1/usr/share/kilobyte/packages.txt"' \
-        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then cp /work/debs/*.deb "$1/tmp/" && chroot "$1" sh -c "dpkg -i /tmp/*.deb && apt-mark hold \$(dpkg-deb -f /tmp/*.deb Package) && rm /tmp/*.deb"; fi' \
+        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && cp /work/debs/*.deb "$1/tmp/kb-debs/" && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
         --customize-hook='cp /src/image/customize.sh "$1/tmp/customize.sh"' \
         --customize-hook='chroot "$1" bash /tmp/customize.sh "$KB_VARIANT"' \
         "$SUITE" "$WORK/rootfs" \

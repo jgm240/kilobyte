@@ -13,7 +13,7 @@ text-mode programs, plus a few small Python programs for the real-time parts
 It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
 ```
- ■ Kilobyte 1.1  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
+ ■ Kilobyte 1.2  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
  ─────────────────────────────────────────────────────────────────────────
 
          ┌──────────── Program Manager ────────────┐   ┌─── Weather ───────
@@ -41,9 +41,9 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
 | Program Manager entry | Program | |
 |---|---|---|
-| Editor | `mcedit` | EDIT.COM-style editor with a menu bar (F9) |
-| Spreadsheet | `sc-im` | formulas, CSV/XLSX import, `:w` saves |
-| Web | `links` | text-mode web browser with menus (Esc) |
+| Editor | `mcedit` | EDIT.COM-style editor with a menu bar (F9); also opens and saves DOCX and ODT |
+| Spreadsheet | `sc-im` | formulas; opens and saves XLSX, ODS and CSV, `:w` saves |
+| Web | `elinks` | web browser with CSS and JavaScript, menus on Esc |
 | Email | `alpine` | Pine's successor; a setup wizard knows Gmail, Outlook, iCloud, Yahoo, GMX, WEB.DE, Posteo, mailbox.org |
 | Internet › Chat | `weechat` | IRC: pick a network and a room |
 | Internet › BBS Dialer | `telnet`, `ssh`, `luit` | bulletin boards that still run today, with modem sounds and CP437 ANSI art |
@@ -63,6 +63,23 @@ Commander, Windows 1.0, Commodore 64, Amiga Workbench 1.3, Mac System 1,
 Green Screen, Amber Screen and Hot Dog Stand. On the Linux console the themes
 reprogram the 16-colour palette, so the phosphor, C64, Amiga and Mac themes
 recolour every program.
+
+**Office files**: `kb-office` turns Word and Writer documents (DOCX, ODT) into
+plain text for the Editor. Headings become `#`, lists `-` and table rows
+`| a | b |`. On saving, the text goes back into the document and its styles,
+headers and page layout are kept. Excel and Calc sheets (XLSX, ODS) open in
+sc-im with values, text and formulas (SUM, AVERAGE, IF... are translated),
+and are written back. Bold, italics, pictures and cell colours are not kept.
+The old version is kept as `FILE~`. It uses only Python's standard library.
+
+**The web browser** is ELinks, rebuilt for Kilobyte with JavaScript (MuJS)
+and real CSS (NetSurf's libcss and libdom, compiled from source because
+Debian does not package them): `image/debs/elinks`. It runs the scripts of
+ordinary pages; large web applications are beyond it.
+
+**Mouse**: a click on a menu item highlights it, a click on the highlighted
+item (so a double-click) runs it. That is a small patch to `dialog`
+(`image/debs/dialog`), rebuilt as a Debian package for each architecture.
 
 **Paint** draws with half blocks: every character cell is two square
 pixels in 16 colours. It has pencil, line, box, ellipse, fill, eraser and
@@ -135,16 +152,16 @@ It is Debian's IBM VGA font with every DOS graphics character and the Western
 European letters combined.
 
 **Mouse**: `gpm` provides a block pointer on the text console. Programs that
-run under `kb-guard` are on a pseudo terminal and get no mouse.
+run under `kb-guard` are on a pseudo terminal and get no mouse there.
 
 ## Downloads and builds
 
 | Image | For | Build |
 |---|---|---|
-| `kilobyte-1.1-amd64.iso` | 64-bit PCs (BIOS and UEFI) | `./build.sh` |
-| `kilobyte-1.1-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
-| `kilobyte-1.1-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
-| `kilobyte-1.1-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
+| `kilobyte-1.2-amd64.iso` | 64-bit PCs (BIOS and UEFI) | `./build.sh` |
+| `kilobyte-1.2-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
+| `kilobyte-1.2-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
+| `kilobyte-1.2-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
 
 `./build.sh --arch all` builds all four. You need Docker. Debian is installed
 in a container of the target architecture (emulated when your computer has a
@@ -228,6 +245,7 @@ image/
   packages-pi.txt            Raspberry Pi: boot firmware, SD card resize
   packages-wifi.txt          Wi-Fi firmware (skipped by --lite)
   grub.cfg                   live medium boot menu
+  debs/                      Debian packages rebuilt for Kilobyte (dialog, elinks)
 rootfs/                      copied over the Debian root file system
   usr/bin/kilobyte           the Program Manager
   usr/lib/kilobyte/lib.sh    shared dialog helpers, theming, sounds, USB

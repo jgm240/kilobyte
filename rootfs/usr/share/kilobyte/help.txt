@@ -38,8 +38,11 @@
                   I inbox, C write, L folders, Q quit; Ctrl+X sends.
                   Gmail, iCloud and Yahoo need an "app password".
 
-   Web browser    links. Esc opens the menu bar, g types an address,
-                  arrow keys follow links, ← goes back, q quits.
+   Web browser    ELinks, with CSS and JavaScript. Esc opens the menu bar,
+                  g types an address, arrow keys move between links,
+                  Enter follows one, ← goes back, q quits. Big web apps
+                  (web mail, video sites) are too much for it: use the
+                  Email and YouTube programs instead.
 
    File manager   mc (Midnight Commander). Tab switches panel, F3 views,
                   F4 edits, F5 copies, F6 moves, F7 makes a folder,
