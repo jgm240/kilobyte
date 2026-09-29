@@ -20,12 +20,14 @@ WORK=/work
 
 case $ARCH in
     amd64) SUITE=trixie   KERNEL=linux-image-amd64 KIND=pc EFI=grub-efi-amd64-bin EFI32=grub-efi-ia32-bin FOREIGN=i386 ;;
-    i386)  SUITE=bookworm KERNEL=linux-image-686   KIND=pc EFI=grub-efi-ia32-bin ;;   # Debian 13 has no 32-bit PC kernel
+    # Debian 13 still builds its packages for i386, but no longer a 32-bit PC
+    # kernel: that one comes from Debian 12 (KERNEL_SUITE, 6.1 LTS).
+    i386)  SUITE=trixie   KERNEL=linux-image-686   KIND=pc EFI=grub-efi-ia32-bin KERNEL_SUITE=bookworm ;;
     arm64) SUITE=trixie   KERNEL=linux-image-arm64 KIND=pi EFI= ;;
     armhf) SUITE=trixie   KERNEL=linux-image-armmp KIND=pi EFI= ;;
     *) echo "unknown ARCH $ARCH" >&2; exit 2 ;;
 esac
-EFI32=${EFI32:-} FOREIGN=${FOREIGN:-}
+EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-}
 if [ $KIND = pc ]; then
     NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}"
 else
@@ -151,6 +153,10 @@ stage_rootfs() {
     # The firmware is in non-free-firmware: the check below must see it.
     [ -f /etc/apt/sources.list.d/debian.sources ] &&
         sed -i 's/^Components: main$/Components: main non-free-firmware/' /etc/apt/sources.list.d/debian.sources
+    if [ -n "$KERNEL_SUITE" ]; then
+        printf 'Types: deb\nURIs: %s\nSuites: %s %s-updates\nComponents: main non-free-firmware\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
+            "$MIRROR" "$KERNEL_SUITE" "$KERNEL_SUITE" > /etc/apt/sources.list.d/kernel-suite.sources
+    fi
     tools mmdebstrap ca-certificates curl
 
     # Leave out what this Debian release does not have (the 32-bit PC image
@@ -170,7 +176,7 @@ stage_rootfs() {
     echo "==> Building the Debian $SUITE root file system for $ARCH"
     export KB_PACKAGES="$packages"   # recorded in the image for Kilobyte Update
     KB_VARIANT=$([ $KIND = pc ] && echo live || echo pi)
-    export KB_VARIANT
+    export KB_VARIANT KERNEL_SUITE
     mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
         --components="main non-free-firmware" \
         --include="$packages" \
@@ -185,6 +191,7 @@ stage_rootfs() {
         --dpkgopt='path-exclude=/var/games/bsdgames/tetris-bsd.scores' \
         --dpkgopt='path-exclude=/usr/games/snake' \
         --dpkgopt='path-exclude=/usr/games/snscore' \
+        --setup-hook='if [ -n "$KERNEL_SUITE" ]; then mkdir -p "$1/etc/apt/preferences.d" && printf "Package: *\nPin: release n=%s\nPin-Priority: 100\n" "$KERNEL_SUITE" > "$1/etc/apt/preferences.d/kilobyte-kernel"; fi' \
         --essential-hook='echo "debconf debconf/frontend select Noninteractive" | chroot "$1" debconf-set-selections' \
         --customize-hook='tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$1" -xf -' \
         --customize-hook='curl -fsSL -o "$1/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 "$1/usr/local/bin/yt-dlp"' \
@@ -197,7 +204,10 @@ stage_rootfs() {
         "$SUITE" "$WORK/rootfs" \
         "deb $MIRROR $SUITE main non-free-firmware" \
         "deb $MIRROR $SUITE-updates main non-free-firmware" \
-        "deb http://security.debian.org/debian-security $SUITE-security main non-free-firmware"
+        "deb http://security.debian.org/debian-security $SUITE-security main non-free-firmware" \
+        ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE main non-free-firmware"} \
+        ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE-updates main non-free-firmware"} \
+        ${KERNEL_SUITE:+"deb http://security.debian.org/debian-security $KERNEL_SUITE-security main non-free-firmware"}
     du -sh "$WORK/rootfs"
 }
 

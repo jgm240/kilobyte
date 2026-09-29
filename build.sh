@@ -2,7 +2,7 @@
 # Build Kilobyte images with Docker.
 #
 #   ./build.sh                  64-bit PC ISO and USB stick image (amd64)
-#   ./build.sh --arch i386      32-bit PC ISO (Debian 12, for old computers)
+#   ./build.sh --arch i386      32-bit PC ISO (Debian 13, Debian 12's kernel; old computers)
 #   ./build.sh --arch arm64     Raspberry Pi 3 / 4 / 400 SD card image
 #   ./build.sh --arch armhf     Raspberry Pi 2 / 3 SD card image (32-bit)
 #   ./build.sh --arch all       all four
@@ -39,7 +39,7 @@ esac
 for ARCH in $ARCHES; do
     case $ARCH in
         amd64) PLATFORM=linux/amd64  SUITE=trixie ;;
-        i386)  PLATFORM=linux/386    SUITE=bookworm ;;
+        i386)  PLATFORM=linux/386    SUITE=trixie ;;
         arm64) PLATFORM=linux/arm64  SUITE=trixie ;;
         armhf) PLATFORM=linux/arm/v7 SUITE=trixie ;;
         *) echo "unknown architecture: $ARCH" >&2; exit 2 ;;

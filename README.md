@@ -191,7 +191,7 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 |---|---|---|
 | `kilobyte-1.3-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
 | `kilobyte-1.3-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
-| `kilobyte-1.3-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
+| `kilobyte-1.3-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
 | `kilobyte-1.3-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
 | `kilobyte-1.3-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
 
@@ -216,9 +216,8 @@ The USB image is UEFI only; BIOS PCs use the ISO.
 
 The PC images are hybrid ISOs. Burn one to a DVD or write it to a USB stick
 (`dd`, Etcher, Rufus in DD mode). Secure Boot must be off. The 32-bit image is
-built on Debian 12, because Debian 13 no longer ships a 32-bit PC kernel.
-There, YouTube may not work: Debian 12's QuickJS is too old for YouTube's
-challenges.
+Debian 13 like the others, with the kernel from Debian 12 (6.1 LTS), because
+Debian 13 still builds its packages for i386 but no longer a 32-bit PC kernel.
 
 Write the Raspberry Pi images to an SD card with Raspberry Pi Imager
 ("Use custom") or `xzcat … | dd`. On the first start Kilobyte grows the root
