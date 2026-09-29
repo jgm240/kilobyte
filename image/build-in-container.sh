@@ -148,7 +148,23 @@ stage_rootfs() {
     [ -n "${LITE:-}" ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
 
     echo "==> Installing build tools"
+    # The firmware is in non-free-firmware: the check below must see it.
+    [ -f /etc/apt/sources.list.d/debian.sources ] &&
+        sed -i 's/^Components: main$/Components: main non-free-firmware/' /etc/apt/sources.list.d/debian.sources
     tools mmdebstrap ca-certificates curl
+
+    # Leave out what this Debian release does not have (the 32-bit PC image
+    # is Debian 12, which lacks a few newer packages), with a warning.
+    local p kept=() missing=()
+    for p in ${packages//,/ }; do
+        if [[ $p == *:* ]] || apt-cache show "$p" >/dev/null 2>&1; then
+            kept+=("$p")
+        else
+            missing+=("$p")
+        fi
+    done
+    [ ${#missing[@]} -eq 0 ] || echo "WARNING: not in Debian $SUITE, left out: ${missing[*]}"
+    packages=$(IFS=,; echo "${kept[*]}")
     rm -rf "$WORK/rootfs" "$WORK/iso"   # (the patched packages in $WORK/debs stay)
 
     echo "==> Building the Debian $SUITE root file system for $ARCH"
