@@ -31,7 +31,7 @@ KB_SHARE = "/usr/share/kilobyte"
 class Screen:
     """curses set up for 16 colours; attr(fg, bg) gives the attribute."""
 
-    def __init__(self, stdscr):
+    def __init__(self, stdscr, mouse=True):
         self.scr = stdscr
         curses.curs_set(0)
         curses.start_color()
@@ -43,8 +43,9 @@ class Screen:
         # Colours beyond 8 come from the bold attribute on 8-colour terminals.
         self.native16 = curses.COLORS >= 16 and os.environ.get("TERM") != "linux"
         stdscr.keypad(True)
-        curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
-        curses.mouseinterval(0)
+        if mouse:
+            curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+            curses.mouseinterval(0)
 
     def attr(self, fg, bg=BLACK):
         bg &= 7                                    # backgrounds: 8 colours only
@@ -247,11 +248,12 @@ def play_sound(name):
         subprocess.Popen(["aplay", "-q", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def run(main):
-    """Start a curses program; Ctrl-C ends it quietly."""
+def run(main, mouse=True):
+    """Start a curses program; Ctrl-C ends it quietly. mouse=False leaves
+    the mouse alone (for a program that reads gpm itself)."""
     os.environ.setdefault("ESCDELAY", "25")
     try:
-        curses.wrapper(lambda stdscr: main(Screen(stdscr)))
+        curses.wrapper(lambda stdscr: main(Screen(stdscr, mouse)))
     except KeyboardInterrupt:
         pass
     sys.exit(0)

@@ -221,6 +221,8 @@ class Desk:
         self.buttons = set()               # mouse buttons held down
         # The console mouse straight from gpm (ncurses' gpm is off, see main).
         self.gpm = Gpm.open() if os.environ.get("TERM") == "linux" else None
+        if not self.gpm and os.environ.get("TERM") == "linux":
+            curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)   # clicks at least
         self.last_click = (0, None)
         self.menu = None
         s.scr.nodelay(True)
@@ -668,8 +670,8 @@ class Desk:
 if __name__ == "__main__":
     argv = sys.argv[1:] or ["kilobyte"]
     os.environ.setdefault("ESCDELAY", "25")
-    # On the console Kilobyte Windows reads gpm itself; ncurses must not open
-    # gpm too, or it takes events from the same connection.
-    if os.environ.get("TERM") == "linux":
-        os.environ["NCURSES_GPM_TERMS"] = ""
-    kbui.run(lambda s: Desk(s, argv).run())
+    # On the console Kilobyte Windows reads gpm itself; the curses mouse must
+    # stay off there, or ncurses opens gpm too and takes events from the same
+    # connection.
+    console = os.environ.get("TERM") == "linux"
+    kbui.run(lambda s: Desk(s, argv).run(), mouse=not console)
