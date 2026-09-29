@@ -227,6 +227,49 @@ stage_iso() {
     ls -lh "$iso"
 }
 
+# PCs, USB stick image: one FAT32 EFI partition holding GRUB, the kernel and
+# the live system, listed in both a GPT and a hybrid MBR. Macs (2006-2010
+# firmware) and fussy UEFI PCs list it in their boot menus ("EFI Boot"),
+# which the hybrid ISO's layered GPT/APM/HFS+ does not always manage; a GPT
+# whose backup is not at the end of a larger stick is ignored by some, and
+# then the MBR still shows the EFI partition. UEFI only (BIOS PCs: the ISO).
+stage_usbimg() {
+    local img="/out/$NAME-usb.img" esp="$WORK/esp.img" g="$WORK/usb-grub" mb t
+    echo "==> Writing $img (USB stick for UEFI PCs and Intel Macs)"
+    tools grub-common "$EFI" ${EFI32:+"$EFI32"} mtools dosfstools gdisk
+    rm -rf "$g" "$esp" && mkdir -p "$g"
+    # The EFI loaders find their partition by a file only it has.
+    printf 'search --no-floppy --set=root --file /boot/grub/kilobyte-usb\nset prefix=($root)/boot/grub\n' > "$g/early.cfg"
+    for t in x86_64-efi i386-efi; do
+        [ -d "/usr/lib/grub/$t" ] || continue
+        case $t in x86_64-efi) f=BOOTX64.EFI ;; i386-efi) f=BOOTIA32.EFI ;; esac
+        grub-mkimage -O "$t" -o "$g/$f" -p /boot/grub -c "$g/early.cfg" \
+            part_gpt part_msdos fat search search_fs_file configfile normal
+        mkdir -p "$g/mods/$t" && cp /usr/lib/grub/"$t"/*.mod /usr/lib/grub/"$t"/*.lst "$g/mods/$t/"
+    done
+    # Size: the live system plus 64 MB for GRUB and room.
+    mb=$(( $(du -sm "$WORK/iso/live" | cut -f1) + 64 ))
+    mkfs.vfat -C -F 32 -n KILOBYTE "$esp" $(( mb * 1024 )) >/dev/null
+    mmd -i "$esp" ::/EFI ::/EFI/BOOT ::/boot ::/boot/grub ::/boot/grub/fonts ::/boot/grub/themes ::/live
+    mcopy -i "$esp" "$g"/*.EFI ::/EFI/BOOT/
+    mcopy -s -i "$esp" "$g"/mods/* ::/boot/grub/
+    mcopy -i "$esp" /src/image/grub.cfg ::/boot/grub/grub.cfg
+    : > "$g/kilobyte-usb" && mcopy -i "$esp" "$g/kilobyte-usb" ::/boot/grub/
+    mcopy -i "$esp" /usr/share/grub/unicode.pf2 ::/boot/grub/fonts/
+    mcopy -s -i "$esp" /src/rootfs/usr/share/kilobyte/grub ::/boot/grub/themes/kilobyte
+    mcopy -i "$esp" "$WORK/iso/live/vmlinuz" "$WORK/iso/live/initrd.img" "$WORK/iso/live/filesystem.squashfs" ::/live/
+    # Disk: 1 MiB, the partition, 1 MiB for the backup GPT.
+    rm -f "$img.tmp"
+    truncate -s $(( mb + 2 ))M "$img.tmp"
+    sgdisk -q -n 1:2048:+"${mb}M" -t 1:ef00 -c 1:KILOBYTE "$img.tmp"
+    sgdisk -q -h 1 "$img.tmp"                  # hybrid MBR: 0xEE, then the EFI partition
+    dd if="$esp" of="$img.tmp" bs=1M seek=1 conv=notrunc status=none
+    rm -f "$esp"
+    mv "$img.tmp" "$img"
+    sgdisk -p "$img" | tail -n 3
+    ls -lh "$img"
+}
+
 stage_piimage() {
     local r="$WORK/rootfs" boot="$WORK/boot.img" root="$WORK/root.img" img="$WORK/$NAME.img"
     local boot_mb=256 used_mb root_mb
@@ -270,5 +313,6 @@ case "${1:-}" in
     squash)  stage_squash ;;
     iso)     stage_iso ;;
     piimage) stage_piimage ;;
-    *) echo "usage: $0 debs|box86|rootfs|squash|iso|piimage" >&2; exit 2 ;;
+    usbimg)  stage_usbimg ;;
+    *) echo "usage: $0 debs|box86|rootfs|squash|iso|usbimg|piimage" >&2; exit 2 ;;
 esac

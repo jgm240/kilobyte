@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build Kilobyte images with Docker.
 #
-#   ./build.sh                  64-bit PC ISO (amd64)
+#   ./build.sh                  64-bit PC ISO and USB stick image (amd64)
 #   ./build.sh --arch i386      32-bit PC ISO (Debian 12, for old computers)
 #   ./build.sh --arch arm64     Raspberry Pi 3 / 4 / 400 SD card image
 #   ./build.sh --arch armhf     Raspberry Pi 2 / 3 SD card image (32-bit)
@@ -61,7 +61,8 @@ for ARCH in $ARCHES; do
     case $ARCH in
         amd64 | i386)
             stage squash --platform "$NATIVE"
-            stage iso --platform "$PLATFORM" ;;
+            stage iso --platform "$PLATFORM"
+            stage usbimg --platform "$PLATFORM" ;;
         *)
             stage piimage --platform "$NATIVE" ;;
     esac
