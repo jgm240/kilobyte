@@ -13,6 +13,7 @@ resize, maximise, minimise, tile, cascade, close, leave).
 
     desk [PROGRAM [ARGS...]]     first window runs PROGRAM (default: kilobyte)
 """
+import ctypes
 import curses
 import fcntl
 import os
@@ -73,6 +74,59 @@ APP_KEYS = {
     curses.KEY_UP: b"\x1bOA", curses.KEY_DOWN: b"\x1bOB", curses.KEY_RIGHT: b"\x1bOC",
     curses.KEY_LEFT: b"\x1bOD", curses.KEY_HOME: b"\x1bOH", curses.KEY_END: b"\x1bOF",
 }
+
+
+class Gpm:
+    """The console mouse straight from gpm (libgpm): every movement, drag,
+    press, release and wheel turn. ncurses' own gpm support reports only
+    presses and releases, which is not enough to drag windows."""
+
+    MOVE, DRAG, DOWN, UP = 1, 2, 4, 8
+    B_LEFT, B_MIDDLE, B_RIGHT, B_UP, B_DOWN = 4, 2, 1, 16, 32
+
+    class Connect(ctypes.Structure):
+        _fields_ = [("eventMask", ctypes.c_ushort), ("defaultMask", ctypes.c_ushort),
+                    ("minMod", ctypes.c_ushort), ("maxMod", ctypes.c_ushort),
+                    ("pid", ctypes.c_int), ("vc", ctypes.c_int)]
+
+    class Event(ctypes.Structure):
+        _fields_ = [("buttons", ctypes.c_ubyte), ("modifiers", ctypes.c_ubyte), ("vc", ctypes.c_ushort),
+                    ("dx", ctypes.c_short), ("dy", ctypes.c_short), ("x", ctypes.c_short), ("y", ctypes.c_short),
+                    ("type", ctypes.c_int), ("clicks", ctypes.c_int), ("margin", ctypes.c_int),
+                    ("wdx", ctypes.c_short), ("wdy", ctypes.c_short)]
+
+    @classmethod
+    def open(cls):
+        if os.environ.get("TERM") != "linux":
+            return None
+        try:
+            lib = ctypes.CDLL("libgpm.so.2")
+        except OSError:
+            return None
+        conn = cls.Connect(0xFFFF, 0, 0, 0xFFFF, 0, 0)   # every event, none to gpm itself
+        if lib.Gpm_Open(ctypes.byref(conn), 0) < 0:
+            return None
+        g = cls()
+        g.lib = lib
+        g.fd = ctypes.c_int.in_dll(lib, "gpm_fd").value
+        return g if g.fd >= 0 else None
+
+    def events(self):
+        """Read one gpm event -> list of (x, y, kind, button)."""
+        ev = self.Event()
+        if self.lib.Gpm_GetEvent(ctypes.byref(ev)) <= 0:
+            return []
+        x, y = ev.x - 1, ev.y - 1
+        button = 1 if ev.buttons & self.B_LEFT else 3 if ev.buttons & self.B_RIGHT else 0
+        if ev.wdy or ev.buttons & (self.B_UP | self.B_DOWN):
+            return [(x, y, "wheel", 4 if (ev.wdy > 0 or ev.buttons & self.B_UP) else 5)]
+        if ev.type & self.DOWN:
+            return [(x, y, "down", button)]
+        if ev.type & self.UP:
+            return [(x, y, "up", button or 1)]
+        if ev.type & self.DRAG:
+            return [(x, y, "drag", button)]
+        return [(x, y, "move", 0)]
 
 
 class Window:
@@ -163,6 +217,10 @@ class Desk:
         self.windows = []                  # bottom to top; the last is active
         self.drag = None                   # ("move"|"size", window, dx, dy)
         self.pointer = None                # where the mouse is, drawn as a block
+        self.buttons = set()               # mouse buttons held down
+        self.gpm = Gpm.open()              # the console mouse, directly (or None)
+        if self.gpm:
+            curses.mousemask(0)            # gpm gives every event; curses would only give clicks
         self.last_click = (0, None)
         self.menu = None
         s.scr.nodelay(True)
@@ -404,91 +462,120 @@ class Desk:
 
     # --- input ----------------------------------------------------------
     def mouse(self):
+        """A curses mouse event (terminal emulators) -> pointer events."""
         try:
             _, mx, my, _, b = curses.getmouse()
         except curses.error:
             return
+        B = curses
+        events = []
+        for bit, button in ((B.BUTTON1_PRESSED, 1), (B.BUTTON3_PRESSED, 3)):
+            if b & bit:
+                events.append(("down", button))
+        for bit, button in ((B.BUTTON1_RELEASED, 1), (B.BUTTON3_RELEASED, 3)):
+            if b & bit:
+                events.append(("up", button))
+        for bit, button, times in ((B.BUTTON1_CLICKED, 1, 1), (B.BUTTON1_DOUBLE_CLICKED, 1, 2), (B.BUTTON3_CLICKED, 3, 1)):
+            if b & bit:
+                events += [("down", button), ("up", button)] * times
+        for name, button in (("BUTTON4_PRESSED", 4), ("BUTTON5_PRESSED", 5)):
+            if b & getattr(B, name, 0):
+                events.append(("wheel", button))
+        if b & B.REPORT_MOUSE_POSITION and not events:
+            events.append(("drag" if self.buttons else "move", 0))
+        for kind, button in events:
+            self.pointer_event(mx, my, kind, button)
+
+    def pointer_event(self, mx, my, kind, button):
+        """One mouse event: kind is down, up, move, drag or wheel; button
+        1 (left), 3 (right), 4/5 (wheel up/down). Coordinates start at 0."""
         self.pointer = (mx, my)
+        if kind == "down":
+            self.buttons.add(button)
+        elif kind == "up":
+            self.buttons.discard(button)
         if os.environ.get("KB_DESK_DEBUG"):
             with open("/tmp/desk-mouse.log", "a") as log:
-                log.write("mouse x=%d y=%d bstate=%#x drag=%s\n" % (mx, my, b, bool(self.drag)))
+                log.write("%s %d at %d,%d drag=%s\n" % (kind, button, mx, my, bool(self.drag)))
         H, W = self.s.size()
-        pressed = b & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED)
-        released = b & curses.BUTTON1_RELEASED
-        # Dragging a window.
+        down = kind == "down" and button == 1
+
+        # A window being moved or resized follows the pointer.
         if self.drag:
-            kind, win, dx, dy = self.drag
-            if kind == "move":
-                win.move(mx - dx, my - dy)
-            else:
-                win.resize(mx - win.x + 1, my - win.y + 1)
-            if released or pressed:
+            what, win, dx, dy = self.drag
+            if kind in ("drag", "move", "up"):
+                if what == "move":
+                    win.move(mx - dx, my - dy)
+                else:
+                    win.resize(mx - win.x + 1, my - win.y + 1)
+            if kind == "up" or down:
                 self.drag = None
             return
-        if self.menu and pressed:
-            x, y, w = self.menu.get("box", (0, 0, 0))
-            if x <= mx < x + w and y < my <= y + len(self.MENU):
-                self.menu_do(self.MENU[my - y - 1][0])
-            else:
-                self.menu = None
+        if self.menu:
+            if down:
+                x, y, w = self.menu.get("box", (0, 0, 0))
+                if x <= mx < x + w and y < my <= y + len(self.MENU):
+                    self.menu_do(self.MENU[my - y - 1][0])
+                else:
+                    self.menu = None
             return
-        if my == 0 and pressed:
-            if 14 <= mx < 29:
-                self.new_window()
-            elif mx < 40:
-                self.menu = {"sel": 0}
+        if my == 0:
+            if down:
+                if 14 <= mx < 29:
+                    self.new_window()
+                elif mx < 40:
+                    self.menu = {"sel": 0}
             return
-        if my == H - 1 and pressed:
-            for x0, x1, win in self.task_buttons:
-                if x0 <= mx < x1:
-                    if win is self.active():
-                        win.minimised = True
-                    else:
-                        self.raise_(win)
+        if my == H - 1:
+            if down:
+                for x0, x1, win in self.task_buttons:
+                    if x0 <= mx < x1:
+                        if win is self.active():
+                            win.minimised = True
+                        else:
+                            self.raise_(win)
             return
         # The topmost window under the pointer.
         for win in reversed(self.windows):
             if win.minimised or not win.contains(mx, my):
                 continue
-            if pressed and win is not self.active():
+            if down and win is not self.active():
                 self.raise_(win)
             rx, ry = mx - win.x, my - win.y
-            if ry == 0 and pressed:
-                now = time.time()
-                double = b & curses.BUTTON1_DOUBLE_CLICKED or (
-                    self.last_click[1] is win and now - self.last_click[0] < 0.4)
-                self.last_click = (now, win)
-                if 1 <= rx <= 3:
-                    win.close()
-                elif win.w - 7 <= rx <= win.w - 5:
-                    win.minimised = True
-                elif win.w - 4 <= rx <= win.w - 2 or double:
-                    self.maximise(win)
-                elif b & curses.BUTTON1_PRESSED:
-                    if win.saved:
+            if ry == 0:                               # title bar
+                if down:
+                    now = time.time()
+                    double = self.last_click[1] is win and now - self.last_click[0] < 0.45
+                    self.last_click = (now, win)
+                    if 1 <= rx <= 3:
+                        win.close()
+                    elif win.w - 7 <= rx <= win.w - 5:
+                        win.minimised = True
+                    elif win.w - 4 <= rx <= win.w - 2 or double:
                         self.maximise(win)
-                    self.drag = ("move", win, rx, ry)
+                    else:
+                        if win.saved:                 # dragging a maximised window restores it
+                            self.maximise(win)
+                            win.move(mx - min(rx, win.w - 2), my)
+                            rx = mx - win.x
+                        self.drag = ("move", win, rx, 0)
                 return
-            if ry == win.h - 1 and rx >= win.w - 2 and b & curses.BUTTON1_PRESSED:
-                self.drag = ("size", win, 0, 0)
+            if ry == win.h - 1 and rx >= win.w - 2:   # lower right corner
+                if down:
+                    win.saved = None
+                    self.drag = ("size", win, 0, 0)
                 return
-            # Inside: hand the click to the program if it listens to the mouse.
+            # Inside: hand the event to the program if it listens to the mouse.
             if 1 <= rx < win.w - 1 and 1 <= ry < win.h - 1 and win.mouse_on():
-                cx, cy = rx, ry           # 1-based inside the window
-                for bit, code, up in ((curses.BUTTON1_PRESSED, 0, False), (curses.BUTTON1_RELEASED, 0, True),
-                                      (curses.BUTTON3_PRESSED, 2, False), (curses.BUTTON3_RELEASED, 2, True)):
-                    if b & bit:
-                        win.send(b"\x1b[<%d;%d;%d%s" % (code, cx, cy, b"m" if up else b"M"))
-                for bit, code in ((curses.BUTTON1_CLICKED, 0), (curses.BUTTON1_DOUBLE_CLICKED, 0),
-                                  (curses.BUTTON3_CLICKED, 2)):
-                    if b & bit:
-                        clicks = 2 if bit == curses.BUTTON1_DOUBLE_CLICKED else 1
-                        for _ in range(clicks):
-                            win.send(b"\x1b[<%d;%d;%dM\x1b[<%d;%d;%dm" % (code, cx, cy, code, cx, cy))
-                wheel = {getattr(curses, "BUTTON4_PRESSED", 0): 64, getattr(curses, "BUTTON5_PRESSED", 0): 65}
-                for bit, code in wheel.items():
-                    if bit and b & bit:
-                        win.send(b"\x1b[<%d;%d;%dM" % (code, cx, cy))
+                code = {1: 0, 3: 2, 4: 64, 5: 65}.get(button, 0)
+                if kind == "down":
+                    win.send(b"\x1b[<%d;%d;%dM" % (code, rx, ry))
+                elif kind == "up":
+                    win.send(b"\x1b[<%d;%d;%dm" % (code, rx, ry))
+                elif kind == "wheel":
+                    win.send(b"\x1b[<%d;%d;%dM" % (code, rx, ry))
+                elif kind == "drag" and (1002 << 5 in win.screen.mode or 1003 << 5 in win.screen.mode):
+                    win.send(b"\x1b[<32;%d;%dM" % (rx, ry))
             return
 
     def key(self, k):
@@ -545,6 +632,8 @@ class Desk:
                 return
             self.draw()
             fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
+            if self.gpm:
+                fds.append(self.gpm.fd)
             try:
                 ready, _, _ = select.select(fds, [], [], 1.0)
             except InterruptedError:
@@ -552,6 +641,14 @@ class Desk:
             for win in self.windows:
                 if win.fd in ready:
                     win.read()
+            if self.gpm and self.gpm.fd in ready:
+                for x, y, kind, button in self.gpm.events():
+                    try:
+                        self.pointer_event(x, y, kind, button)
+                    except Exception:
+                        import traceback
+                        with open(os.path.expanduser("~/.cache/kilobyte-desk.log"), "a") as log:
+                            traceback.print_exc(file=log)
             if sys.stdin.fileno() in ready or not ready:
                 while True:
                     try:
