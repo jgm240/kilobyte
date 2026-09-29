@@ -146,6 +146,7 @@ class Window:
                        KB_DESK_PID=str(os.getppid()),
                        NCURSES_NO_UTF8_ACS="1")   # real box characters, not VT100 line mode
             env.pop("KILOBYTE", None)
+            env.pop("NCURSES_GPM_TERMS", None)
             os.chdir(os.path.expanduser("~"))
             try:
                 os.execvpe(argv[0], argv, env)
@@ -218,14 +219,8 @@ class Desk:
         self.drag = None                   # ("move"|"size", window, dx, dy)
         self.pointer = None                # where the mouse is, drawn as a block
         self.buttons = set()               # mouse buttons held down
-        # The console mouse straight from gpm: curses' own gpm connection has
-        # to be closed first (libgpm keeps one connection state for both).
-        self.gpm = None
-        if os.environ.get("TERM") == "linux":
-            curses.mousemask(0)
-            self.gpm = Gpm.open()
-            if not self.gpm:
-                curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+        # The console mouse straight from gpm (ncurses' gpm is off, see main).
+        self.gpm = Gpm.open() if os.environ.get("TERM") == "linux" else None
         self.last_click = (0, None)
         self.menu = None
         s.scr.nodelay(True)
@@ -673,4 +668,8 @@ class Desk:
 if __name__ == "__main__":
     argv = sys.argv[1:] or ["kilobyte"]
     os.environ.setdefault("ESCDELAY", "25")
+    # On the console Kilobyte Windows reads gpm itself; ncurses must not open
+    # gpm too, or it takes events from the same connection.
+    if os.environ.get("TERM") == "linux":
+        os.environ["NCURSES_GPM_TERMS"] = ""
     kbui.run(lambda s: Desk(s, argv).run())
