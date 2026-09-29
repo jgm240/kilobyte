@@ -271,8 +271,11 @@ stage_usbimg() {
     # Disk: 1 MiB, the partition, 1 MiB for the backup GPT.
     rm -f "$img.tmp"
     truncate -s $(( mb + 2 ))M "$img.tmp"
-    sgdisk -q -n 1:2048:+"${mb}M" -t 1:ef00 -c 1:KILOBYTE "$img.tmp"
-    sgdisk -q -h 1 "$img.tmp"                  # hybrid MBR: 0xEE, then the EFI partition
+    # (not sgdisk -q: with it, sgdisk silently writes no partition)
+    sgdisk -n 1:2048:+"${mb}M" -t 1:ef00 -c 1:KILOBYTE "$img.tmp" >/dev/null
+    sgdisk -h 1 "$img.tmp" >/dev/null          # hybrid MBR: 0xEE, then the EFI partition
+    sgdisk -i 1 "$img.tmp" | grep -q "EFI system partition" ||
+        { echo "usbimg: the EFI partition is missing" >&2; return 1; }
     dd if="$esp" of="$img.tmp" bs=1M seek=1 conv=notrunc status=none
     rm -f "$esp"
     mv "$img.tmp" "$img"
