@@ -26,11 +26,11 @@ wifi_status_text() {
     ssid=$(sed -n 's/^ssid=//p' <<< "$st")
     ip=$(sed -n 's/^ip_address=//p' <<< "$st")
     case $(sed -n 's/^wpa_state=//p' <<< "$st") in
-        COMPLETED) echo "Wi-Fi is \Z2\ZbON\Zn, connected to \Zb$ssid\Zn${ip:+ ($ip)}." ;;
+        COMPLETED) echo "Wi-Fi is \ZbON\Zn, connected to \Zb$ssid\Zn${ip:+ ($ip)}." ;;
         SCANNING | ASSOCIATING | AUTHENTICATING | ASSOCIATED | 4WAY_HANDSHAKE | GROUP_HANDSHAKE)
-                   echo "Wi-Fi is \Z2\ZbON\Zn, connecting..." ;;
-        "")        echo "Wi-Fi is \Z2\ZbON\Zn, the adapter $IF is starting..." ;;
-        *)         echo "Wi-Fi is \Z2\ZbON\Zn, not connected." ;;
+                   echo "Wi-Fi is \ZbON\Zn, connecting..." ;;
+        "")        echo "Wi-Fi is \ZbON\Zn, the adapter $IF is starting..." ;;
+        *)         echo "Wi-Fi is \ZbON\Zn, not connected." ;;
     esac
 }
 
@@ -92,7 +92,7 @@ wifi_connect() {
         kb_info "Connecting to \"$choice\"...  ($n)"
         st=$(wcli status)
         if grep -q '^wpa_state=COMPLETED' <<< "$st" && grep -q '^ip_address=' <<< "$st"; then
-            kb_msg "Wi-Fi" "\Z2\ZbConnected\Zn to \"$choice\".\n\nAddress: $(sed -n 's/^ip_address=//p' <<< "$st")"
+            kb_msg "Wi-Fi" "\ZbConnected\Zn to \"$choice\".\n\nAddress: $(sed -n 's/^ip_address=//p' <<< "$st")"
             return
         fi
         sleep 1
@@ -155,7 +155,7 @@ network_panel() {
     if [ $? -eq "$DIALOG_EXTRA" ]; then
         kb_info "Testing the connection to the Internet..."
         if ping -c 2 -W 3 deb.debian.org >/dev/null 2>&1; then
-            kb_msg "Network" "\Z2\ZbThe Internet can be reached.\Zn"
+            kb_msg "Network" "\ZbThe Internet can be reached.\Zn"
         else
             kb_msg "Network" "\Z1\ZbThe Internet cannot be reached.\Zn\n\nPlug in a cable or connect to Wi-Fi."
         fi
@@ -201,6 +201,7 @@ display_panel() {
     kb_sudo || return
     sudo sed -i -e "s/^CODESET=.*/CODESET=\"$codeset\"/" -e "s/^FONTFACE=.*/FONTFACE=\"$face\"/" \
         -e "s/^FONTSIZE=.*/FONTSIZE=\"$size\"/" /etc/default/console-setup
+    sudo setupcon --save-only --force 2>/dev/null   # keep it after a restart
     [ "$TERM" = linux ] && sudo setupcon --force --font-only 2>/dev/null
     kb_msg "Display" "The console font is now $face $size."
 }
@@ -221,6 +222,7 @@ keyboard_panel() {
         latam "Spanish (Latin America)" ca "Canadian (French)") || return
     kb_sudo || return
     sudo sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$sel\"/" /etc/default/keyboard
+    sudo setupcon --save-only --force 2>/dev/null   # keep it after a restart
     [ "$TERM" = linux ] && sudo setupcon --force --keyboard-only 2>/dev/null
     kb_msg "Keyboard" "The keyboard layout is now \Zb$sel\Zn."
 }
@@ -349,7 +351,7 @@ update_panel() {
     fi
     echo "$new" > "$KB_CONF/update-latest"
     if [ "$old" = "$new" ]; then
-        kb_msg "Kilobyte Update" "\Z2\ZbKilobyte is up to date.\Zn\n\nVersion ${old:0:7} from github.com/$(. "$KB_SHARE/update.conf"; echo "$REPO")" 9 64
+        kb_msg "Kilobyte Update" "\ZbKilobyte is up to date.\Zn\n\nVersion ${old:0:7} from github.com/$(. "$KB_SHARE/update.conf"; echo "$REPO")" 9 64
         return
     fi
     changes=$("$KB_LIB/kb-update" changes 2>/dev/null | head -n 12 | sed 's/^/  · /')
@@ -366,7 +368,7 @@ ${changes:-  (no details)}
 Your files and settings are kept." $(( 14 + n )) 72 || return
     kb_sudo || return
     if kb_run_pause sudo "$KB_LIB/kb-root" kilobyte update "$new"; then
-        kb_msg "Kilobyte Update" "\Z2\ZbKilobyte was updated.\Zn\n\nThe Program Manager restarts now." 9 50
+        kb_msg "Kilobyte Update" "\ZbKilobyte was updated.\Zn\n\nThe Program Manager restarts now." 9 50
         exit 42   # tells the Program Manager to restart itself
     fi
 }
@@ -384,7 +386,7 @@ startup_panel() {
 # --- main -----------------------------------------------------------------
 
 page=${1:-}
-sel=Wi-Fi
+sel=Update
 while true; do
     if [ -z "$page" ]; then
         sel=$(kb_dialog --title " Settings " --item-help --default-item "$sel" \

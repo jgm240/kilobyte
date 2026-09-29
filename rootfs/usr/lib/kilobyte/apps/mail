@@ -115,7 +115,7 @@ EOF
     # Its presence lets Alpine offer to remember the password (encrypted).
     [ -e "$HOME/.pine-passfile" ] || install -m 600 /dev/null "$HOME/.pine-passfile"
 
-    kb_msg "Email Account" "\Z2\ZbYour account is set up.\Zn
+    kb_msg "Email Account" "\ZbYour account is set up.\Zn
 
 $note
 

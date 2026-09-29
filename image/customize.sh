@@ -32,6 +32,10 @@ systemctl mask systemd-networkd-wait-online.service
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 passwd -l root
 
+# --- console font and keyboard: console-setup applies a cache made when the
+# package was installed, before Kilobyte's settings were in place; renew it.
+setupcon --save-only --force
+
 # --- slim down
 update-initramfs -u -k all
 apt-get clean

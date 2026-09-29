@@ -227,6 +227,8 @@ EOF
     kb_theme_name > "$theme_dir/theme"
     in_target chown -R "$NAME:$NAME" "/home/$NAME"
 
+    in_target setupcon --save-only --force    # font and keyboard at boot
+
     progress 88 "Removing the live system tools..."
     in_target dpkg --purge live-boot live-boot-initramfs-tools || true
     in_target update-initramfs -u -k all
@@ -261,7 +263,7 @@ if [ "$(cat "$STATUS" 2>/dev/null)" != ok ]; then
 fi
 
 if kb_dialog --title " Kilobyte is Installed " --yes-label "Restart" --no-label "Later" --yesno "
-\Z2\ZbKilobyte is now installed on $DISK.\Zn
+\ZbKilobyte is now installed on $DISK.\Zn
 
 Remove the USB stick or CD, then restart the computer.
 Log in as \Zb$NAME\Zn with the password you chose." 11 60; then
