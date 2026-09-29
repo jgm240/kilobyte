@@ -58,7 +58,7 @@ cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
 package_list() { sed 's/#.*//' "$@" 2>/dev/null | xargs -n 1 | sort -u; }
 
 cmd_apply() {
-    local sha=${1:-} src d f old_pkgs new_pkgs added=() missing=() failed=() p kind
+    local sha=${1:-} src
     [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: kb-update apply COMMIT-ID" >&2; exit 2; }
     [ "$(id -u)" -eq 0 ] || { echo "kb-update: apply needs root" >&2; exit 1; }
 
@@ -81,6 +81,27 @@ cmd_apply() {
         esac || { echo "kb-update: $f is broken, update stopped" >&2; exit 1; }
     done
     visudo -cqf "$src/etc/sudoers.d/kilobyte" || { echo "kb-update: sudoers file is broken, update stopped" >&2; exit 1; }
+    install_tree "$src" "$sha"
+}
+
+# Hand the installing over to the updater that came with the download, so an
+# update's own changes to the updater (new files to install, new steps)
+# already count for this update.
+cmd_apply_from() {
+    local src=$1 sha=$2
+    TMP=${KB_UPDATE_TMP:-}
+    trap cleanup EXIT
+    install_tree "$src" "$sha"
+}
+
+install_tree() {
+    local src=$1 sha=$2 d f old_pkgs new_pkgs added=() missing=() failed=() p kind
+    if [ -z "${KB_UPDATE_TMP:-}" ] && [ -f "$src/usr/lib/kilobyte/kb-update" ] &&
+       ! cmp -s "$src/usr/lib/kilobyte/kb-update" "$0"; then
+        export KB_UPDATE_TMP=$TMP
+        trap - EXIT                  # the new updater cleans up
+        exec bash "$src/usr/lib/kilobyte/kb-update" apply-from "$src" "$sha"
+    fi
 
     # The package list this system has (from its image or last update).
     old_pkgs=$(package_list "$SHARE/packages.txt")
@@ -165,5 +186,6 @@ case "${1:-}" in
     check)   cmd_check ;;
     changes) cmd_changes ;;
     apply)   cmd_apply "${2:-}" ;;
+    apply-from) cmd_apply_from "${2:-}" "${3:-}" ;;
     *) echo "usage: kb-update check | changes | apply COMMIT-ID" >&2; exit 2 ;;
 esac
