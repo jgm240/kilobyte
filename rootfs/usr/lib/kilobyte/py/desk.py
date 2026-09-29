@@ -187,9 +187,16 @@ class Window:
     def set_size(self):
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", self.rows(), self.cols(), 0, 0))
 
-    def resize(self, w, h):
+    def clamp_size(self, w, h):
         H, W = self.desk.area()
-        w, h = max(MIN_W, min(w, W)), max(MIN_H, min(h, H))
+        return max(MIN_W, min(w, W)), max(MIN_H, min(h, H))
+
+    def clamp_pos(self, x, y):
+        H, W = self.desk.area()
+        return max(-self.w + 8, min(x, W - 8)), max(1, min(y, H))
+
+    def resize(self, w, h):
+        w, h = self.clamp_size(w, h)
         if (w, h) == (self.w, self.h):
             return
         self.w, self.h = w, h
@@ -197,9 +204,7 @@ class Window:
         self.set_size()                    # the kernel sends the program SIGWINCH
 
     def move(self, x, y):
-        H, W = self.desk.area()
-        self.x = max(-self.w + 8, min(x, W - 8))
-        self.y = max(1, min(y, H))
+        self.x, self.y = self.clamp_pos(x, y)
 
     def read(self):
         try:
@@ -239,6 +244,7 @@ class Desk:
         self.first_argv = argv
         self.windows = []                  # bottom to top; the last is active
         self.drag = None                   # ("move"|"size", window, dx, dy)
+        self.outline = None                # (x, y, w, h) where the dragged window will go
         self.pointer = None                # where the mouse is, drawn as a block
         self.buttons = set()               # mouse buttons held down
         # The console mouse straight from gpm (ncurses' gpm is off, see main).
@@ -393,6 +399,8 @@ class Desk:
         for win in self.windows:
             if not win.minimised:
                 self.draw_window(win, win is act)
+        if self.outline:
+            self.draw_outline()
         self.draw_bars()
         if self.menu:
             self.draw_menu()
@@ -418,6 +426,25 @@ class Desk:
         else:
             curses.curs_set(0)
         self.s.scr.refresh()
+
+    def draw_outline(self):
+        """Where the window being dragged will go: its frame in reverse video."""
+        x, y, w, h = self.outline
+        H, W = self.s.size()
+
+        def mark(yy, xx, n):
+            x0, x1 = max(0, xx), min(W, xx + n)
+            if 0 < yy < H - 1 and x0 < x1:
+                try:
+                    self.s.scr.chgat(yy, x0, x1 - x0, curses.A_REVERSE)
+                except curses.error:
+                    pass
+
+        mark(y, x, w)
+        mark(y + h - 1, x, w)
+        for yy in range(y + 1, y + h - 1):
+            mark(yy, x, 1)
+            mark(yy, x + w - 1, 1)
 
     # --- the F12 window menu -------------------------------------------
     MENU = [("n", "New window"), ("m", "Move (arrow keys, Enter)"), ("r", "Resize (arrow keys, Enter)"),
@@ -524,16 +551,23 @@ class Desk:
         H, W = self.s.size()
         down = kind == "down" and button == 1
 
-        # A window being moved or resized follows the pointer.
+        # Moving or resizing: an outline follows the pointer (like Windows
+        # 98) and the window goes there when the button is let go.
         if self.drag:
             what, win, dx, dy = self.drag
             if kind in ("drag", "move", "up"):
                 if what == "move":
-                    win.move(mx - dx, my - dy)
+                    self.outline = win.clamp_pos(mx - dx, my - dy) + (win.w, win.h)
                 else:
-                    win.resize(mx - win.x + 1, my - win.y + 1)
+                    self.outline = (win.x, win.y) + win.clamp_size(mx - win.x + 1, my - win.y + 1)
             if kind == "up" or down:
-                self.drag = None
+                if self.outline and win in self.windows:
+                    x, y, w, h = self.outline
+                    if what == "move":
+                        win.move(x, y)
+                    else:
+                        win.resize(w, h)
+                self.drag = self.outline = None
             return
         if self.menu:
             if down:
@@ -583,11 +617,13 @@ class Desk:
                             win.move(mx - min(rx, win.w - 2), my)
                             rx = mx - win.x
                         self.drag = ("move", win, rx, 0)
+                        self.outline = (win.x, win.y, win.w, win.h)
                 return
             if ry == win.h - 1 and rx >= win.w - 2:   # lower right corner
                 if down:
                     win.saved = None
                     self.drag = ("size", win, 0, 0)
+                    self.outline = (win.x, win.y, win.w, win.h)
                 return
             # Inside: hand the event to the program if it listens to the mouse.
             if 1 <= rx < win.w - 1 and 1 <= ry < win.h - 1 and win.mouse_on():
@@ -684,17 +720,35 @@ class Desk:
         if extra is not None:
             self.key(extra)
 
+    def log_error(self):
+        """Something went wrong: note it and carry on, so one bad event or
+        one odd piece of program output never ends every window."""
+        import traceback
+        try:
+            path = os.path.expanduser("~/.cache/kilobyte-desk.log")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a") as log:
+                log.write(time.strftime("--- %Y-%m-%d %H:%M:%S\n"))
+                traceback.print_exc(file=log)
+        except OSError:
+            pass
+
     def run(self):
         while True:
             for win in [w for w in self.windows if not w.alive]:
                 self.windows.remove(win)
+                if self.drag and self.drag[1] is win:
+                    self.drag = self.outline = None
                 try:
                     os.waitpid(win.pid, os.WNOHANG)
                 except ChildProcessError:
                     pass
             if not self.windows:
                 return
-            self.draw()
+            try:
+                self.draw()
+            except Exception:
+                self.log_error()
             fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
             if self.gpm:
                 fds.append(self.gpm.fd)
@@ -704,15 +758,16 @@ class Desk:
                 continue
             for win in self.windows:
                 if win.fd in ready:
-                    win.read()
-            if self.gpm and self.gpm.fd in ready:
-                for x, y, kind, button in self.gpm.events():
                     try:
-                        self.pointer_event(x, y, kind, button)
+                        win.read()
                     except Exception:
-                        import traceback
-                        with open(os.path.expanduser("~/.cache/kilobyte-desk.log"), "a") as log:
-                            traceback.print_exc(file=log)
+                        self.log_error()
+            if self.gpm and self.gpm.fd in ready:
+                try:
+                    for x, y, kind, button in self.gpm.events():
+                        self.pointer_event(x, y, kind, button)
+                except Exception:
+                    self.log_error()
             if sys.stdin.fileno() in ready or not ready:
                 while True:
                     try:
@@ -722,9 +777,7 @@ class Desk:
                     try:
                         self.key(k)
                     except Exception:           # one bad key must not end every window
-                        import traceback
-                        with open(os.path.expanduser("~/.cache/kilobyte-desk.log"), "a") as log:
-                            traceback.print_exc(file=log)
+                        self.log_error()
             # Let more program output arrive before drawing again.
             time.sleep(0.01)
 
