@@ -70,9 +70,15 @@ cmd_apply() {
     [ -x "$src/usr/bin/kilobyte" ] || [ -f "$src/usr/bin/kilobyte" ] || { echo "kb-update: download is not a Kilobyte tree" >&2; exit 1; }
 
     echo "Checking the new files ..."
-    for f in "$src/usr/bin/kilobyte" "$src/usr/sbin/kilobyte-install" "$src"/usr/lib/kilobyte/*.sh \
-             "$src"/usr/lib/kilobyte/apps/* "$src"/usr/lib/kilobyte/kb-root "$src"/usr/lib/kilobyte/kb-play; do
-        [ -f "$f" ] && ! bash -n "$f" && { echo "kb-update: $f is broken, update stopped" >&2; exit 1; }
+    # Every program is checked in its own language before anything is installed.
+    for f in "$src/usr/bin/kilobyte" "$src"/usr/sbin/kilobyte-* "$src"/usr/lib/kilobyte/*.sh \
+             "$src"/usr/lib/kilobyte/apps/* "$src"/usr/lib/kilobyte/kb-* "$src"/usr/lib/kilobyte/py/*.py; do
+        [ -f "$f" ] || continue
+        case "$f $(head -n 1 "$f")" in
+            *.py\ * | *python*) python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], "rb").read())' "$f" ;;
+            *perl*)   perl -c "$f" >/dev/null 2>&1 ;;
+            *)        bash -n "$f" ;;
+        esac || { echo "kb-update: $f is broken, update stopped" >&2; exit 1; }
     done
     visudo -cqf "$src/etc/sudoers.d/kilobyte" || { echo "kb-update: sudoers file is broken, update stopped" >&2; exit 1; }
 

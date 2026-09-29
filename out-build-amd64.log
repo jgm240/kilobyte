@@ -1,0 +1,18 @@
+######## Kilobyte for amd64
+==> Building Kilobyte's versions of Debian packages
+(unchanged, reusing:)
+dialog_1.3-20250116-1+kilobyte1_amd64.deb
+elinks-data_0.18.0-1+kilobyte1_all.deb
+elinks_0.18.0-1+kilobyte1_amd64.deb
+libdialog15_1.3-20250116-1+kilobyte1_amd64.deb
+==> Installing build tools
+==> Building the Debian trixie root file system for amd64
+I: chroot architecture amd64 is equal to the host's architecture
+W: gpg --version failed: cannot infer signed-by value
+I: automatically chosen format: directory
+I: running apt-get update...
+I: downloading packages with apt...
+I: extracting archives...
+I: installing essential packages...
+I: running --essential-hook in shell: sh -c 'echo "debconf debconf/frontend select Noninteractive" | chroot "$1" debconf-set-selections' exec /work/rootfs
+I: installing remaining packages inside the chroot...
