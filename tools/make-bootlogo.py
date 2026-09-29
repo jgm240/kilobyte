@@ -147,27 +147,40 @@ def console_logo():
     lines = []
     for r in range(0, len(bits), 2):
         top, bot = bits[r], bits[r + 1]
-        lines.append("".join({("#", "#"): "█", ("#", "."): "▀", (".", "#"): "▄"}.get((a, b), " ")
+        lines.append("".join({("#", "#"): "\u2588", ("#", "."): "\u2580", (".", "#"): "\u2584"}.get((a, b), " ")
                              for a, b in zip(top, bot)).rstrip())
-    body = "\n".join("printf '\\033[44m\\033[K   \\033[1;36m%s\\033[0;44m\\n'" % l for l in lines)
-    script = '''#!/bin/sh
+    # One printf, so the band arrives in a single write between other messages.
+    band = "\\0337\\033[r\\033[1;1H\\033[44m\\033[K"
+    for i, l in enumerate(lines):
+        band += "\\033[%d;1H\\033[44m\\033[K   \\033[1;36m%s\\033[0;44m" % (i + 2, l)
+    band += "\\033[%d;1H\\033[44m\\033[K   \\033[0;37;44mKilobyte %%s - starting up" % (len(lines) + 2)
+    band += "\\033[%d;1H\\033[44m\\033[K\\033[%d;1H\\033[0m\\033[K\\033[8r\\0338" % (len(lines) + 3, len(lines) + 4)
+    script = """#!/bin/sh
 # The Kilobyte logo at the top of the console during start-up (made by
 # tools/make-bootlogo.py). The kernel's and systemd's messages scroll in the
-# lines below it (a scroll region), so the whole start is visible.
-# Runs in the initramfs (scripts/*/kilobyte-logo) and again after the
-# console font is loaded (kilobyte-bootlogo.service).
+# lines below it (a scroll region, lines 8 to the bottom).
+#
+#   bootlogo          clear the screen and draw it (initramfs, init-top)
+#   bootlogo again    draw it over what is there (initramfs, init-bottom)
+#   bootlogo watch    keep drawing it twice a second (kilobyte-bootlogo.service,
+#                     stopped by kilobyte-post.service): a new graphics mode
+#                     or a terminal reset clears the scroll region, and this
+#                     puts the logo back
 v=""
 read -r v 2>/dev/null < /usr/lib/kilobyte/version || v=$(sed -n 's/^KB_VERSION="\\(.*\\)"/\\1/p' /usr/lib/kilobyte/lib.sh 2>/dev/null)
-# "bootlogo again" draws it over whatever is on the screen (after the console
-# changed size or font) and carries on at the bottom.
-[ "$1" = again ] || printf '\\033[0m\\033[2J'
-printf '\\033[0m\\033[r\\033[H\\033[44m\\033[K\\n'
-%s
-printf '\\033[44m\\033[K   \\033[0;37;44mKilobyte %%s - starting up\\033[0;44m\\n' "$v"
-printf '\\033[44m\\033[K\\033[0m\\n\\033[K'
-# Everything from line 8 down scrolls; the logo stays.
-if [ "$1" = again ]; then printf '\\033[8r\\033[999;1H'; else printf '\\033[8r\\033[8;1H'; fi
-''' % body
+band() { printf '%s' "$v"; }
+case $1 in
+    again) band ;;
+    watch)
+        i=0
+        while [ $i -lt 600 ]; do     # five minutes at most
+            band
+            sleep 0.5
+            i=$((i + 1))
+        done ;;
+    *) printf '\\033[0m\\033[2J'; band; printf '\\033[8;1H' ;;
+esac
+""" % band
     path = os.path.join(ROOT, "usr/lib/kilobyte/bootlogo")
     with open(path, "w") as f:
         f.write(script)

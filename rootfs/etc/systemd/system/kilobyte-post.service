@@ -1,6 +1,8 @@
 [Unit]
 Description=Kilobyte start-up screen (and the end of the start-up messages)
-After=systemd-vconsole-setup.service console-setup.service
+After=systemd-vconsole-setup.service console-setup.service kilobyte-bootlogo.service
+# The start-up screen ends the start-up logo.
+Conflicts=kilobyte-bootlogo.service
 Before=getty@tty1.service
 
 [Service]

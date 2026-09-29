@@ -1,18 +1,21 @@
 [Unit]
 Description=Kilobyte logo during start-up
+Documentation=file:/usr/lib/kilobyte/bootlogo
+# From as early as possible until the start-up screen (kilobyte-post, which
+# stops it) takes over the console.
 DefaultDependencies=no
-After=systemd-vconsole-setup.service console-setup.service systemd-udev-trigger.service
-Before=kilobyte-post.service getty@tty1.service
+Conflicts=shutdown.target
 ConditionKernelCommandLine=!quiet
 
 [Service]
-Type=oneshot
-ExecStart=/usr/lib/kilobyte/bootlogo again
+Type=simple
+ExecStart=/usr/lib/kilobyte/bootlogo watch
 StandardInput=null
 StandardOutput=tty
 TTYPath=/dev/tty1
 TTYReset=no
 TTYVHangup=no
+TTYVTDisallocate=no
 
 [Install]
 WantedBy=sysinit.target
