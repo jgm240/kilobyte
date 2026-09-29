@@ -3,6 +3,11 @@
 # Shows the real hardware, then beeps once. Runs on tty1 before the login
 # (kilobyte-post.service). Switch it off in Settings > Startup.
 
+# The start-up messages end here: Kilobyte has the screen from now on
+# (systemd stops printing its status lines to the console).
+kill -s RTMIN+21 1 2>/dev/null || true
+[ -e /etc/kilobyte/post-off ] && { printf '\033[r\033[0m\033[2J\033[H'; exit 0; }
+
 W="\033[1;37m" G="\033[0;37m" C="\033[1;36m" Y="\033[1;33m" N="\033[0m"
 
 printf '\033[r\033[0m\033[2J\033[H\033[?25l'

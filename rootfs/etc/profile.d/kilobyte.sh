@@ -1,3 +1,11 @@
+# box64/box86 (Windows programs on ARM): their code translator does not run
+# on Apple processors (Kilobyte in a virtual machine on a Mac), so there they
+# interpret, which is slower but works.
+if grep -q '^CPU implementer.*0x61' /proc/cpuinfo 2>/dev/null; then
+    export BOX64_DYNAREC=0 BOX86_DYNAREC=0
+fi
+export BOX64_NOBANNER=1 BOX86_NOBANNER=1
+
 # Start Kilobyte after logging in on a text console (tty1-tty6).
 if [ -z "${KILOBYTE:-}" ] && [ -z "${KILOBYTE_SHELL:-}" ] && [ -t 0 ] \
    && [ ! -e "$HOME/.config/kilobyte/noautostart" ] && command -v kilobyte >/dev/null; then

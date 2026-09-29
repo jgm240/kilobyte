@@ -54,7 +54,13 @@ stage_debs() {
         ls -1 "$WORK/debs"
         return 0
     fi
-    echo "deb-src $MIRROR $SUITE main" > /etc/apt/sources.list.d/kilobyte-src.list
+    # Source packages too: in the image's own list when it is a deb822 file
+    # (its Signed-By must match), otherwise as a list of our own.
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
+    else
+        echo "deb-src $MIRROR $SUITE main" > /etc/apt/sources.list.d/kilobyte-src.list
+    fi
     tools dpkg-dev build-essential fakeroot patch
     rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src"
     export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
