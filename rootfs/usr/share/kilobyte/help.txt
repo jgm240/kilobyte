@@ -70,6 +70,23 @@
                   time zone, installing programs, password, task manager.
 
 
+ WINDOWS
+ ───────
+   Kilobyte runs its programs in movable windows, several at once.
+     [New window] (top line) or F12 > New   another Program Manager
+     drag the title bar                     move a window
+     drag the lower right corner            resize it
+     double-click the title, or [▲]         maximise / restore
+     [▼]                                    minimise (the taskbar brings it back)
+     [■]                                    close
+     Alt+Tab, or click the taskbar          switch windows
+     F12                                    the window menu: move and resize
+                                            with the arrow keys, tile, cascade
+   Settings > Login and startup switches windows off (one program at a time,
+   fullscreen). Video in pixel fonts needs that: inside a window it uses
+   text blocks.
+
+
  MORE PROGRAMS
  ─────────────
    Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem

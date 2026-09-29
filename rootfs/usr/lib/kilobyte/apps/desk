@@ -1,0 +1,3 @@
+#!/bin/sh
+# Kilobyte Windows (a Python program; see /usr/lib/kilobyte/py/desk.py)
+exec python3 /usr/lib/kilobyte/py/desk.py "$@"

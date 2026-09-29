@@ -18,8 +18,11 @@ mode=${1:-medium}
 src=${2:?usage: kb-play MODE SOURCE [MPV-OPTIONS...]}
 shift 2
 
+# Streams from the web (YouTube and others) in the chosen picture size.
+height=$(cat "$KB_CONF/stream-height" 2>/dev/null)
+[[ $height =~ ^[0-9]+$ ]] || height=720
 opts=(--really-quiet --input-terminal=yes --keep-open=no
-      --ytdl-format='bv*[height<=720]+ba/b[height<=720]/b')
+      "--ytdl-format=bv*[height<=$height]+ba/b[height<=$height]/b")
 
 on_console() { [ "$TERM" = linux ] && case $(tty) in /dev/tty[0-9]*) true ;; *) false ;; esac; }
 

@@ -284,16 +284,22 @@ shut_down() {
         kb_msg "Shut Down" "This computer cannot be turned off from Kilobyte."
 }
 
-# Returns 0 to stay, 10 to log out, 11 to drop to a shell.
+# Returns 0 to stay, 10 to log out, 11 to drop to a shell, 12 to close
+# this window.
 quit_menu() {
-    local sel
-    sel=$(submenu "Exit" "Leave Kilobyte." \
+    local sel items=()
+    [ -n "${KILOBYTE_DESK:-}" ] && items+=(Close "Close this window" "The other windows stay open")
+    sel=$(submenu "Exit" "Leave Kilobyte." "${items[@]}" \
         Logout   "Log out"                "End this session" \
         Shell    "Exit to shell"          "Leave Kilobyte; type kilobyte to come back" \
         Restart  "Restart the computer"   "Reboot" \
         Shutdown "Shut down the computer" "Power off") || return 0
     case $sel in
-        Logout)   return 10 ;;
+        Close)    return 12 ;;
+        Logout)
+            # In windows, log out means closing all of them.
+            [ -n "${KB_DESK_PID:-}" ] && kill -USR1 "$KB_DESK_PID" 2>/dev/null
+            return 10 ;;
         Shell)    return 11 ;;
         Restart)  kb_yesno "Restart" "Restart the computer now?" && { clear; kb_sound shutdown wait; sudo -n "$KB_LIB/kb-root" power reboot; } ;;
         Shutdown) shut_down ;;
@@ -324,6 +330,7 @@ program_manager() {
         # The timeout only redraws the clock in the top line. Ctrl-C here
         # (and only here) sets KB_CTRL_C instead of being ignored.
         KB_CTRL_C=
+        kb_title "Program Manager"
         mapfile -d '' tiles < <(tiles_args)
         trap 'KB_CTRL_C=1' INT QUIT
         sel=$(kb_dialog "${tiles[@]}" --title " Program Manager " --timeout 30 --item-help \
@@ -380,12 +387,22 @@ case "${1:-}" in
 esac
 
 command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; exit 1; }
+
+# Windows (movable windows, several programs at once) unless switched off in
+# Settings > Login and startup. If the window system fails, carry on without.
+if [ -z "${KILOBYTE_DESK:-}" ] && [ ! -e "$KB_CONF/windows-off" ] && [ -t 0 ] &&
+   python3 -c 'import pyte' 2>/dev/null; then
+    kb_sound startup
+    "$KB_LIB/apps/desk" kilobyte && { clear; kb_palette ""; exit 0; }
+    echo "Kilobyte Windows stopped unexpectedly; starting without windows." >&2
+    sleep 2
+fi
 export KILOBYTE=1
 # Ctrl-Z would suspend Kilobyte and leave a bare shell: switch it off.
 KB_STTY=$(stty -g 2>/dev/null)
 stty susp undef 2>/dev/null
 kb_update_check_later
-kb_sound startup
+[ -n "${KILOBYTE_DESK:-}" ] || kb_sound startup
 program_manager
 rc=$?
 [ -n "$KB_STTY" ] && stty "$KB_STTY" 2>/dev/null

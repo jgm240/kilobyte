@@ -1,0 +1,549 @@
+#!/usr/bin/python3
+"""Kilobyte Windows: movable windows and multitasking in text mode.
+
+Every window is a terminal of its own (a pseudo terminal, emulated with
+pyte) running a program, normally a Program Manager. Windows have a title
+bar, a close box [■], minimise [▼] and maximise [▲] boxes and a shadow; the
+active one has a double frame. A taskbar at the bottom lists all windows.
+
+Mouse: drag a title bar to move a window, drag its lower right corner to
+resize it, double-click a title bar to maximise. Clicks inside a window go
+to its program. Keys: Alt+Tab next window, F12 the window menu (new, move,
+resize, maximise, minimise, tile, cascade, close, leave).
+
+    desk [PROGRAM [ARGS...]]     first window runs PROGRAM (default: kilobyte)
+"""
+import curses
+import fcntl
+import os
+import pty
+import select
+import signal
+import struct
+import sys
+import termios
+import time
+
+sys.path.insert(0, "/usr/lib/kilobyte/py")
+import kbui  # noqa: E402
+from kbui import (BLACK, BLUE, CYAN, DARKGREY, LIGHTGREY, WHITE, YELLOW,  # noqa: E402
+                  RGB, nearest)
+
+import pyte  # noqa: E402
+
+NAMES = {"black": 0, "red": 1, "green": 2, "brown": 3, "yellow": 3, "blue": 4, "magenta": 5, "cyan": 6,
+         "white": 7}
+MIN_W, MIN_H = 20, 6
+
+
+def colour(name, default):
+    """pyte colour (name, 'brightred' or hex) -> console colour 0-15."""
+    if name == "default":
+        return default
+    if name.startswith("bright") and name[6:] in NAMES:
+        return NAMES[name[6:]] + 8
+    if name in NAMES:
+        return NAMES[name]
+    if len(name) == 6:
+        try:
+            return nearest((int(name[0:2], 16), int(name[2:4], 16), int(name[4:6], 16)))
+        except ValueError:
+            pass
+    return default
+
+
+# --- keys: curses -> what a program on an xterm expects ---------------------
+KEYS = {
+    curses.KEY_UP: b"\x1b[A", curses.KEY_DOWN: b"\x1b[B", curses.KEY_RIGHT: b"\x1b[C", curses.KEY_LEFT: b"\x1b[D",
+    curses.KEY_HOME: b"\x1b[H", curses.KEY_END: b"\x1b[F", curses.KEY_PPAGE: b"\x1b[5~", curses.KEY_NPAGE: b"\x1b[6~",
+    curses.KEY_IC: b"\x1b[2~", curses.KEY_DC: b"\x1b[3~", curses.KEY_BACKSPACE: b"\x7f", curses.KEY_ENTER: b"\r",
+    curses.KEY_BTAB: b"\x1b[Z",
+    curses.KEY_F1: b"\x1bOP", curses.KEY_F2: b"\x1bOQ", curses.KEY_F3: b"\x1bOR", curses.KEY_F4: b"\x1bOS",
+    curses.KEY_F5: b"\x1b[15~", curses.KEY_F6: b"\x1b[17~", curses.KEY_F7: b"\x1b[18~", curses.KEY_F8: b"\x1b[19~",
+    curses.KEY_F9: b"\x1b[20~", curses.KEY_F10: b"\x1b[21~", curses.KEY_F11: b"\x1b[23~",
+    curses.KEY_SLEFT: b"\x1b[1;2D", curses.KEY_SRIGHT: b"\x1b[1;2C",
+}
+for name, seq in (("KEY_SR", b"\x1b[1;2A"), ("KEY_SF", b"\x1b[1;2B")):
+    if hasattr(curses, name):
+        KEYS[getattr(curses, name)] = seq
+
+
+class Window:
+    def __init__(self, desk, argv, x, y, w, h, title="Program Manager"):
+        self.desk = desk
+        self.x, self.y, self.w, self.h = x, y, w, h
+        self.title = title
+        self.saved = None                  # position before maximising
+        self.minimised = False
+        self.screen = pyte.Screen(w - 2, h - 2)
+        self.screen.set_mode(pyte.modes.LNM)
+        self.stream = pyte.ByteStream(self.screen)
+        self.alive = True
+        pid, fd = pty.fork()
+        if pid == 0:
+            env = dict(os.environ, TERM="xterm", KILOBYTE_DESK="1", COLORTERM="",
+                       KB_DESK_PID=str(os.getppid()),
+                       NCURSES_NO_UTF8_ACS="1")   # real box characters, not VT100 line mode
+            env.pop("KILOBYTE", None)
+            os.chdir(os.path.expanduser("~"))
+            try:
+                os.execvpe(argv[0], argv, env)
+            finally:
+                os._exit(127)
+        self.pid, self.fd = pid, fd
+        self.set_size()
+
+    # the inner size is the frame minus its border
+    def cols(self):
+        return self.w - 2
+
+    def rows(self):
+        return self.h - 2
+
+    def set_size(self):
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", self.rows(), self.cols(), 0, 0))
+
+    def resize(self, w, h):
+        H, W = self.desk.area()
+        w, h = max(MIN_W, min(w, W)), max(MIN_H, min(h, H))
+        if (w, h) == (self.w, self.h):
+            return
+        self.w, self.h = w, h
+        self.screen.resize(self.rows(), self.cols())
+        self.set_size()                    # the kernel sends the program SIGWINCH
+
+    def move(self, x, y):
+        H, W = self.desk.area()
+        self.x = max(-self.w + 8, min(x, W - 8))
+        self.y = max(1, min(y, H))
+
+    def read(self):
+        try:
+            data = os.read(self.fd, 65536)
+        except OSError:
+            data = b""
+        if not data:
+            self.alive = False
+            return
+        self.stream.feed(data)
+        if self.screen.title:
+            self.title = self.screen.title
+
+    def send(self, data):
+        try:
+            os.write(self.fd, data)
+        except OSError:
+            pass
+
+    def close(self):
+        try:
+            os.killpg(os.getpgid(self.pid), signal.SIGHUP)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    def mouse_on(self):
+        modes = self.screen.mode
+        return any(m << 5 in modes for m in (1000, 1002, 1003))
+
+    def contains(self, mx, my):
+        return self.x <= mx < self.x + self.w and self.y <= my < self.y + self.h
+
+
+class Desk:
+    def __init__(self, s, argv):
+        self.s = s
+        self.first_argv = argv
+        self.windows = []                  # bottom to top; the last is active
+        self.drag = None                   # ("move"|"size", window, dx, dy)
+        self.last_click = (0, None)
+        self.menu = None
+        s.scr.nodelay(True)
+        s.scr.keypad(True)
+        curses.raw()
+        signal.signal(signal.SIGCHLD, lambda *a: None)
+        # "Log out" in any window: close them all.
+        signal.signal(signal.SIGUSR1, lambda *a: [w.close() for w in self.windows])
+        self.new_window(argv, maximised=True)
+
+    def area(self):
+        H, W = self.s.size()
+        return H - 2, W                    # rows 1..H-2 are the desktop
+
+    # --- windows --------------------------------------------------------
+    def new_window(self, argv=None, maximised=False):
+        H, W = self.area()
+        n = len(self.windows)
+        if maximised:
+            x, y, w, h = 0, 1, W, H
+        else:
+            w, h = max(MIN_W, W * 3 // 4), max(MIN_H, H * 3 // 4)
+            x, y = min(2 + 3 * n, W - w), min(1 + 2 * n, H - h + 1)
+        win = Window(self, argv or ["kilobyte"], x, y, w, h)
+        self.windows.append(win)
+        return win
+
+    def active(self):
+        visible = [w for w in self.windows if not w.minimised]
+        return visible[-1] if visible else None
+
+    def raise_(self, win):
+        win.minimised = False
+        self.windows.remove(win)
+        self.windows.append(win)
+
+    def cycle(self):
+        if len(self.windows) > 1:
+            win = self.windows.pop(0)
+            self.windows.append(win)
+            win.minimised = False
+
+    def maximise(self, win):
+        H, W = self.area()
+        if win.saved:
+            x, y, w, h = win.saved
+            win.saved = None
+        else:
+            win.saved = (win.x, win.y, win.w, win.h)
+            x, y, w, h = 0, 1, W, H
+        win.x, win.y = x, y
+        win.resize(w, h)
+
+    def tile(self):
+        vis = [w for w in self.windows if not w.minimised]
+        if not vis:
+            return
+        H, W = self.area()
+        cols = 1 if len(vis) == 1 else 2
+        rows = (len(vis) + cols - 1) // cols
+        for i, win in enumerate(vis):
+            c, r = i % cols, i // cols
+            win.saved = None
+            win.x, win.y = c * W // cols, 1 + r * H // rows
+            win.resize(W // cols, H // rows)
+
+    def cascade(self):
+        H, W = self.area()
+        for i, win in enumerate(w for w in self.windows if not w.minimised):
+            win.saved = None
+            win.resize(W * 3 // 4, H * 3 // 4)
+            win.move(2 + 3 * i, 1 + 2 * i)
+
+    # --- drawing --------------------------------------------------------
+    def draw_desktop(self):
+        H, W = self.s.size()
+        for y in range(1, H - 1):
+            self.s.put(y, 0, "░" * W, LIGHTGREY, BLUE)
+
+    def draw_bars(self):
+        """Menu bar and taskbar: drawn last, so windows never cover them."""
+        H, W = self.s.size()
+        clock = time.strftime("%a %d %b  %H:%M")
+        bar = " ■ Kilobyte  │  [New window]  │  F12 window menu   Alt+Tab next window"
+        self.s.put(0, 0, bar.ljust(W - len(clock) - 1)[:max(0, W - len(clock) - 1)] + clock + " ", BLACK, LIGHTGREY)
+        self.s.put(0, 1, "■", kbui.RED, LIGHTGREY)
+        x = 1
+        self.task_buttons = []
+        self.s.put(H - 1, 0, " " * W, BLACK, CYAN)
+        act = self.active()
+        for i, win in enumerate(sorted(self.windows, key=lambda w: w.pid)):
+            label = f" {i + 1} {win.title[:18]} "
+            fg, bg = (WHITE, BLUE) if win is act else ((DARKGREY, CYAN) if win.minimised else (BLACK, CYAN))
+            self.s.put(H - 1, x, label, fg, bg)
+            self.task_buttons.append((x, x + len(label), win))
+            x += len(label) + 1
+
+    def draw_window(self, win, active):
+        s, x, y, w, h = self.s, win.x, win.y, win.w, win.h
+        frame_fg, frame_bg = (WHITE, BLUE) if active else (LIGHTGREY, BLUE)
+        tl, tr, bl, br, hz, vt = ("╔", "╗", "╚", "╝", "═", "║") if active else ("┌", "┐", "└", "┘", "─", "│")
+        # Shadow first (right and below).
+        for yy in range(y + 1, y + h + 1):
+            s.put(yy, x + w, "  ", DARKGREY, BLACK)
+        s.put(y + h, x + 2, " " * w, DARKGREY, BLACK)
+        # Frame and title bar.
+        s.put(y, x, tl + hz * (w - 2) + tr, frame_fg, frame_bg)
+        title = f" {win.title} "[: max(0, w - 16)]
+        s.put(y, x + (w - len(title)) // 2, title, YELLOW if active else LIGHTGREY, frame_bg)
+        s.put(y, x + 1, "[■]", frame_fg, frame_bg)
+        s.put(y, x + w - 7, "[▼][▲]" if not win.saved else "[▼][↕]", frame_fg, frame_bg)
+        for yy in range(1, h - 1):
+            s.put(y + yy, x, vt, frame_fg, frame_bg)
+            s.put(y + yy, x + w - 1, vt, frame_fg, frame_bg)
+        s.put(y + h - 1, x, bl + hz * (w - 2) + br, frame_fg, frame_bg)   # the corner resizes
+        # Contents.
+        buf = win.screen.buffer
+        for row in range(win.rows()):
+            line = buf[row]
+            col = 0
+            out_x = x + 1
+            while col < win.cols():
+                ch = line[col]
+                fg = colour(ch.fg, LIGHTGREY)
+                bg = colour(ch.bg, BLACK)
+                if ch.bold and fg < 8:
+                    fg += 8
+                if ch.reverse:
+                    fg, bg = bg, fg
+                # Batch runs of cells with the same colours.
+                text = ch.data or " "
+                end = col + 1
+                while end < win.cols():
+                    nxt = line[end]
+                    if (nxt.fg, nxt.bg, nxt.bold, nxt.reverse) != (ch.fg, ch.bg, ch.bold, ch.reverse):
+                        break
+                    text += nxt.data or " "
+                    end += 1
+                s.put(y + 1 + row, out_x, text, fg, bg & 7)
+                out_x += end - col
+                col = end
+
+    def draw(self):
+        self.draw_desktop()
+        act = self.active()
+        for win in self.windows:
+            if not win.minimised:
+                self.draw_window(win, win is act)
+        self.draw_bars()
+        if self.menu:
+            self.draw_menu()
+        # The cursor of the active window's program.
+        if act and not act.screen.cursor.hidden and not self.menu:
+            cx, cy = act.x + 1 + act.screen.cursor.x, act.y + 1 + act.screen.cursor.y
+            H, W = self.s.size()
+            if 0 <= cx < W and 0 <= cy < H - 1:
+                try:
+                    curses.curs_set(1)
+                    self.s.scr.move(cy, cx)
+                except curses.error:
+                    pass
+        else:
+            curses.curs_set(0)
+        self.s.scr.refresh()
+
+    # --- the F12 window menu -------------------------------------------
+    MENU = [("n", "New window"), ("m", "Move (arrow keys, Enter)"), ("r", "Resize (arrow keys, Enter)"),
+            ("x", "Maximise / restore"), ("i", "Minimise"), ("t", "Tile all windows"), ("c", "Cascade windows"),
+            ("w", "Close this window"), ("q", "Leave windows (close all)")]
+
+    def draw_menu(self):
+        H, W = self.s.size()
+        w = 34
+        x, y = (W - w) // 2, max(1, (H - len(self.MENU) - 2) // 2)
+        self.s.box(y, x, len(self.MENU) + 2, w, BLACK, LIGHTGREY, title="Window")
+        for i, (key, label) in enumerate(self.MENU):
+            sel = i == self.menu["sel"]
+            fg, bg = (WHITE, BLACK) if sel else (BLACK, LIGHTGREY)
+            self.s.put(y + 1 + i, x + 1, f" {key.upper()}  {label}".ljust(w - 2), fg, bg)
+            self.s.put(y + 1 + i, x + 2, key.upper(), kbui.RED if not sel else YELLOW, bg)
+        self.menu["box"] = (x, y, w)
+
+    def menu_key(self, k):
+        m = self.menu
+        if m.get("mode") in ("move", "resize"):
+            win = self.active()
+            dx = {curses.KEY_LEFT: -1, curses.KEY_RIGHT: 1}.get(k, 0)
+            dy = {curses.KEY_UP: -1, curses.KEY_DOWN: 1}.get(k, 0)
+            if win and (dx or dy):
+                if m["mode"] == "move":
+                    win.move(win.x + dx * 2, win.y + dy)
+                else:
+                    win.resize(win.w + dx * 2, win.h + dy)
+            elif k in (10, 13, 27, curses.KEY_ENTER):
+                self.menu = None
+            return
+        if k in (27, curses.KEY_F12):
+            self.menu = None
+        elif k == curses.KEY_UP:
+            m["sel"] = (m["sel"] - 1) % len(self.MENU)
+        elif k == curses.KEY_DOWN:
+            m["sel"] = (m["sel"] + 1) % len(self.MENU)
+        elif k in (10, 13, curses.KEY_ENTER):
+            self.menu_do(self.MENU[m["sel"]][0])
+        elif isinstance(k, str) and k.lower() in dict(self.MENU):
+            self.menu_do(k.lower())
+
+    def menu_do(self, key):
+        win = self.active()
+        self.menu = None
+        if key == "n":
+            self.new_window()
+        elif key in ("m", "r") and win:
+            if win.saved:
+                self.maximise(win)
+            self.menu = {"mode": "move" if key == "m" else "resize", "sel": 0}
+        elif key == "x" and win:
+            self.maximise(win)
+        elif key == "i" and win:
+            win.minimised = True
+        elif key == "t":
+            self.tile()
+        elif key == "c":
+            self.cascade()
+        elif key == "w" and win:
+            win.close()
+        elif key == "q":
+            for w in self.windows:
+                w.close()
+
+    # --- input ----------------------------------------------------------
+    def mouse(self):
+        try:
+            _, mx, my, _, b = curses.getmouse()
+        except curses.error:
+            return
+        if os.environ.get("KB_DESK_DEBUG"):
+            with open("/tmp/desk-mouse.log", "a") as log:
+                log.write("mouse x=%d y=%d bstate=%#x drag=%s\n" % (mx, my, b, bool(self.drag)))
+        H, W = self.s.size()
+        pressed = b & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED)
+        released = b & curses.BUTTON1_RELEASED
+        # Dragging a window.
+        if self.drag:
+            kind, win, dx, dy = self.drag
+            if kind == "move":
+                win.move(mx - dx, my - dy)
+            else:
+                win.resize(mx - win.x + 1, my - win.y + 1)
+            if released or pressed:
+                self.drag = None
+            return
+        if self.menu and pressed:
+            x, y, w = self.menu.get("box", (0, 0, 0))
+            if x <= mx < x + w and y < my <= y + len(self.MENU):
+                self.menu_do(self.MENU[my - y - 1][0])
+            else:
+                self.menu = None
+            return
+        if my == 0 and pressed:
+            if 14 <= mx < 29:
+                self.new_window()
+            elif mx < 40:
+                self.menu = {"sel": 0}
+            return
+        if my == H - 1 and pressed:
+            for x0, x1, win in self.task_buttons:
+                if x0 <= mx < x1:
+                    if win is self.active():
+                        win.minimised = True
+                    else:
+                        self.raise_(win)
+            return
+        # The topmost window under the pointer.
+        for win in reversed(self.windows):
+            if win.minimised or not win.contains(mx, my):
+                continue
+            if pressed and win is not self.active():
+                self.raise_(win)
+            rx, ry = mx - win.x, my - win.y
+            if ry == 0 and pressed:
+                now = time.time()
+                double = b & curses.BUTTON1_DOUBLE_CLICKED or (
+                    self.last_click[1] is win and now - self.last_click[0] < 0.4)
+                self.last_click = (now, win)
+                if 1 <= rx <= 3:
+                    win.close()
+                elif win.w - 7 <= rx <= win.w - 5:
+                    win.minimised = True
+                elif win.w - 4 <= rx <= win.w - 2 or double:
+                    self.maximise(win)
+                elif b & curses.BUTTON1_PRESSED:
+                    if win.saved:
+                        self.maximise(win)
+                    self.drag = ("move", win, rx, ry)
+                return
+            if ry == win.h - 1 and rx >= win.w - 2 and b & curses.BUTTON1_PRESSED:
+                self.drag = ("size", win, 0, 0)
+                return
+            # Inside: hand the click to the program if it listens to the mouse.
+            if 1 <= rx < win.w - 1 and 1 <= ry < win.h - 1 and win.mouse_on():
+                cx, cy = rx, ry           # 1-based inside the window
+                for bit, code, up in ((curses.BUTTON1_PRESSED, 0, False), (curses.BUTTON1_RELEASED, 0, True),
+                                      (curses.BUTTON3_PRESSED, 2, False), (curses.BUTTON3_RELEASED, 2, True)):
+                    if b & bit:
+                        win.send(b"\x1b[<%d;%d;%d%s" % (code, cx, cy, b"m" if up else b"M"))
+                for bit, code in ((curses.BUTTON1_CLICKED, 0), (curses.BUTTON1_DOUBLE_CLICKED, 0),
+                                  (curses.BUTTON3_CLICKED, 2)):
+                    if b & bit:
+                        clicks = 2 if bit == curses.BUTTON1_DOUBLE_CLICKED else 1
+                        for _ in range(clicks):
+                            win.send(b"\x1b[<%d;%d;%dM\x1b[<%d;%d;%dm" % (code, cx, cy, code, cx, cy))
+                wheel = {getattr(curses, "BUTTON4_PRESSED", 0): 64, getattr(curses, "BUTTON5_PRESSED", 0): 65}
+                for bit, code in wheel.items():
+                    if bit and b & bit:
+                        win.send(b"\x1b[<%d;%d;%dM" % (code, cx, cy))
+            return
+
+    def key(self, k):
+        if self.menu:
+            self.menu_key(k)
+            return
+        if k == curses.KEY_F12:
+            self.menu = {"sel": 0}
+            return
+        if k == curses.KEY_MOUSE:
+            self.mouse()
+            return
+        if k == curses.KEY_RESIZE:
+            H, W = self.area()
+            for win in self.windows:
+                win.resize(min(win.w, W), min(win.h, H))
+                win.move(win.x, win.y)
+            return
+        win = self.active()
+        if k == "\x1b":
+            # Alt+Tab arrives as Esc followed by Tab.
+            self.s.scr.timeout(15)
+            try:
+                nxt = self.s.scr.get_wch()
+            except curses.error:
+                nxt = None
+            self.s.scr.nodelay(True)
+            if nxt == "\t":
+                self.cycle()
+                return
+            if win:
+                win.send(b"\x1b")
+                if nxt is not None:
+                    self.key(nxt)
+            return
+        if not win:
+            return
+        if isinstance(k, str):
+            win.send(k.encode("utf-8"))
+        elif k in KEYS:
+            win.send(KEYS[k])
+
+    def run(self):
+        while True:
+            for win in [w for w in self.windows if not w.alive]:
+                self.windows.remove(win)
+                try:
+                    os.waitpid(win.pid, os.WNOHANG)
+                except ChildProcessError:
+                    pass
+            if not self.windows:
+                return
+            self.draw()
+            fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
+            try:
+                ready, _, _ = select.select(fds, [], [], 1.0)
+            except InterruptedError:
+                continue
+            for win in self.windows:
+                if win.fd in ready:
+                    win.read()
+            if sys.stdin.fileno() in ready or not ready:
+                while True:
+                    try:
+                        k = self.s.scr.get_wch()
+                    except curses.error:
+                        break
+                    self.key(k)
+            # Let more program output arrive before drawing again.
+            time.sleep(0.01)
+
+
+if __name__ == "__main__":
+    argv = sys.argv[1:] or ["kilobyte"]
+    os.environ.setdefault("ESCDELAY", "25")
+    kbui.run(lambda s: Desk(s, argv).run())

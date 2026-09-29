@@ -3,7 +3,7 @@
 # Everything on screen is drawn by dialog(1): coloured character cells, line
 # drawing and block glyphs, the same way EDIT.COM or raspi-config look.
 
-KB_VERSION="1.2"
+KB_VERSION="1.3"
 KB_SHARE=/usr/share/kilobyte
 KB_LIB=/usr/lib/kilobyte
 KB_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/kilobyte"
@@ -178,8 +178,29 @@ kb_textfile() { # kb_textfile TITLE FILE
     kb_dialog --title " $1 " --exit-label "Close" --textbox "$2" 0 0
 }
 
+# kb_title TEXT: name the window this runs in (Kilobyte Windows' title bar
+# and taskbar). Does nothing outside a window.
+kb_title() {
+    [ -n "${KILOBYTE_DESK:-}" ] && printf '\033]2;%s\007' "$1"
+    return 0
+}
+
+# A friendly window title for a program.
+kb_program_title() {
+    local p=$1
+    [ "$(basename "$p")" = kb-guard ] && { shift; [ "${1:-}" = -q ] && shift 2; p=${1:-$p}; }
+    case $(basename "$p") in
+        mcedit) echo Editor ;;      sc-im) echo Spreadsheet ;;  elinks) echo Web ;;
+        alpine) echo Email ;;       mc) echo Files ;;           weechat) echo Chat ;;
+        calcurse) echo Agenda ;;    htop) echo Tasks ;;         mpv | kb-play) echo Player ;;
+        paint) echo Paint ;;        mines) echo Mines ;;        solitaire) echo Solitaire ;;
+        reversi) echo Reversi ;;    alsamixer) echo Sound ;;    *) basename "$p" ;;
+    esac
+}
+
 # Leave dialog's screen and run a fullscreen program on a clean terminal.
 kb_run() {
+    kb_title "$(kb_program_title "$@")"
     clear
     tput cnorm 2>/dev/null
     "$@"

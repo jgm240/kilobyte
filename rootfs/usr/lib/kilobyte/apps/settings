@@ -378,13 +378,15 @@ Your files and settings are kept." $(( 14 + n )) 72 || return
 autologin_on() { grep -qs -- "--autologin $USER " /etc/systemd/system/getty@tty1.service.d/autologin.conf; }
 
 login_panel() {
-    local sel a b c
+    local sel a b c d
     while true; do
         a=$(autologin_on && echo ON || echo OFF)
         b=$([ -e "$KB_CONF/noautostart" ] && echo OFF || echo ON)
         c=$([ -e /etc/kilobyte/post-off ] && echo OFF || echo ON)
+        d=$([ -e "$KB_CONF/windows-off" ] && echo OFF || echo ON)
         sel=$(kb_dialog --title " Login and Startup " --ok-label "Switch" --cancel-label "Back" \
-            --menu "Choose a setting to switch it on or off." 12 66 3 \
+            --menu "Choose a setting to switch it on or off." 13 70 4 \
+            Windows   "Movable windows and multitasking: $d" \
             Autologin "Log in automatically as $USER: $a" \
             Autostart "Start Kilobyte after login: $b" \
             Post      "Show the start-up screen: $c") || return
@@ -400,6 +402,9 @@ login_panel() {
                 if [ "$b" = ON ]; then : > "$KB_CONF/noautostart"; else rm -f "$KB_CONF/noautostart"; fi ;;
             Post)
                 sudo -n "$KB_LIB/kb-root" post "$([ "$c" = ON ] && echo off || echo on)" ;;
+            Windows)
+                if [ "$d" = ON ]; then : > "$KB_CONF/windows-off"; else rm -f "$KB_CONF/windows-off"; fi
+                kb_msg "Windows" "This takes effect the next time Kilobyte starts." 7 56 ;;
         esac
     done
 }
@@ -648,7 +653,7 @@ while true; do
             Keyboard   "Keyboard layout"               "Choose the layout of your keyboard" \
             Date       "Date, time and time zone"      "Set the clock and the time zone" \
             Software   "Add or remove programs"        "Search, install and update Debian packages" \
-            Login      "Login and startup"             "Automatic login, start-up screen, autostart" \
+            Login      "Login and startup"             "Windows, automatic login, start-up screen" \
             Password   "Change your password"          "Change the password of $USER" \
             Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
             About      "About this computer"           "Processor, memory, disk and version") || exit 0

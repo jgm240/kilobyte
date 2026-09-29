@@ -13,7 +13,7 @@ text-mode programs, plus a few small Python programs for the real-time parts
 It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
 ```
- ■ Kilobyte 1.2  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
+ ■ Kilobyte 1.3  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
  ─────────────────────────────────────────────────────────────────────────
 
          ┌──────────── Program Manager ────────────┐   ┌─── Weather ───────
@@ -63,6 +63,16 @@ Commander, Windows 1.0, Commodore 64, Amiga Workbench 1.3, Mac System 1,
 Green Screen, Amber Screen and Hot Dog Stand. On the Linux console the themes
 reprogram the 16-colour palette, so the phosphor, C64, Amiga and Mac themes
 recolour every program.
+
+**Windows and multitasking**: Kilobyte Windows (`apps/desk`) runs every
+program in a window of its own: a pseudo terminal emulated with `pyte` and
+drawn with the same character cells as everything else. Windows have a title
+bar with close, minimise and maximise boxes, a double frame when active and a
+shadow. Drag a title bar to move a window, its corner to resize it,
+double-click to maximise. Alt+Tab or the taskbar switch between them, and
+F12 opens the window menu (move and resize by keyboard, tile, cascade).
+Clicks inside a window reach its program. Settings › Login and startup turns
+windows off.
 
 **Office files**: `kb-office` turns Word and Writer documents (DOCX, ODT) into
 plain text for the Editor. Headings become `#`, lists `-` and table rows
@@ -158,10 +168,10 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 
 | Image | For | Build |
 |---|---|---|
-| `kilobyte-1.2-amd64.iso` | 64-bit PCs (BIOS and UEFI) | `./build.sh` |
-| `kilobyte-1.2-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
-| `kilobyte-1.2-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
-| `kilobyte-1.2-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
+| `kilobyte-1.3-amd64.iso` | 64-bit PCs (BIOS and UEFI) | `./build.sh` |
+| `kilobyte-1.3-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
+| `kilobyte-1.3-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
+| `kilobyte-1.3-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
 
 `./build.sh --arch all` builds all four. You need Docker. Debian is installed
 in a container of the target architecture (emulated when your computer has a

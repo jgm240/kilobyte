@@ -15,7 +15,7 @@ bluez bluez-alsa-utils libasound2-plugin-bluez
 
 # --- Kilobyte and its programs ---
 dialog mc elinks sc-im calcurse htop bc bsdgames moon-buggy alpine
-python3 weechat luit telnet openssh-client
+python3 python3-pyte weechat luit telnet openssh-client
 
 # --- media: video, pictures, YouTube, discs, sound ---
 mpv ffmpeg quickjs lsdvd eject alsa-utils alsa-ucm-conf

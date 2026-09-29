@@ -66,12 +66,20 @@ item_menu() {
     local url=$1 title=$2 sel q
     while true; do
         sel=$(kb_dialog --title " $title " --ok-label "Select" --cancel-label "Back" --menu \
-            "What do you want to do?" 13 72 4 \
-            Watch "Watch now, without saving" \
+            "What do you want to do?" 14 72 5 \
+            Watch "Watch now: $("$KB_LIB/apps/player" --mode-name)" \
+            WatchAs "Watch now with another picture..." \
             Video "Download the video (MP4)" \
             Audio "Download the sound only (MP3)") || return
         case $sel in
             Watch) "$KB_LIB/apps/player" "$url" ;;
+            WatchAs)
+                q=$(kb_dialog --title " Watch As " --ok-label "Watch" --cancel-label "Back" --menu \
+                    "How to show this video:" 14 64 5 \
+                    extreme "Extreme blocks (1x2 pixels)" fine "Fine blocks (2x4 pixels)" \
+                    medium "Medium blocks (4x8 pixels)" text "Text characters (ASCII art)" \
+                    real "Real picture") || continue
+                "$KB_LIB/apps/player" --mode "$q" "$url" ;;
             Audio) download "$url" audio; return ;;
             Video)
                 q=$(kb_dialog --title " Quality " --default-item 720 --ok-label "Download" --cancel-label "Back" \
@@ -124,15 +132,24 @@ update() {
 
 sel=Search
 while sel=$(kb_dialog --title " YouTube Downloader " --default-item "$sel" --ok-label "Select" --cancel-label "Close" \
-    --menu "Watch and save videos. Videos are saved in ~/Videos, sound in ~/Music." 15 72 5 \
+    --menu "Watch and save videos. Videos are saved in ~/Videos, sound in ~/Music." 17 72 7 \
     Search  "Search YouTube" \
     Link    "Paste a video link" \
     Saved   "Play saved videos and music" \
+    Picture "Picture: $("$KB_LIB/apps/player" --mode-name)" \
+    Quality "Streaming quality: $(cat "$KB_CONF/stream-height" 2>/dev/null || echo 720)p" \
     Update  "Update the downloader (when YouTube stops working)"); do
     case $sel in
         Search) search ;;
         Link)   paste_link ;;
         Saved)  "$KB_LIB/apps/player" ;;
+        Picture) "$KB_LIB/apps/player" --choose-mode ;;
+        Quality)
+            q=$(kb_dialog --title " Streaming Quality " --default-item "$(cat "$KB_CONF/stream-height" 2>/dev/null || echo 720)" \
+                --ok-label "Use" --cancel-label "Back" --menu \
+                "Picture size when watching without saving.\nSmaller starts faster on slow connections;\nthe block modes do not need more than 480p." 15 60 5 \
+                240 "Tiny (240p)" 360 "Small (360p)" 480 "Medium (480p)" 720 "HD (720p)" 1080 "Full HD (1080p)") &&
+                echo "$q" > "$KB_CONF/stream-height" ;;
         Update) update ;;
     esac
 done

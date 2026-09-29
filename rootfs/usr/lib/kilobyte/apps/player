@@ -16,7 +16,7 @@ mode_name() {
         extreme) echo "Extreme blocks (1x2 pixels)" ;;
         fine)    echo "Fine blocks (2x4 pixels)" ;;
         medium)  echo "Medium blocks (4x8 pixels)" ;;
-        text)    echo "Text blocks (normal letters)" ;;
+        text)    echo "Text characters (ASCII art, normal font)" ;;
         real)    echo "Real picture" ;;
     esac
 }
@@ -35,10 +35,11 @@ Real picture shows the video itself, without blocks." 16 66 5 "${items[@]}") || 
 }
 
 # play SOURCE [MPV-OPTIONS...]: show the keys, then play.
+# KB_PLAY_MODE picks the picture for this once (see --mode).
 play() {
     local src=$1 mode
     shift
-    mode=$(player_mode)
+    mode=${KB_PLAY_MODE:-$(player_mode)}
     if [[ ${src,,} =~ \.($AUDIO_EXT)$ ]]; then
         mode=audio
     else
@@ -56,10 +57,20 @@ open_address() {
     play "$url"
 }
 
-# player --choose-mode: only the picture setting (used by Pictures)
+# player --choose-mode: only the picture setting (Pictures, YouTube)
 if [ "${1:-}" = --choose-mode ]; then
     choose_mode
     exit
+fi
+# player --mode-name: print the chosen picture setting
+if [ "${1:-}" = --mode-name ]; then
+    mode_name "$(player_mode)"
+    exit
+fi
+# player --mode MODE SOURCE...: play once with another picture
+if [ "${1:-}" = --mode ]; then
+    export KB_PLAY_MODE=$2
+    shift 2
 fi
 # player SOURCE [MPV-OPTIONS...]: just play that, with the chosen picture mode.
 if [ $# -gt 0 ]; then
