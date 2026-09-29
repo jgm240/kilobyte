@@ -5,20 +5,20 @@
 #
 #   bootlogo          clear the screen and draw it (initramfs, init-top)
 #   bootlogo again    draw it over what is there (initramfs, init-bottom)
-#   bootlogo watch    keep drawing it twice a second (kilobyte-bootlogo.service,
+#   bootlogo watch    keep drawing it once a second (kilobyte-bootlogo.service,
 #                     stopped by kilobyte-post.service): a new graphics mode
 #                     or a terminal reset clears the scroll region, and this
 #                     puts the logo back
 v=""
 read -r v 2>/dev/null < /usr/lib/kilobyte/version || v=$(sed -n 's/^KB_VERSION="\(.*\)"/\1/p' /usr/lib/kilobyte/lib.sh 2>/dev/null)
-band() { printf '\0337\033[r\033[1;1H\033[44m\033[K\033[2;1H\033[44m\033[K   \033[1;36m█ ▄▀ ▀█▀ █    ▄▀▀▄ █▀▀▄ ▀▄ ▄▀ ▀▀█▀▀ █▀▀▀\033[0;44m\033[3;1H\033[44m\033[K   \033[1;36m█▀▄   █  █    █  █ █▀▀▄   █     █   █▀▀\033[0;44m\033[4;1H\033[44m\033[K   \033[1;36m▀  ▀ ▀▀▀ ▀▀▀▀  ▀▀  ▀▀▀    ▀     ▀   ▀▀▀▀\033[0;44m\033[5;1H\033[44m\033[K   \033[0;37;44mKilobyte %s - starting up\033[6;1H\033[44m\033[K\033[7;1H\033[0m\033[K\033[8r\0338' "$v"; }
+band() { printf '\033[?25l\0337\033[r\033[1;1H\033[44m\033[K\033[2;1H\033[44m\033[K   \033[1;36m█ ▄▀ ▀█▀ █    ▄▀▀▄ █▀▀▄ ▀▄ ▄▀ ▀▀█▀▀ █▀▀▀\033[0;44m\033[3;1H\033[44m\033[K   \033[1;36m█▀▄   █  █    █  █ █▀▀▄   █     █   █▀▀\033[0;44m\033[4;1H\033[44m\033[K   \033[1;36m▀  ▀ ▀▀▀ ▀▀▀▀  ▀▀  ▀▀▀    ▀     ▀   ▀▀▀▀\033[0;44m\033[5;1H\033[44m\033[K   \033[0;37;44mKilobyte %s - starting up\033[6;1H\033[44m\033[K\033[7;1H\033[0m\033[K\033[8r\0338' "$v"; }
 case $1 in
     again) band ;;
     watch)
         i=0
-        while [ $i -lt 600 ]; do     # five minutes at most
+        while [ $i -lt 300 ]; do     # five minutes at most
             band
-            sleep 0.5
+            sleep 1
             i=$((i + 1))
         done ;;
     *) printf '\033[0m\033[2J'; band; printf '\033[8;1H' ;;

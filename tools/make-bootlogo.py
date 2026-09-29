@@ -150,7 +150,9 @@ def console_logo():
         lines.append("".join({("#", "#"): "\u2588", ("#", "."): "\u2580", (".", "#"): "\u2584"}.get((a, b), " ")
                              for a, b in zip(top, bot)).rstrip())
     # One printf, so the band arrives in a single write between other messages.
-    band = "\\0337\\033[r\\033[1;1H\\033[44m\\033[K"
+    # The cursor stays hidden: fbcon leaves a block behind wherever a moving
+    # cursor was drawn. (The start-up screen shows it again.)
+    band = "\\033[?25l\\0337\\033[r\\033[1;1H\\033[44m\\033[K"
     for i, l in enumerate(lines):
         band += "\\033[%d;1H\\033[44m\\033[K   \\033[1;36m%s\\033[0;44m" % (i + 2, l)
     band += "\\033[%d;1H\\033[44m\\033[K   \\033[0;37;44mKilobyte %%s - starting up" % (len(lines) + 2)
@@ -162,7 +164,7 @@ def console_logo():
 #
 #   bootlogo          clear the screen and draw it (initramfs, init-top)
 #   bootlogo again    draw it over what is there (initramfs, init-bottom)
-#   bootlogo watch    keep drawing it twice a second (kilobyte-bootlogo.service,
+#   bootlogo watch    keep drawing it once a second (kilobyte-bootlogo.service,
 #                     stopped by kilobyte-post.service): a new graphics mode
 #                     or a terminal reset clears the scroll region, and this
 #                     puts the logo back
@@ -173,9 +175,9 @@ case $1 in
     again) band ;;
     watch)
         i=0
-        while [ $i -lt 600 ]; do     # five minutes at most
+        while [ $i -lt 300 ]; do     # five minutes at most
             band
-            sleep 0.5
+            sleep 1
             i=$((i + 1))
         done ;;
     *) printf '\\033[0m\\033[2J'; band; printf '\\033[8;1H' ;;
