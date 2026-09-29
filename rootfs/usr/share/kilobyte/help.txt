@@ -106,6 +106,16 @@
    videos in ~/Videos and music in ~/Music.
 
 
+ WINDOWS PROGRAMS
+ ────────────────
+   Accessories > Windows programs runs .exe and .msi files with Wine.
+   Graphical programs open full screen in a Windows desktop and you come
+   back here when they close; Ctrl+Alt+Backspace leaves at once. Installed
+   programs live in ~/.wine (drive C:). On a Raspberry Pi, Wine for PCs runs
+   through box64 or box86, which translate PC code for the ARM processor:
+   it works, slowly, and not with every program.
+
+
  DVDs
  ────
    Most films on DVD are encrypted. Debian does not include the library

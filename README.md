@@ -53,6 +53,7 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
 | Media › Pictures | `mpv` | photos in coloured blocks or the real picture; opens them in Paint |
 | Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
+| Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
 | Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
 | Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure, Trek |
 | Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme, font, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
@@ -138,6 +139,26 @@ music, index cards and settings to a stick as a `.tar.gz`, and restores them.
 from GitHub rather than Debian's. The downloader can update itself. QuickJS
 runs YouTube's JavaScript challenges.
 
+**Windows programs** (Accessories › Windows programs): Wine runs many
+Windows programs without Windows. On the 64-bit PC image it is Debian's Wine
+with 32-bit support (i386 multiarch), so both 64- and 32-bit programs run; on
+the 32-bit PC image, 32-bit programs. On the Raspberry Pi, Wine for PCs (the
+newest stable build from WineHQ, in `/opt/wine`) runs through **box64**
+(64-bit image, from Debian: 64-bit Windows programs) or **box86** (32-bit
+image, built from source by the image build: 32-bit Windows programs), which
+translate x86 code to ARM while it runs. Expect it to be slow on a Pi, and
+not every program works. Graphical programs open full screen in a Windows
+desktop in an X server of their own (`kb-x`, started only for them), and
+you are back in Kilobyte when they close; Ctrl+Alt+Backspace leaves at once.
+Text-mode programs can run right in the terminal.
+
+**Start-up**: the Kilobyte logo is on screen from the boot menu on. GRUB shows
+a graphical Kilobyte menu (text if the screen can't), and from the initramfs
+on the logo stays at the top of the console while every kernel and systemd
+message scrolls below it (a scroll region; `/usr/lib/kilobyte/bootlogo`).
+The boot is verbose by default; the live medium's "quiet start" entry is the
+old silent boot.
+
 **Optical drives**: `cdrom`, `sr_mod`, `usb_storage`, `uas`, `isofs` and
 `udf` load at boot. Users are in the `cdrom` group, and `/media/cdrom` can be
 mounted without root. Encrypted commercial DVDs need `libdvdcss`, which
@@ -168,7 +189,7 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 
 | Image | For | Build |
 |---|---|---|
-| `kilobyte-1.3-amd64.iso` | 64-bit PCs (BIOS and UEFI) | `./build.sh` |
+| `kilobyte-1.3-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
 | `kilobyte-1.3-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI) | `./build.sh --arch i386` |
 | `kilobyte-1.3-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
 | `kilobyte-1.3-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
@@ -177,6 +198,11 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 in a container of the target architecture (emulated when your computer has a
 different one); compression runs natively. `--lite` leaves out the large
 Wi-Fi firmware (about 70 MB).
+
+The 64-bit image boots from 64-bit UEFI and falls back to 32-bit EFI GRUB
+(`BOOTIA32.EFI`) on machines whose firmware is 32-bit although the processor
+is 64-bit (old EFI 1.x PCs, the first Intel Macs); Setup installs both, at
+the removable-media paths that every firmware looks at.
 
 The PC images are hybrid ISOs. Burn one to a DVD or write it to a USB stick
 (`dd`, Etcher, Rufus in DD mode). Secure Boot must be off. The 32-bit image is
@@ -209,7 +235,8 @@ whether to log in automatically. It then:
    partition and an ext4 root, so the disk boots with BIOS or UEFI;
 2. copies the live system's pristine root file system onto it;
 3. replaces the live user with your account (administrator via `sudo`),
-   removes the live-boot tools and installs GRUB for both BIOS and UEFI.
+   removes the live-boot tools and installs GRUB for BIOS, UEFI and (on
+   64-bit PCs) 32-bit EFI.
 
 The live session's keyboard, font, Wi-Fi networks and theme are carried over.
 Automatic login can be changed later in Settings › Login and startup.
