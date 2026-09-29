@@ -218,9 +218,14 @@ class Desk:
         self.drag = None                   # ("move"|"size", window, dx, dy)
         self.pointer = None                # where the mouse is, drawn as a block
         self.buttons = set()               # mouse buttons held down
-        self.gpm = Gpm.open()              # the console mouse, directly (or None)
-        if self.gpm:
-            curses.mousemask(0)            # gpm gives every event; curses would only give clicks
+        # The console mouse straight from gpm: curses' own gpm connection has
+        # to be closed first (libgpm keeps one connection state for both).
+        self.gpm = None
+        if os.environ.get("TERM") == "linux":
+            curses.mousemask(0)
+            self.gpm = Gpm.open()
+            if not self.gpm:
+                curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
         self.last_click = (0, None)
         self.menu = None
         s.scr.nodelay(True)
