@@ -116,6 +116,10 @@ class Gpm:
         ev = self.Event()
         if self.lib.Gpm_GetEvent(ctypes.byref(ev)) <= 0:
             return []
+        if os.environ.get("KB_DESK_DEBUG"):
+            with open("/tmp/desk-mouse.log", "a") as log:
+                log.write("raw buttons=%d dx=%d dy=%d x=%d y=%d type=%d clicks=%d vc=%d\n"
+                          % (ev.buttons, ev.dx, ev.dy, ev.x, ev.y, ev.type, ev.clicks, ev.vc))
         x, y = ev.x - 1, ev.y - 1
         button = 1 if ev.buttons & self.B_LEFT else 3 if ev.buttons & self.B_RIGHT else 0
         if ev.wdy or ev.buttons & (self.B_UP | self.B_DOWN):
