@@ -211,7 +211,7 @@ games() {
         Hangman    "Guess the word"            "Type letters" \
         Adventure  "Colossal Cave Adventure"   "Type commands such as GO NORTH; QUIT ends" \
         Trek       "Star Trek"                 "Type help inside the game" \
-        Rain       "Screen saver: rain"        "Any key stops it" \
+        Rain       "Screen saver: rain"        "Ctrl+C stops it" \
         Worms      "Screen saver: worms"       "Ctrl+C stops it"); do
         case $sel in
             Mines)     kb_run "$APPS/mines" ;;

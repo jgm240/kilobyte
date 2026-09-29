@@ -206,6 +206,7 @@ kb_run() {
     "$@"
     local rc=$?
     kb_load_theme   # a program may have reset the console palette
+    kb_title "Program Manager"
     return $rc
 }
 
