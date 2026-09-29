@@ -45,6 +45,14 @@ pkgs() { sed 's/#.*//' "$@" | xargs | tr ' ' ','; }
 stage_debs() {
     local pkg dir p v
     echo "==> Building Kilobyte's versions of Debian packages"
+    # Reuse the packages from the last build when their recipes are unchanged.
+    local stamp
+    stamp=$(cd /src/image/debs && find . -type f | sort | xargs sha256sum | sha256sum | cut -c1-16)-$SUITE
+    if [ "$(cat "$WORK/debs/.recipes" 2>/dev/null)" = "$stamp" ]; then
+        echo "(unchanged, reusing:)"
+        ls -1 "$WORK/debs"
+        return 0
+    fi
     echo "deb-src $MIRROR $SUITE main" > /etc/apt/sources.list.d/kilobyte-src.list
     tools dpkg-dev build-essential fakeroot patch
     rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src"
@@ -75,6 +83,7 @@ stage_debs() {
             done
         ) || echo "WARNING: $pkg could not be rebuilt; the image keeps Debian's version"
     done
+    echo "$stamp" > "$WORK/debs/.recipes"
     ls -1 "$WORK/debs"
 }
 

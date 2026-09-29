@@ -36,7 +36,9 @@ kb_theme_name() {
 # Recolour the Linux console's 16-entry palette from a file of 16 rrggbb
 # lines. Other terminals ignore the escape, so this is always safe.
 kb_palette() {
-    [ "$TERM" = linux ] || return 0
+    # Only when writing to the console itself: output that is captured
+    # (x=$(some-kilobyte-script)) must not contain the colour codes.
+    [ "$TERM" = linux ] && [ -t 1 ] || return 0
     if [ -f "$1" ]; then
         local i=0 c
         while read -r c; do
