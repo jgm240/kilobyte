@@ -129,7 +129,28 @@ run_terminal() {
 #
 # Window size: S small, M usual, L as large as the desktop allows.
 
+# The table only changes when programs are installed or removed, or with an
+# update of Kilobyte: it is kept in a file until then (working out which Store
+# programs are there takes a second or two on a Raspberry Pi 1).
 apps_table() {
+    local cache="${XDG_RUNTIME_DIR:-/tmp}/kilobyte-apps-${UID:-0}" lines
+    if [ -s "$cache" ] && [ "$cache" -nt /var/lib/dpkg/status ] && [ "$cache" -nt /usr/bin/kilobyte ] &&
+       [ "$cache" -nt /usr/share/kilobyte/store.tsv ]; then
+        mapfile -t lines < "$cache"
+        printf '%s\n' "${lines[@]}"
+        return 0
+    fi
+    apps_table_now > "$cache.$$" 2>/dev/null && mv -f "$cache.$$" "$cache" 2>/dev/null
+    if [ -s "$cache" ]; then
+        mapfile -t lines < "$cache"
+        printf '%s\n' "${lines[@]}"
+    else
+        rm -f "$cache.$$"
+        apps_table_now
+    fi
+}
+
+apps_table_now() {
     cat <<'TABLE'
 Editor|main|Text editor|Text files and documents (also DOCX, ODT); F9 opens the menus|Ed|L
 Spreadsheet|main|Spreadsheet|Tables and formulas, also XLSX and ODS (sc-im: :w saves, :q quits)|##|L
@@ -329,18 +350,31 @@ tiles_args() {
     [ -n "${KILOBYTE_DESK:-}" ] && return      # Kilobyte Windows shows them on the desktop
     cols=$(tput cols) rows=$(tput lines)
     [ "$cols" -ge 132 ] && [ "$rows" -ge 30 ] || return
-    "$KB_LIB/kb-tiles" refresh </dev/null >/dev/null 2>&1 &
-    weather=$("$KB_LIB/kb-tiles" weather) news=$("$KB_LIB/kb-tiles" news)
+    # New weather and news are fetched in the background, at most every five
+    # minutes; the saved ones are read straight from their files.
+    if [ "$SECONDS" -ge "${KB_TILES_NEXT:-0}" ]; then
+        KB_TILES_NEXT=$(( SECONDS + 300 ))
+        "$KB_LIB/kb-tiles" refresh </dev/null >/dev/null 2>&1 &
+    fi
+    local lines=() line
+    weather="" news="" wl=0 nl=0
+    { mapfile -t lines < "$KB_CONF/tiles/weather"; } 2>/dev/null
+    wl=${#lines[@]}
+    [ "$wl" -gt 0 ] && printf -v weather '%s\n' "${lines[@]}" && weather=${weather%$'\n'}
+    lines=()
+    { mapfile -t lines < "$KB_CONF/tiles/news"; } 2>/dev/null
+    nl=${#lines[@]}
+    for line in "${lines[@]}"; do news+="${line:0:58}"$'\n'; done
+    news=${news%$'\n'}
     [ -n "$weather$news" ] || return
     x=$(( (cols - 62 - 2 - 64) / 2 + 64 ))
-    wl=$(printf '%s\n' "$weather" | wc -l) nl=$(printf '%s\n' "$news" | wc -l)
     if [ -n "$weather" ]; then
         printf '%s\0' --keep-window --no-collapse --begin 3 "$x" --title " Weather " \
             --infobox "$weather" $(( wl + 2 )) 62 --and-widget
     fi
     if [ -n "$news" ]; then
         printf '%s\0' --keep-window --no-collapse --begin $(( 3 + wl + 3 )) "$x" --title " News " \
-            --infobox "$(printf '%s\n' "$news" | cut -c1-58)" $(( nl + 2 )) 62 --and-widget
+            --infobox "$news" $(( nl + 2 )) 62 --and-widget
     fi
     # The menu goes to the left of the tiles (and needs its options again).
     printf '%s\0' --colors --cr-wrap --begin 3 $(( x - 66 ))

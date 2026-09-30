@@ -64,15 +64,23 @@ kb_load_theme() {
 # Top line of the screen, like a menu bar: product, user, date and time.
 # The network in a few words: "Wi-Fi NAME ■■■·", "Wired" or "Offline".
 kb_network() {
-    local dev ssid level bars
-    dev=$(ip route show default 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n 1)
+    local dev="" d dest rest ssid level bars
+    # The interface of the default route (IPv4), read without running a program.
+    while read -r d dest rest; do
+        [ "$dest" = 00000000 ] && { dev=$d; break; }
+    done 2>/dev/null < /proc/net/route
     if [ -z "$dev" ]; then
         echo "Offline"
         return 1
     fi
     if [ -d "/sys/class/net/$dev/wireless" ]; then
         ssid=$(wpa_cli -i "$dev" status 2>/dev/null | sed -n 's/^ssid=//p' | cut -c1-20)
-        level=$(awk -v d="$dev:" '$1 == d { printf "%d", $4 }' /proc/net/wireless 2>/dev/null)
+        level=""
+        while read -r d rest; do
+            [ "$d" = "$dev:" ] || continue
+            read -r _ _ level _ <<< "$rest"
+            level=${level%.}
+        done 2>/dev/null < /proc/net/wireless
         bars=""
         if [ -n "$level" ] && [ "$level" -lt 0 ]; then
             if   [ "$level" -ge -55 ]; then bars=" ■■■■"
@@ -121,7 +129,8 @@ kb_status() {
 }
 
 kb_backtitle() {
-    local where="${USER:-$(id -un)}@$(hostname 2>/dev/null)" note="" bat
+    # (Every dialog shows this line: only shell built-ins here, no programs.)
+    local where="${USER:-$(id -un)}@${HOSTNAME:-$(hostname 2>/dev/null)}" note="" bat now
     kb_is_live && where="$where (live)"
     # In Kilobyte Windows the menu bar above already shows the rest.
     if [ -n "${KILOBYTE_DESK:-}" ]; then
@@ -131,7 +140,8 @@ kb_backtitle() {
     note+="  │  $(kb_network)"
     bat=$(kb_battery) && note+="  │  Battery $bat"
     kb_update_available && note+="  │  ▲ Update available"
-    printf ' ■ Kilobyte %s  │  %s  │  %s%s' "$KB_VERSION" "$where" "$(date '+%a %d %b  %H:%M')" "$note"
+    printf -v now '%(%a %d %b  %H:%M)T' -1
+    printf ' ■ Kilobyte %s  │  %s  │  %s%s' "$KB_VERSION" "$where" "$now" "$note"
 }
 
 # --- battery --------------------------------------------------------------
@@ -142,11 +152,14 @@ kb_psu() { cat "$1/$2" 2>/dev/null; }  # kb_psu DEVICE ATTRIBUTE
 
 # "87%" or "87%+" (charging) for the first battery; nothing without one.
 kb_battery() {
-    local b
+    local b type present capacity status
     for b in "$KB_POWER"/*; do
-        [ "$(kb_psu "$b" type)" = Battery ] && [ "$(kb_psu "$b" present)" != 0 ] || continue
-        [ -n "$(kb_psu "$b" capacity)" ] || continue
-        printf '%s%%%s' "$(kb_psu "$b" capacity)" "$([ "$(kb_psu "$b" status)" = Charging ] && echo +)"
+        type="" present="" capacity="" status=""
+        { read -r type < "$b/type"; read -r present < "$b/present"
+          read -r capacity < "$b/capacity"; read -r status < "$b/status"; } 2>/dev/null
+        [ "$type" = Battery ] && [ "$present" != 0 ] && [ -n "$capacity" ] || continue
+        [ "$status" = Charging ] && status=+ || status=""
+        printf '%s%%%s' "$capacity" "$status"
         return 0
     done
     return 1
@@ -198,9 +211,10 @@ kb_usb_mount() {
 
 # True when the last check found a newer Kilobyte than the installed one.
 kb_update_available() {
-    local latest
-    latest=$(cat "$KB_CONF/update-latest" 2>/dev/null) || return 1
-    [ -n "$latest" ] && [ "$latest" != "$(cat "$KB_SHARE/commit" 2>/dev/null)" ]
+    local latest="" installed=""
+    { read -r latest < "$KB_CONF/update-latest"; } 2>/dev/null || return 1
+    { read -r installed < "$KB_SHARE/commit"; } 2>/dev/null
+    [ -n "$latest" ] && [ "$latest" != "$installed" ]
 }
 
 # Look for a new version at most once a day, quietly, in the background.

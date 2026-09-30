@@ -16,7 +16,13 @@ binary_of() { # binary_of COMMAND
     case $first in */kb-x) read -r first rest <<< "$rest" ;; esac
     echo "$first"
 }
-installed() { command -v "$(binary_of "$1")" >/dev/null 2>&1 || [ -x "/usr/games/$(binary_of "$1")" ]; }
+# (Without subshells: on a Raspberry Pi 1 each one costs a noticeable moment,
+# and this runs for every entry each time a menu is shown.)
+installed() {
+    local b=${1%% *}
+    case $b in */kb-x) b=${1#* }; b=${b%% *} ;; esac
+    command -v "$b" >/dev/null 2>&1 || [ -x "/usr/games/$b" ]
+}
 
 if [ "${1:-}" = --table ]; then
     # (No lib.sh here: this runs for every menu.)
