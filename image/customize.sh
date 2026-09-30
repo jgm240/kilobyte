@@ -43,6 +43,13 @@ FSTAB
     sed -i -e 's/^#\?ROOTPART=.*/ROOTPART=LABEL=KBROOT/' -e 's/^#\?CONSOLES=.*/CONSOLES="tty1"/' \
         /etc/default/raspi-firmware
     grep -q '^ROOTPART=' /etc/default/raspi-firmware || echo 'ROOTPART=LABEL=KBROOT' >> /etc/default/raspi-firmware
+    # Pi 1 and Zero: Debian's kernel for them (6.12.48 and later) hangs before
+    # it shows anything when cmdline.txt sets a CMA size (Debian bug #1116251).
+    # Without it the kernel takes the size from the device tree.
+    if [ "$(dpkg --print-architecture)" = armel ]; then
+        sed -i 's/^#\?CMA=.*/CMA=0/' /etc/default/raspi-firmware
+        grep -q '^CMA=' /etc/default/raspi-firmware || echo 'CMA=0' >> /etc/default/raspi-firmware
+    fi
     # 64-bit images run Raspberry Pi's own kernel. Its packages put the
     # kernel, the initramfs and the device trees on the boot partition and
     # leave these two files to whoever makes the image.
