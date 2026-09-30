@@ -577,7 +577,7 @@ class Desk:
                 self.s.watched.update(enumerate(self.wall_cells[row - 1]))
         # The chosen icon: its name in other colours.
         for x, y, icon in self.icons:
-            if icon is self.icon_sel:
+            if self.same_icon(icon, self.icon_sel):
                 self.s.put(y + 2, x, self.icon_label(icon), BLACK, CYAN)
 
     @staticmethod
@@ -652,6 +652,13 @@ class Desk:
             put(y + 2, x, self.icon_label(icon), WHITE, BLACK)
             self.icons.append((x, y + 1, icon))    # (in screen rows: the desktop starts at row 1)
         return win
+
+    @staticmethod
+    def same_icon(a, b):
+        """The desktop is drawn anew now and then (news arrive, a file
+        appears), which makes new icons: compare what they stand for."""
+        return (isinstance(a, dict) and isinstance(b, dict)
+                and (a.get("path"), a.get("id")) == (b.get("path"), b.get("id")))
 
     def icon_at(self, mx, my):
         for x, y, icon in self.icons:
@@ -1386,7 +1393,7 @@ class Desk:
                 self.open_menu(self.main_menu(), mx, my)
         elif down:
             now = time.time()
-            double = icon is not None and self.last_click[1] is icon and now - self.last_click[0] < 0.6
+            double = self.same_icon(icon, self.last_click[1]) and now - self.last_click[0] < 0.6
             self.last_click = (now, icon)
             self.icon_sel = icon
             if double:
