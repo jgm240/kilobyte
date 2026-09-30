@@ -43,6 +43,38 @@ FSTAB
     sed -i -e 's/^#\?ROOTPART=.*/ROOTPART=LABEL=KBROOT/' -e 's/^#\?CONSOLES=.*/CONSOLES="tty1"/' \
         /etc/default/raspi-firmware
     grep -q '^ROOTPART=' /etc/default/raspi-firmware || echo 'ROOTPART=LABEL=KBROOT' >> /etc/default/raspi-firmware
+    # 64-bit images run Raspberry Pi's own kernel. Its packages put the
+    # kernel, the initramfs and the device trees on the boot partition and
+    # leave these two files to whoever makes the image.
+    if ls /boot/vmlinuz-*-rpi-v8 >/dev/null 2>&1; then
+        mkdir -p /boot/firmware
+        cat > /boot/firmware/config.txt <<'CONFIG'
+# Kilobyte on the Raspberry Pi 3, 4, 400, 5, 500 and Zero 2 W.
+# What can be set here:
+# https://www.raspberrypi.com/documentation/computers/config_txt.html
+
+arm_64bit=1
+# The initramfs that goes with the kernel (it finds the root file system).
+auto_initramfs=1
+disable_overscan=1
+arm_boost=1
+
+# Sound, and the display driver of the kernel.
+dtparam=audio=on
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+disable_fw_kms_setup=1
+
+[cm4]
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]
+CONFIG
+        echo 'console=tty1 root=LABEL=KBROOT rw rootwait fsck.repair=yes net.ifnames=0' > /boot/firmware/cmdline.txt
+    fi
     ;;
 esac
 

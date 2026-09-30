@@ -32,7 +32,10 @@ case $ARCH in
     # Debian 13 still builds its packages for i386, but no longer a 32-bit PC
     # kernel: that one comes from Debian 12 (KERNEL_SUITE, 6.1 LTS).
     i386)  SUITE=trixie   KERNEL=linux-image-686   KIND=pc EFI=grub-efi-ia32-bin KERNEL_SUITE=bookworm ;;
-    arm64) SUITE=trixie   KERNEL=linux-image-arm64 KIND=pi EFI= ;;
+    # 64-bit Raspberry Pis run Raspberry Pi's own kernel (RPI_REPO): Debian's
+    # has no driver for the SD card, USB or network of a Pi 5. Everything
+    # else stays Debian's.
+    arm64) SUITE=trixie   KERNEL=linux-image-rpi-v8,raspberrypi-archive-keyring,bluez-firmware KIND=pi EFI= RPI_REPO=1 ;;
     armhf) SUITE=trixie   KERNEL=linux-image-armmp KIND=pi EFI= ;;
     # The first Raspberry Pis (1, Zero) have an ARMv6 processor, older than
     # what Debian's armhf needs: their system is Debian's armel with its
@@ -40,7 +43,9 @@ case $ARCH in
     armel) SUITE=trixie   KERNEL=linux-image-rpi   KIND=pi EFI= ;;
     *) echo "unknown ARCH $ARCH" >&2; exit 2 ;;
 esac
-EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-}
+EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-} RPI_REPO=${RPI_REPO:-}
+RPI_MIRROR=http://archive.raspberrypi.com/debian
+RPI_KEY=/usr/share/keyrings/raspberrypi-archive-keyring.pgp
 if [ $KIND = pc ]; then
     NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}"
 else
@@ -64,7 +69,7 @@ stage_debs() {
     # Reuse the packages from the last build when their recipes are unchanged.
     local stamp
     stamp=$(cd /src/image/debs && find . -type f | sort | xargs sha256sum | sha256sum | cut -c1-16)-$SUITE
-    if [ "$(cat "$WORK/debs/.recipes" 2>/dev/null)" = "$stamp" ]; then
+    if [ -z "${FRESH:-}" ] && [ "$(cat "$WORK/debs/.recipes" 2>/dev/null)" = "$stamp" ]; then
         echo "(unchanged, reusing:)"
         ls -1 "$WORK/debs"
         return 0
@@ -80,9 +85,13 @@ stage_debs() {
     rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src" "$WORK/ccache"
     export PATH="/usr/lib/ccache:$PATH" CCACHE_DIR="$WORK/ccache"
     export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+    local try failed=
     for pkg in $(ls /src/image/debs); do
+        # Twice: the sources come from the network, which fails now and then.
+        for try in 1 2; do
         (
             set -e
+            rm -rf "$WORK/src/$pkg"-* "$WORK"/src/*+kilobyte1_*.deb
             cd "$WORK/src" && apt-get source -qq "$pkg" >/dev/null
             dir=$(find "$WORK/src" -mindepth 1 -maxdepth 1 -type d -name "$pkg-*" | head -n 1)
             cd "$dir"
@@ -104,9 +113,14 @@ stage_debs() {
                 case $deb in *-dbgsym_* | *-doc_* | *-dev_*) continue ;; esac
                 cp "$deb" "$WORK/debs/"
             done
-        ) || echo "WARNING: $pkg could not be rebuilt; the image keeps Debian's version"
+        ) && break
+        [ "$try" = 1 ] && { echo "($pkg: trying once more)"; continue; }
+        echo "WARNING: $pkg could not be rebuilt; the image keeps Debian's version"
+        failed=1
+        done
     done
-    echo "$stamp" > "$WORK/debs/.recipes"
+    # A failed package is tried again by the next build.
+    [ -n "$failed" ] || echo "$stamp" > "$WORK/debs/.recipes"
     ls -1 "$WORK/debs"
 }
 
@@ -123,7 +137,7 @@ stage_box86() {
     echo "==> Building box86 $v for armhf"
     tools ca-certificates curl cmake make python3 gcc-arm-linux-gnueabihf libc6-dev-armhf-cross dpkg-dev
     rm -rf "$b" && mkdir -p "$b/src" && cd "$b/src"
-    curl -fsSL "https://github.com/ptitSeb/box86/archive/refs/tags/$BOX86_VERSION.tar.gz" | tar -xz --strip-components=1
+    curl -fsSL --retry 5 --retry-all-errors "https://github.com/ptitSeb/box86/archive/refs/tags/$BOX86_VERSION.tar.gz" | tar -xz --strip-components=1
     mkdir build && cd build
     cmake .. -DRPI2=1 -DNOGIT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=armv7l \
@@ -159,7 +173,7 @@ CONTROL
 # The key of a base system: everything that decides what is in it.
 base_key() {
     {
-        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}"
+        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}"
         echo "$1"                                   # the package list
         cat "$WORK/debs/.recipes" 2>/dev/null
         ls "$WORK/debs" 2>/dev/null
@@ -192,6 +206,11 @@ stage_base() {
         printf 'Types: deb\nURIs: %s\nSuites: %s %s-updates\nComponents: main non-free-firmware\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
             "$MIRROR" "$KERNEL_SUITE" "$KERNEL_SUITE" > /etc/apt/sources.list.d/kernel-suite.sources
     fi
+    if [ -n "$RPI_REPO" ]; then
+        # Raspberry Pi's package archive, for the kernel and the firmware only.
+        install -D -m 644 /src/image/keys/raspberrypi-archive-keyring.pgp "$RPI_KEY"
+        echo "deb [signed-by=$RPI_KEY] $RPI_MIRROR $SUITE main" > /etc/apt/sources.list.d/raspberrypi.list
+    fi
     tools mmdebstrap ca-certificates curl
 
     # Leave out what this Debian release does not have, with a warning.
@@ -214,7 +233,7 @@ stage_base() {
     mkdir -p "$WORK/apt-cache"
 
     echo "==> Building the Debian $SUITE base system for $ARCH (kept for the next builds)"
-    export KERNEL_SUITE
+    export KERNEL_SUITE RPI_REPO RPI_KEY
     # Downloaded packages are kept in apt-cache/ and offered to apt again.
     mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
         --components="main non-free-firmware" \
@@ -232,6 +251,7 @@ stage_base() {
         --dpkgopt='path-exclude=/usr/games/snake' \
         --dpkgopt='path-exclude=/usr/games/snscore' \
         --setup-hook='if [ -n "$KERNEL_SUITE" ]; then mkdir -p "$1/etc/apt/preferences.d" && printf "Package: *\nPin: release n=%s\nPin-Priority: 100\n" "$KERNEL_SUITE" > "$1/etc/apt/preferences.d/kilobyte-kernel"; fi' \
+        --setup-hook='if [ -n "$RPI_REPO" ]; then install -D -m 644 "$RPI_KEY" "$1$RPI_KEY" && mkdir -p "$1/etc/apt/preferences.d" && printf "# Raspberry Pi archive: its kernel and firmware, nothing else instead of Debian.\nPackage: *\nPin: origin archive.raspberrypi.com\nPin-Priority: 100\n\nPackage: raspi-firmware firmware-brcm80211 bluez-firmware\nPin: origin archive.raspberrypi.com\nPin-Priority: 990\n" > "$1/etc/apt/preferences.d/kilobyte-raspberrypi"; fi' \
         --setup-hook='mkdir -p "$1/var/cache/apt/archives" && { cp -n /work/apt-cache/*.deb "$1/var/cache/apt/archives/" 2>/dev/null || true; }' \
         --essential-hook='echo "debconf debconf/frontend select Noninteractive" | chroot "$1" debconf-set-selections' \
         --customize-hook='cp -n "$1"/var/cache/apt/archives/*.deb /work/apt-cache/ 2>/dev/null || true' \
@@ -244,7 +264,8 @@ stage_base() {
         "deb http://security.debian.org/debian-security $SUITE-security main non-free-firmware" \
         ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE main non-free-firmware"} \
         ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE-updates main non-free-firmware"} \
-        ${KERNEL_SUITE:+"deb http://security.debian.org/debian-security $KERNEL_SUITE-security main non-free-firmware"}
+        ${KERNEL_SUITE:+"deb http://security.debian.org/debian-security $KERNEL_SUITE-security main non-free-firmware"} \
+        ${RPI_REPO:+"deb [signed-by=$RPI_KEY] $RPI_MIRROR $SUITE main"}
     # Old versions of packages pile up in the download cache: keep a month.
     find "$WORK/apt-cache" -name '*.deb' -mtime +30 -delete 2>/dev/null || true
     echo "$packages" | tr , '\n' | sort -u > "$WORK/base.packages"
@@ -263,7 +284,7 @@ stage_rootfs() {
     rm -rf "$r" "$WORK/iso"
     cp -a "$WORK/base" "$r"
     tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$r" -xf -
-    curl -fsSL -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+    curl -fsSL --retry 5 --retry-all-errors -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
     chmod 755 "$r/usr/local/bin/yt-dlp"
     echo "${KB_COMMIT:-unknown}" > "$r/usr/share/kilobyte/commit"
     cp "$WORK/base.packages" "$r/usr/share/kilobyte/packages.txt"
