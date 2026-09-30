@@ -374,6 +374,7 @@ class Desk:
         self.task_buttons = []
         self.wall = None                   # the desktop (wallpaper, tiles, icons), drawn once and kept
         self.wall_key = None
+        self.wall_cells = []               # what it shows, row by row: (character, fg, bg)
         self.wall_checked = 0
         self.apps = []                     # the programs (kilobyte --list-apps)
         self.apps_read = 0
@@ -571,6 +572,9 @@ class Desk:
                 self.wall.overwrite(self.s.scr)
             except curses.error:
                 pass
+            row = self.s.watch_y
+            if row is not None and 0 <= row - 1 < len(self.wall_cells):
+                self.s.watched.update(enumerate(self.wall_cells[row - 1]))
         # The chosen icon: its name in other colours.
         for x, y, icon in self.icons:
             if icon is self.icon_sel:
@@ -591,10 +595,14 @@ class Desk:
         except curses.error:
             return None
 
+        cells = self.wall_cells = [[(" ", LIGHTGREY, BLACK)] * w for _ in range(h)]
+
         def put(y, x, text, fg, bg):
             if 0 <= y < h and x < w:
                 if x < 0:
                     text, x = text[-x:], 0
+                for i, ch in enumerate(text[:w - x]):
+                    cells[y][x + i] = (ch, fg, bg)
                 try:
                     win.addstr(y, x, text[:w - x], self.s.attr(fg, bg))
                 except curses.error:
@@ -775,6 +783,7 @@ class Desk:
                 self.invert(y + 1 + row, x + 1 + x0, x1 - x0 + 1)
 
     def draw(self):
+        self.s.watch_y, self.s.watched = (self.pointer[1] if self.pointer else None), {}
         self.draw_desktop()
         act = self.active()
         for win in self.windows:
@@ -794,8 +803,7 @@ class Desk:
             self.s.put(H - 1, 0, hint.ljust(W), BLACK, YELLOW)
         # The mouse pointer: the cell under it with its colours swapped.
         if self.pointer:
-            px, py = self.pointer
-            self.invert(py, px, 1)
+            self.draw_pointer(*self.pointer)
         # The cursor of the active window's program.
         if act and not act.screen.cursor.hidden and not self.menus and not self.volume_open:
             cx, cy = act.x + 1 + act.screen.cursor.x, act.y + 1 + act.screen.cursor.y
@@ -809,6 +817,23 @@ class Desk:
         else:
             curses.curs_set(0)
         self.s.scr.refresh()
+
+    def draw_pointer(self, px, py):
+        """The cell under the mouse with its colours swapped. Where that would
+        hardly show (half-filled wallpaper characters, a bright letter on its
+        own colour) the pointer is a plain block instead."""
+        cell = self.s.watched.get(px) if py == self.s.watch_y else None
+        if not cell:
+            self.invert(py, px, 1)
+            return
+        ch, fg, bg = cell
+        bg &= 7
+        self.s.watch_y = None                      # this put is not the cell's content
+        if ch in "░▒▓▀▄▌▐" or fg & 7 == bg:
+            block = BLACK if LIGHTGREY in (fg & 7, bg) and ch != " " or bg == LIGHTGREY else LIGHTGREY
+            self.s.put(py, px, " ", block, block)
+        else:
+            self.s.put(py, px, ch, bg, fg & 7)
 
     def invert(self, y, x, n):
         """Swap foreground and background of n cells, whatever their colours

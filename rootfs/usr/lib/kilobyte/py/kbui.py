@@ -47,6 +47,12 @@ class Screen:
             curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
             curses.mouseinterval(0)
 
+    # One row can be watched: put() notes what it writes there, so that the
+    # cell under a mouse pointer can be redrawn in other colours (curses cannot
+    # be asked reliably what a cell holds once it is not plain ASCII).
+    watch_y = None
+    watched = {}
+
     def attr(self, fg, bg=BLACK):
         bg &= 7                                    # backgrounds: 8 colours only
         if self.native16:
@@ -73,6 +79,9 @@ class Screen:
         if x < 0:
             text, x = text[-x:], 0
         text = text[: w - x]
+        if y == self.watch_y:                      # remember what this row shows
+            for i, ch in enumerate(text):
+                self.watched[x + i] = (ch, fg, bg)
         try:
             self.scr.addstr(y, x, text, self.attr(fg, bg))
         except curses.error:
