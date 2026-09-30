@@ -264,8 +264,9 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 | `kilobyte-1.4-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
 | `kilobyte-1.4-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
 | `kilobyte-1.4-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
+| `kilobyte-1.4-raspberrypi-armel.img.xz` | Raspberry Pi 1, Zero, Zero W (ARMv6); no Windows programs, and it starts without windows | `./build.sh --arch armel` |
 
-`./build.sh --arch all` builds all four (the PC builds also write a
+`./build.sh --arch all` builds all five (the PC builds also write a
 `-usb.img`).
 
 The long part of a build, installing Debian and some 1,500 packages in an
@@ -365,7 +366,7 @@ Settings › Login and startup.
 ## Layout
 
 ```
-build.sh                     host entry point (Docker), --arch amd64|i386|arm64|armhf|all
+build.sh                     host entry point (Docker), --arch amd64|i386|arm64|armhf|armel|all
 image/
   build-in-container.sh      mmdebstrap -> squashfs -> grub-mkrescue, or -> Pi SD image
   customize.sh               runs in the chroot: live user or Pi first start, services

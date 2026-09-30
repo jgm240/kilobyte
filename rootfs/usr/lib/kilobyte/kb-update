@@ -182,6 +182,8 @@ install_tree() {
     install -m 755 "$src/usr/sbin/kilobyte-firstboot" /usr/sbin/kilobyte-firstboot
     install -D -m 644 -t /usr/share/consolefonts "$src"/usr/share/consolefonts/Kilobyte-*
     install -m 440 "$src/etc/sudoers.d/kilobyte" /etc/sudoers.d/kilobyte
+    local gpm_changed=
+    cmp -s "$src/etc/gpm.conf" /etc/gpm.conf || gpm_changed=1
     # System files that belong to Kilobyte (not the owner's settings).
     for f in etc/profile.d/kilobyte.sh etc/systemd/system/kilobyte-wifi.service \
              etc/modules-load.d/kilobyte-optical.conf etc/sysctl.d/10-kilobyte.conf \
@@ -265,7 +267,9 @@ install_tree() {
         echo "Updating the start-up files ..."
         update-initramfs -u -k all >/dev/null 2>&1 || true
     fi
-    systemctl try-restart gpm.service 2>/dev/null || true      # new mouse settings
+    # New mouse settings. Only then: restarting the mouse service ends the
+    # windows of Kilobyte 1.3, which would be running this very update.
+    [ -z "$gpm_changed" ] || systemctl try-restart gpm.service 2>/dev/null || true
     # shellcheck source=/dev/null
     . /usr/lib/kilobyte/setup-questions.sh
     for u in $(awk -F: '$3 >= 1000 && $3 < 60000 {print $1}' /etc/passwd); do
