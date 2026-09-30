@@ -17,7 +17,7 @@ export PATH="$PATH:/usr/games:/usr/sbin:/sbin"
 export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_HELP=2 DIALOG_EXTRA=3 \
        DIALOG_ITEM_HELP=4 DIALOG_TIMEOUT=5 DIALOG_ESC=255
 
-mkdir -p "$KB_CONF" 2>/dev/null
+[ -d "$KB_CONF" ] || mkdir -p "$KB_CONF" 2>/dev/null
 
 # Ctrl-C must not kill a Kilobyte screen. A handler (rather than ignoring the
 # signal) is used so that programs started from here still get Ctrl-C, and
@@ -29,7 +29,8 @@ kb_is_live() { [ -d /run/live/medium ]; }
 # --- theme ----------------------------------------------------------------
 
 kb_theme_name() {
-    local t="${KB_THEME:-$(cat "$KB_CONF/theme" 2>/dev/null)}"
+    local t="${KB_THEME:-}"
+    [ -n "$t" ] || { read -r t < "$KB_CONF/theme"; } 2>/dev/null
     [ -n "$t" ] && [ -d "$KB_SHARE/themes/$t" ] || t=classic
     echo "$t"
 }
@@ -53,9 +54,15 @@ kb_palette() {
 }
 
 kb_load_theme() {
-    local dir="$KB_SHARE/themes/$(kb_theme_name)"
+    # (Every Kilobyte script loads this file and so runs this: no programs.)
+    local t="${KB_THEME:-}"
+    [ -n "$t" ] || { read -r t < "$KB_CONF/theme"; } 2>/dev/null
+    [ -n "$t" ] && [ -d "$KB_SHARE/themes/$t" ] || t=classic
+    local dir="$KB_SHARE/themes/$t"
     export DIALOGRC="$dir/dialogrc"
-    export MC_SKIN="$(cat "$dir/mc-skin" 2>/dev/null || echo default)"
+    MC_SKIN=""
+    { read -r MC_SKIN < "$dir/mc-skin"; } 2>/dev/null
+    export MC_SKIN="${MC_SKIN:-default}"
     kb_palette "$dir/palette"
 }
 
