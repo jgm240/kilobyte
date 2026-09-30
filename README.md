@@ -68,12 +68,29 @@ recolour every program.
 **Windows and multitasking**: Kilobyte Windows (`apps/desk`) runs every
 program in a window of its own: a pseudo terminal emulated with `pyte` and
 drawn with the same character cells as everything else. Windows have a title
-bar with close, minimise and maximise boxes, a double frame when active and a
-shadow. Drag a title bar to move a window, its corner to resize it,
-double-click to maximise. Alt+Tab or the taskbar switch between them, and
-F12 opens the window menu (move and resize by keyboard, tile, cascade).
+bar with close `[X]`, minimise and maximise boxes, a double frame when active
+and a shadow. Drag a title bar to move a window or its corner to resize it:
+an outline shows where it will go, as in Windows 98, and it moves when you
+let go. Double-click maximises. Alt+Tab or the taskbar switch between them,
+and F12 opens the window menu (move and resize by keyboard, tile, cascade).
 Clicks inside a window reach its program. Settings › Login and startup turns
 windows off.
+
+The **menu bar** has the window menu, New window, Tile and Cascade on the
+left, and on the right the update notice, the network (Wi-Fi name and signal,
+Wired or Offline), the battery and the clock. The weather and news **tiles**
+are drawn on the desktop, and on wide screens the first window leaves their
+column free. **Wallpaper** (Settings › Wallpaper, `py/deskbg.py`): one of 15
+patterns, your own characters repeated, any two colours, or a picture, which
+is cropped to the screen and dithered into half-block "pixels" in the 16
+console colours.
+
+**Video in Kilobyte Windows**: a window is a pseudo terminal, so it cannot
+switch the console to a pixel font or draw on the screen itself. For the
+block modes and the real picture `kb-play` therefore asks Kilobyte Windows
+for the whole screen (a private socket, `KB_DESK_SOCK`): the windows step
+aside, the video plays exactly as without windows, and they return when it
+ends. The Text picture mode and sound play inside the window.
 
 **Office files**: `kb-office` turns Word and Writer documents (DOCX, ODT) into
 plain text for the Editor. Headings become `#`, lists `-` and table rows

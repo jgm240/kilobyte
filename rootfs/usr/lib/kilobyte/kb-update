@@ -160,6 +160,11 @@ install_tree() {
     cp -a "$src/etc/skel/." /etc/skel/ 2>/dev/null || true
     chown -R root:root /etc/skel
     echo "$sha" > "$SHARE/commit"
+    # Whoever was told "Update available" has the update now.
+    local note
+    for note in /home/*/.config/kilobyte/update-latest /root/.config/kilobyte/update-latest; do
+        [ -f "$note" ] && echo "$sha" > "$note"     # (keeps the file's owner)
+    done
     printf '%s\n' "$new_pkgs" > "$SHARE/packages.txt"
     systemctl daemon-reload 2>/dev/null || true
 
