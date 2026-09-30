@@ -130,25 +130,48 @@ class Gpm:
         return g if g.fd >= 0 else None
 
     def events(self):
-        """Read one gpm event -> list of (x, y, kind, button)."""
-        ev = self.Event()
-        if self.lib.Gpm_GetEvent(ctypes.byref(ev)) <= 0:
-            return []
-        if os.environ.get("KB_DESK_DEBUG"):
-            with open("/tmp/desk-mouse.log", "a") as log:
-                log.write("raw buttons=%d dx=%d dy=%d x=%d y=%d type=%d clicks=%d vc=%d\n"
-                          % (ev.buttons, ev.dx, ev.dy, ev.x, ev.y, ev.type, ev.clicks, ev.vc))
-        x, y = ev.x - 1, ev.y - 1
-        button = 1 if ev.buttons & self.B_LEFT else 3 if ev.buttons & self.B_RIGHT else 0
-        if ev.wdy or ev.buttons & (self.B_UP | self.B_DOWN):
-            return [(x, y, "wheel", 4 if (ev.wdy > 0 or ev.buttons & self.B_UP) else 5)]
-        if ev.type & self.DOWN:
-            return [(x, y, "down", button)]
-        if ev.type & self.UP:
-            return [(x, y, "up", button or 1)]
-        if ev.type & self.DRAG:
-            return [(x, y, "drag", button)]
-        return [(x, y, "move", 0)]
+        """Every gpm event that is waiting -> list of (x, y, kind, button),
+        or None when the connection to gpm is gone (gpm was restarted).
+        A mouse sends events much faster than the screen is redrawn, so a run
+        of movements counts as its last one; otherwise the pointer and a
+        dragged window fall further and further behind the hand."""
+        out = []
+        for _ in range(500):
+            try:
+                if not select.select([self.fd], [], [], 0)[0]:
+                    break
+            except (OSError, ValueError):
+                return None
+            ev = self.Event()
+            if self.lib.Gpm_GetEvent(ctypes.byref(ev)) <= 0:
+                return None
+            if os.environ.get("KB_DESK_DEBUG"):
+                with open("/tmp/desk-mouse.log", "a") as log:
+                    log.write("raw buttons=%d dx=%d dy=%d x=%d y=%d type=%d clicks=%d vc=%d\n"
+                              % (ev.buttons, ev.dx, ev.dy, ev.x, ev.y, ev.type, ev.clicks, ev.vc))
+            x, y = ev.x - 1, ev.y - 1
+            button = 1 if ev.buttons & self.B_LEFT else 3 if ev.buttons & self.B_RIGHT else 0
+            if ev.wdy or ev.buttons & (self.B_UP | self.B_DOWN):
+                e = (x, y, "wheel", 4 if (ev.wdy > 0 or ev.buttons & self.B_UP) else 5)
+            elif ev.type & self.DOWN:
+                e = (x, y, "down", button)
+            elif ev.type & self.UP:
+                e = (x, y, "up", button or 1)
+            elif ev.type & self.DRAG:
+                e = (x, y, "drag", button)
+            else:
+                e = (x, y, "move", 0)
+            if out and e[2] in ("move", "drag") and out[-1][2] == e[2]:
+                out[-1] = e
+            else:
+                out.append(e)
+        return out
+
+    def close(self):
+        try:
+            self.lib.Gpm_Close()
+        except Exception:
+            pass
 
 
 class TermScreen(pyte.Screen):
@@ -271,9 +294,9 @@ class Desk:
         self.pointer = None                # where the mouse is, drawn as a block
         self.buttons = set()               # mouse buttons held down
         # The console mouse straight from gpm (ncurses' gpm is off, see main).
-        self.gpm = Gpm.open() if os.environ.get("TERM") == "linux" else None
-        if not self.gpm and os.environ.get("TERM") == "linux":
-            curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)   # clicks at least
+        self.console = os.environ.get("TERM") == "linux"
+        self.gpm = Gpm.open() if self.console else None
+        self.gpm_retry = time.time() + 2   # when to look for gpm again if it is not there
         self.last_click = (0, None)
         self.menu = None
         s.scr.nodelay(True)
@@ -780,6 +803,7 @@ class Desk:
             pass
 
     def run(self):
+        errors = 0
         while True:
             for win in [w for w in self.windows if not w.alive]:
                 self.windows.remove(win)
@@ -792,40 +816,73 @@ class Desk:
             if not self.windows:
                 return
             try:
-                self.draw()
+                self.step()
+                errors = 0
             except Exception:
+                # One bad event, one odd piece of program output or a lost
+                # mouse must not end every window. (If nothing works any
+                # more, give up and let Kilobyte carry on without windows.)
                 self.log_error()
-            fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
-            if self.gpm:
-                fds.append(self.gpm.fd)
-            try:
-                ready, _, _ = select.select(fds, [], [], 1.0)
-            except InterruptedError:
-                continue
-            for win in self.windows:
-                if win.fd in ready:
-                    try:
-                        win.read()
-                    except Exception:
-                        self.log_error()
-            if self.gpm and self.gpm.fd in ready:
+                errors += 1
+                if errors > 50:
+                    raise
+                time.sleep(0.05)
+
+    def step(self):
+        """Draw, wait for something to happen, deal with it."""
+        self.draw()
+        # The console mouse: gpm may be restarted (an update does that) or not
+        # be running yet; look for it again every two seconds.
+        if self.console and not self.gpm and time.time() >= self.gpm_retry:
+            self.gpm = Gpm.open()
+            self.gpm_retry = time.time() + 2
+        fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
+        if self.gpm:
+            fds.append(self.gpm.fd)
+        try:
+            ready, _, _ = select.select(fds, [], [], 1.0)
+        except InterruptedError:
+            return
+        except (OSError, ValueError):
+            self.drop_gpm()            # its descriptor went away
+            return
+        for win in self.windows:
+            if win.fd in ready:
                 try:
-                    for x, y, kind, button in self.gpm.events():
-                        self.pointer_event(x, y, kind, button)
+                    win.read()
                 except Exception:
                     self.log_error()
-            if sys.stdin.fileno() in ready or not ready:
-                while True:
-                    try:
-                        k = self.s.scr.get_wch()
-                    except curses.error:
-                        break
-                    try:
-                        self.key(k)
-                    except Exception:           # one bad key must not end every window
-                        self.log_error()
-            # Let more program output arrive before drawing again.
-            time.sleep(0.01)
+        if self.gpm and self.gpm.fd in ready:
+            events = self.gpm.events()
+            if events is None:
+                self.drop_gpm()
+            for x, y, kind, button in events or []:
+                try:
+                    self.pointer_event(x, y, kind, button)
+                except Exception:
+                    self.log_error()
+        if sys.stdin.fileno() in ready or not ready:
+            while True:
+                try:
+                    k = self.s.scr.get_wch()
+                except curses.error:
+                    break
+                try:
+                    self.key(k)
+                except Exception:
+                    self.log_error()
+        # Let more program output arrive before drawing again.
+        time.sleep(0.01)
+
+    def drop_gpm(self):
+        """The connection to gpm is gone: forget it and any drag in progress."""
+        if self.gpm:
+            self.gpm.close()
+        self.gpm = None
+        self.gpm_retry = time.time() + 2
+        self.drag = self.outline = None
+        self.buttons.clear()
+        self.pointer = None
 
 
 if __name__ == "__main__":

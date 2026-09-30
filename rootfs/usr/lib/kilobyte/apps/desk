@@ -1,3 +1,6 @@
 #!/bin/sh
-# Kilobyte Windows (a Python program; see /usr/lib/kilobyte/py/desk.py)
-exec python3 /usr/lib/kilobyte/py/desk.py "$@"
+# Kilobyte Windows (a Python program; see /usr/lib/kilobyte/py/desk.py).
+# If it ever stops with an error, the reason is in ~/.cache/kilobyte-desk.log.
+log="${XDG_CACHE_HOME:-$HOME/.cache}/kilobyte-desk.log"
+mkdir -p "${log%/*}" 2>/dev/null
+exec python3 /usr/lib/kilobyte/py/desk.py "$@" 2>>"$log"
