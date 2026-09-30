@@ -246,7 +246,8 @@ kb_textfile() { # kb_textfile TITLE FILE
 # kb_title TEXT: name the window this runs in (Kilobyte Windows' title bar
 # and taskbar). Does nothing outside a window.
 kb_title() {
-    [ -n "${KILOBYTE_DESK:-}" ] && printf '\033]2;%s\007' "$1"
+    # (A program in a window of its own keeps the name the window was given.)
+    [ -n "${KILOBYTE_DESK:-}" ] && [ -z "${KB_APP_WINDOW:-}" ] && printf '\033]2;%s\007' "$1"
     return 0
 }
 
