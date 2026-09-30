@@ -151,6 +151,28 @@ class Gpm:
         return [(x, y, "move", 0)]
 
 
+class TermScreen(pyte.Screen):
+    """pyte's screen, with "erase display" colouring every cell. pyte only
+    recolours cells that were written before, so a program that clears to
+    the end of the screen in its background colour (dialog does) left the
+    untouched part black."""
+
+    def erase_in_display(self, how=0, *args, **kwargs):
+        if how == 0:
+            rows = range(self.cursor.y + 1, self.lines)
+        elif how == 1:
+            rows = range(self.cursor.y)
+        else:
+            rows = range(self.lines)
+        self.dirty.update(rows)
+        for y in rows:
+            line = self.buffer[y]
+            for x in range(self.columns):
+                line[x] = self.cursor.attrs
+        if how in (0, 1):
+            self.erase_in_line(how)
+
+
 class Window:
     def __init__(self, desk, argv, x, y, w, h, title="Program Manager"):
         self.desk = desk
@@ -158,7 +180,7 @@ class Window:
         self.title = title
         self.saved = None                  # position before maximising
         self.minimised = False
-        self.screen = pyte.Screen(w - 2, h - 2)
+        self.screen = TermScreen(w - 2, h - 2)
         self.screen.set_mode(pyte.modes.LNM)
         self.stream = pyte.ByteStream(self.screen)
         self.alive = True
@@ -245,6 +267,7 @@ class Desk:
         self.windows = []                  # bottom to top; the last is active
         self.drag = None                   # ("move"|"size", window, dx, dy)
         self.outline = None                # (x, y, w, h) where the dragged window will go
+        self.drag_start = None             # where the pointer was when the drag began
         self.pointer = None                # where the mouse is, drawn as a block
         self.buttons = set()               # mouse buttons held down
         # The console mouse straight from gpm (ncurses' gpm is off, see main).
@@ -275,6 +298,10 @@ class Desk:
             w, h = max(MIN_W, W * 3 // 4), max(MIN_H, H * 3 // 4)
             x, y = min(2 + 3 * n, W - w), min(1 + 2 * n, H - h + 1)
         win = Window(self, argv or ["kilobyte"], x, y, w, h)
+        if maximised:
+            # Where it goes when restored (or when its title bar is dragged).
+            rw, rh = max(MIN_W, W * 3 // 4), max(MIN_H, H * 3 // 4)
+            win.saved = (min(2 + 3 * n, W - rw), min(1 + 2 * n, H - rh + 1), rw, rh)
         self.windows.append(win)
         return win
 
@@ -404,15 +431,10 @@ class Desk:
         self.draw_bars()
         if self.menu:
             self.draw_menu()
-        # The mouse pointer: the cell under it in reverse colours.
+        # The mouse pointer: the cell under it with its colours swapped.
         if self.pointer:
             px, py = self.pointer
-            H, W = self.s.size()
-            if 0 <= px < W and 0 <= py < H:
-                try:
-                    self.s.scr.chgat(py, px, 1, curses.A_REVERSE)
-                except curses.error:
-                    pass
+            self.invert(py, px, 1)
         # The cursor of the active window's program.
         if act and not act.screen.cursor.hidden and not self.menu:
             cx, cy = act.x + 1 + act.screen.cursor.x, act.y + 1 + act.screen.cursor.y
@@ -427,18 +449,27 @@ class Desk:
             curses.curs_set(0)
         self.s.scr.refresh()
 
+    def invert(self, y, x, n):
+        """Swap foreground and background of n cells, whatever their colours
+        (plain reverse video would be grey on grey over a dialog)."""
+        H, W = self.s.size()
+        if not 0 <= y < H:
+            return
+        for xx in range(max(0, x), min(W, x + n)):
+            try:
+                attr = self.s.scr.inch(y, xx) & (curses.A_COLOR | curses.A_BOLD | curses.A_REVERSE)
+                self.s.scr.chgat(y, xx, 1, attr ^ curses.A_REVERSE)
+            except curses.error:
+                pass
+
     def draw_outline(self):
         """Where the window being dragged will go: its frame in reverse video."""
         x, y, w, h = self.outline
         H, W = self.s.size()
 
         def mark(yy, xx, n):
-            x0, x1 = max(0, xx), min(W, xx + n)
-            if 0 < yy < H - 1 and x0 < x1:
-                try:
-                    self.s.scr.chgat(yy, x0, x1 - x0, curses.A_REVERSE)
-                except curses.error:
-                    pass
+            if 0 < yy < H - 1:
+                self.invert(yy, xx, n)
 
         mark(y, x, w)
         mark(y + h - 1, x, w)
@@ -453,6 +484,12 @@ class Desk:
 
     def draw_menu(self):
         H, W = self.s.size()
+        mode = self.menu.get("mode")
+        if mode in ("move", "resize"):
+            # Moving or resizing with the keyboard: say how, and how to stop.
+            hint = " Arrow keys %s the window.  Enter or Esc when done. " % ("move" if mode == "move" else "resize")
+            self.s.put(H - 1, 0, hint.ljust(W), BLACK, YELLOW)
+            return
         w = 34
         x, y = (W - w) // 2, max(1, (H - len(self.MENU) - 2) // 2)
         self.s.box(y, x, len(self.MENU) + 2, w, BLACK, LIGHTGREY, title="Window")
@@ -465,6 +502,9 @@ class Desk:
 
     def menu_key(self, k):
         m = self.menu
+        # Keys come as characters ("\n", Esc) or as curses key numbers.
+        enter = k in ("\n", "\r", " ", curses.KEY_ENTER)
+        leave = k in ("\x1b", "\x03", curses.KEY_F12)
         if m.get("mode") in ("move", "resize"):
             win = self.active()
             dx = {curses.KEY_LEFT: -1, curses.KEY_RIGHT: 1}.get(k, 0)
@@ -474,16 +514,16 @@ class Desk:
                     win.move(win.x + dx * 2, win.y + dy)
                 else:
                     win.resize(win.w + dx * 2, win.h + dy)
-            elif k in (10, 13, 27, curses.KEY_ENTER):
-                self.menu = None
+            elif enter or leave or k in ("q", "Q") or not win:
+                self.menu = None       # (never trap the keyboard in this mode)
             return
-        if k in (27, curses.KEY_F12):
+        if leave:
             self.menu = None
         elif k == curses.KEY_UP:
             m["sel"] = (m["sel"] - 1) % len(self.MENU)
         elif k == curses.KEY_DOWN:
             m["sel"] = (m["sel"] + 1) % len(self.MENU)
-        elif k in (10, 13, curses.KEY_ENTER):
+        elif enter:
             self.menu_do(self.MENU[m["sel"]][0])
         elif isinstance(k, str) and k.lower() in dict(self.MENU):
             self.menu_do(k.lower())
@@ -556,6 +596,13 @@ class Desk:
         if self.drag:
             what, win, dx, dy = self.drag
             if kind in ("drag", "move", "up"):
+                if what == "move" and win.saved and (mx, my) != self.drag_start:
+                    # Dragging a maximised window: it takes its normal size
+                    # first (a click alone leaves it maximised).
+                    self.maximise(win)
+                    dx = min(dx, win.w - 2)
+                    win.move(mx - dx, my - dy)
+                    self.drag = (what, win, dx, dy)
                 if what == "move":
                     self.outline = win.clamp_pos(mx - dx, my - dy) + (win.w, win.h)
                 else:
@@ -612,11 +659,8 @@ class Desk:
                     elif win.w - 4 <= rx <= win.w - 2 or double:
                         self.maximise(win)
                     else:
-                        if win.saved:                 # dragging a maximised window restores it
-                            self.maximise(win)
-                            win.move(mx - min(rx, win.w - 2), my)
-                            rx = mx - win.x
                         self.drag = ("move", win, rx, 0)
+                        self.drag_start = (mx, my)
                         self.outline = (win.x, win.y, win.w, win.h)
                 return
             if ry == win.h - 1 and rx >= win.w - 2:   # lower right corner
@@ -639,6 +683,25 @@ class Desk:
             return
 
     def key(self, k):
+        # An Esc first: it may start a key's escape sequence that curses did
+        # not recognise (on a slow machine a sequence can come in pieces).
+        # Read the whole key here, so neither a program nor the window menu
+        # ever sees a lone Esc that was not typed.
+        if k == "\x1b":
+            seq, extra = self.read_escape()
+            if seq == "\x1b\t":                 # Alt+Tab
+                if not self.menu:
+                    self.cycle()
+            elif seq in RAW_KEYS:                # an arrow, F-key, Home, ...
+                self.key(RAW_KEYS[seq])
+            elif self.menu:
+                if seq == "\x1b":
+                    self.menu_key("\x1b")
+            elif self.active():
+                self.active().send(seq.encode("utf-8"))
+            if extra is not None:
+                self.key(extra)
+            return
         if self.menu:
             self.menu_key(k)
             return
@@ -655,9 +718,6 @@ class Desk:
                 win.move(win.x, win.y)
             return
         win = self.active()
-        if k == "\x1b":
-            self.escape(win)
-            return
         if not win:
             return
         if isinstance(k, str):
@@ -667,11 +727,10 @@ class Desk:
         elif k in KEYS:
             win.send(KEYS[k])
 
-    def escape(self, win):
-        """An Esc arrived on its own: curses did not recognise what follows
-        (on a slow machine a key's escape sequence can come in pieces). Read
-        the rest of the sequence here and pass the whole key on in one write,
-        so the program never sees a lone Esc (which closes dialogs)."""
+    def read_escape(self):
+        """After an Esc: the rest of its escape sequence, if one follows at
+        once. Returns (sequence, extra) where extra is a key that arrived
+        but does not belong to the sequence (or None)."""
         scr = self.s.scr
         seq, extra = "\x1b", None
 
@@ -705,20 +764,7 @@ class Desk:
         elif c is not None:
             extra = c
         scr.nodelay(True)
-        if seq == "\x1b\t":
-            self.cycle()
-        elif RAW_KEYS.get(seq) == curses.KEY_F12:
-            self.menu = {"sel": 0}
-        elif win:
-            key = RAW_KEYS.get(seq)
-            if key is not None and key in APP_KEYS and DECCKM in win.screen.mode:
-                win.send(APP_KEYS[key])
-            elif key is not None and key in KEYS:
-                win.send(KEYS[key])
-            else:
-                win.send(seq.encode("utf-8"))
-        if extra is not None:
-            self.key(extra)
+        return seq, extra
 
     def log_error(self):
         """Something went wrong: note it and carry on, so one bad event or
