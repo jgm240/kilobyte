@@ -92,7 +92,7 @@ while true; do
             --menu "[■] is installed." 0 0 0 "${items[@]}") || break
         IFS='|' read -r id pkgs cmd cat name desc flags <<< "$(entry "$sel")"
         if installed "$cmd"; then
-            act=$(kb_dialog --title " $name " --ok-label "Select" --cancel-label "Back" --menu "$desc\n\nIt is installed." 0 60 0 \
+            act=$(kb_dialog --title " $name " --ok-label "Select" --cancel-label "Back" --menu "$desc\n\nIt is installed." 14 64 2 \
                 Run    "Start it now" \
                 Remove "Remove it") || continue
             case $act in
@@ -104,7 +104,7 @@ while true; do
             esac
         else
             kb_dialog --title " $name " --yes-label "Install" --no-label "Back" --yesno \
-                "$desc\n\nDebian package: $pkgs\n\nInstall it?" 0 60 && install_entry "$name" "$pkgs"
+                "$desc\n\nDebian package: $pkgs\n\nInstall it?" 12 64 && install_entry "$name" "$pkgs"
         fi
     done
 done

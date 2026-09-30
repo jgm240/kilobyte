@@ -76,6 +76,7 @@ for ARCH in $ARCHES; do
         *)
             stage piimage --platform "$NATIVE" ;;
     esac
+    stage clean --platform "$NATIVE"
 done
 echo "Done:"
 ls -1t out/kilobyte-* | head -n 8

@@ -390,6 +390,13 @@ EOF
     ls -lh "/out/$NAME.img.xz"
 }
 
+# The image is in /out: what is left in the work volume is only worth keeping
+# if it saves time next time, and that is the base system and the caches.
+stage_clean() {
+    rm -rf "$WORK/rootfs" "$WORK/iso" "$WORK/usb-grub" "$WORK"/*.img
+    du -sh "$WORK" 2>/dev/null || true
+}
+
 case "${1:-}" in
     debs)    stage_debs ;;
     box86)   stage_box86 ;;
@@ -399,5 +406,6 @@ case "${1:-}" in
     iso)     stage_iso ;;
     piimage) stage_piimage ;;
     usbimg)  stage_usbimg ;;
-    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage" >&2; exit 2 ;;
+    clean)   stage_clean ;;
+    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage|clean" >&2; exit 2 ;;
 esac
