@@ -6,7 +6,8 @@
 #   extreme | fine | medium   coloured character blocks: the text console
 #                             switches to a tiny Kilobyte pixel font (1x2,
 #                             2x4 or 4x8 pixels per character) while playing
-#   text                      coloured blocks in the normal font
+#   text                      coloured blocks in the normal font (in Kilobyte
+#                             Windows: inside the window)
 #   real                      the real picture, drawn straight to the screen
 #   audio                     sound only, with mpv's status line
 #
@@ -17,6 +18,24 @@
 mode=${1:-medium}
 src=${2:?usage: kb-play MODE SOURCE [MPV-OPTIONS...]}
 shift 2
+
+# In Kilobyte Windows a window cannot switch the console to a tiny pixel font
+# or show the real picture: for those modes Kilobyte Windows lends the whole
+# screen while the video plays (KB_FULL_SCREEN is set there). "text" and
+# "audio" play inside the window.
+if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
+    case $mode in
+        extreme | fine | medium | real)
+            clear
+            printf '\n  Playing on the whole screen ...\n\n  Space pauses, the arrow keys seek, q or Ctrl+C stops.\n'
+            python3 "$KB_LIB/py/deskrun.py" "$mode" "$src" "$@"
+            rc=$?
+            clear
+            [ $rc -ne 125 ] && exit $rc
+            mode=text                  # Kilobyte Windows did not answer: in the window
+            ;;
+    esac
+fi
 
 # Streams from the web (YouTube and others) in the chosen picture size.
 height=$(cat "$KB_CONF/stream-height" 2>/dev/null)

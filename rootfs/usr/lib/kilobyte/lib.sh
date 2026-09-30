@@ -61,9 +61,50 @@ kb_load_theme() {
 # --- dialog wrappers ------------------------------------------------------
 
 # Top line of the screen, like a menu bar: product, user, date and time.
+# The network in a few words: "Wi-Fi NAME ■■■·", "Wired" or "Offline".
+kb_network() {
+    local dev ssid level bars
+    dev=$(ip route show default 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n 1)
+    if [ -z "$dev" ]; then
+        echo "Offline"
+        return 1
+    fi
+    if [ -d "/sys/class/net/$dev/wireless" ]; then
+        ssid=$(wpa_cli -i "$dev" status 2>/dev/null | sed -n 's/^ssid=//p' | cut -c1-20)
+        level=$(awk -v d="$dev:" '$1 == d { printf "%d", $4 }' /proc/net/wireless 2>/dev/null)
+        bars=""
+        if [ -n "$level" ] && [ "$level" -lt 0 ]; then
+            if   [ "$level" -ge -55 ]; then bars=" ■■■■"
+            elif [ "$level" -ge -67 ]; then bars=" ■■■·"
+            elif [ "$level" -ge -75 ]; then bars=" ■■··"
+            else                            bars=" ■···"
+            fi
+        fi
+        echo "Wi-Fi ${ssid:-connected}$bars"
+    else
+        echo "Wired"
+    fi
+}
+
+# For the menu bar of Kilobyte Windows: three lines (network, battery,
+# "update" when a newer Kilobyte is known).
+kb_status() {
+    kb_network
+    kb_battery || true
+    echo
+    kb_update_available && echo update
+    return 0
+}
+
 kb_backtitle() {
     local where="${USER:-$(id -un)}@$(hostname 2>/dev/null)" note="" bat
     kb_is_live && where="$where (live)"
+    # In Kilobyte Windows the menu bar above already shows the rest.
+    if [ -n "${KILOBYTE_DESK:-}" ]; then
+        printf ' ■ Kilobyte %s  │  %s' "$KB_VERSION" "$where"
+        return
+    fi
+    note+="  │  $(kb_network)"
     bat=$(kb_battery) && note+="  │  Battery $bat"
     kb_update_available && note+="  │  ▲ Update available"
     printf ' ■ Kilobyte %s  │  %s  │  %s%s' "$KB_VERSION" "$where" "$(date '+%a %d %b  %H:%M')" "$note"

@@ -27,10 +27,15 @@ choose_mode() {
     for m in extreme fine medium text real; do
         items+=("$m" "$(mode_name $m)" "$([ "$m" = "$cur" ] && echo on || echo off)")
     done
+    local note=""
+    [ -n "${KILOBYTE_DESK:-}" ] && note="
+
+In Kilobyte Windows the block modes and the real picture use the
+whole screen while a video plays; Text plays inside the window."
     m=$(kb_dialog --title " Picture " --ok-label "Use" --cancel-label "Back" --radiolist \
 "How videos are shown. The block modes draw the picture with coloured
 characters; smaller pixels mean a sharper but slower picture.
-Real picture shows the video itself, without blocks." 16 66 5 "${items[@]}") || return
+Real picture shows the video itself, without blocks.$note" 0 70 5 "${items[@]}") || return
     echo "$m" > "$KB_CONF/player-mode"
 }
 

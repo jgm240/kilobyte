@@ -16,11 +16,14 @@ resize, maximise, minimise, tile, cascade, close, leave).
 import ctypes
 import curses
 import fcntl
+import json
 import os
 import pty
 import select
 import signal
+import socket
 import struct
+import subprocess
 import sys
 import termios
 import time
@@ -30,6 +33,7 @@ import kbui  # noqa: E402
 from kbui import (BLACK, BLUE, CYAN, DARKGREY, LIGHTGREY, WHITE, YELLOW,  # noqa: E402
                   RGB, nearest)
 
+import deskbg  # noqa: E402
 import pyte  # noqa: E402
 
 NAMES = {"black": 0, "red": 1, "green": 2, "brown": 3, "yellow": 3, "blue": 4, "magenta": 5, "cyan": 6,
@@ -210,7 +214,7 @@ class Window:
         pid, fd = pty.fork()
         if pid == 0:
             env = dict(os.environ, TERM="xterm", KILOBYTE_DESK="1", COLORTERM="",
-                       KB_DESK_PID=str(os.getppid()),
+                       KB_DESK_PID=str(os.getppid()), KB_DESK_SOCK=desk.sock_path or "",
                        NCURSES_NO_UTF8_ACS="1")   # real box characters, not VT100 line mode
             env.pop("KILOBYTE", None)
             env.pop("NCURSES_GPM_TERMS", None)
@@ -299,13 +303,42 @@ class Desk:
         self.gpm_retry = time.time() + 2   # when to look for gpm again if it is not there
         self.last_click = (0, None)
         self.menu = None
+        self.status = deskbg.Status()      # network, battery, update notice for the menu bar
+        self.bar_items = []                # (x0, x1, action) of what can be clicked in the menu bar
+        self.wall = None                   # the desktop (wallpaper and tiles), drawn once and kept
+        self.wall_key = None
+        self.wall_checked = 0
+        # Programs in windows ask here for the whole screen (kb-play: videos).
+        self.sock = None
+        self.sock_path = None
+        try:
+            path = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "kilobyte-desk-%d.sock" % os.getpid())
+            if os.path.exists(path):
+                os.unlink(path)
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            old = os.umask(0o177)
+            try:
+                self.sock.bind(path)
+            finally:
+                os.umask(old)
+            self.sock.listen(4)
+            self.sock_path = path
+        except OSError:
+            self.sock = None
         s.scr.nodelay(True)
         s.scr.keypad(True)
         curses.raw()
         signal.signal(signal.SIGCHLD, lambda *a: None)
         # "Log out" in any window: close them all.
         signal.signal(signal.SIGUSR1, lambda *a: [w.close() for w in self.windows])
-        self.new_window(argv, maximised=True)
+        H, W = self.area()
+        if W >= 140 and not os.path.exists(os.path.join(deskbg.CONF, "tiles-off")):
+            # Wide screen: the first window leaves the tiles' column free.
+            win = self.new_window(argv)
+            win.move(0, 1)
+            win.resize(W - self.TILE_W - 6, H)
+        else:
+            self.new_window(argv, maximised=True)
 
     def area(self):
         H, W = self.s.size()
@@ -375,18 +408,121 @@ class Desk:
             win.move(2 + 3 * i, 1 + 2 * i)
 
     # --- drawing --------------------------------------------------------
+    TILE_W = 64                            # a tile with its frame
+
     def draw_desktop(self):
+        """Wallpaper and tiles. They are drawn into a window of their own
+        when something changed and copied from there for every picture."""
         H, W = self.s.size()
-        for y in range(1, H - 1):
-            self.s.put(y, 0, "░" * W, LIGHTGREY, BLUE)
+        now = time.time()
+        if now - self.wall_checked > 2 or self.wall is None:
+            self.wall_checked = now
+            try:
+                stamp = os.stat(os.path.join(deskbg.CONF, "wallpaper")).st_mtime
+            except OSError:
+                stamp = 0
+            tiles = deskbg.tiles()
+            key = (H, W, stamp, repr(tiles))
+            if key != self.wall_key:
+                self.wall_key = key
+                self.wall = self.render_desktop(H - 2, W, tiles)
+        if self.wall is not None:
+            try:
+                self.wall.overwrite(self.s.scr)
+            except curses.error:
+                pass
+
+    def render_desktop(self, h, w, tiles):
+        if h < 1 or w < 1:
+            return None
+        try:
+            win = curses.newwin(h, w, 1, 0)
+        except curses.error:
+            return None
+
+        def put(y, x, text, fg, bg):
+            if 0 <= y < h and x < w:
+                if x < 0:
+                    text, x = text[-x:], 0
+                try:
+                    win.addstr(y, x, text[:w - x], self.s.attr(fg, bg))
+                except curses.error:
+                    pass                           # the last cell of a window
+
+        try:
+            rows = deskbg.wallpaper(deskbg.read_conf(), w, h)
+        except Exception:
+            self.log_error()
+            rows = [[("░", LIGHTGREY, BLUE)] * w for _ in range(h)]
+        for y, row in enumerate(rows[:h]):
+            x = 0
+            while x < len(row):                    # runs of one colour in one go
+                ch, fg, bg = row[x]
+                end = x + 1
+                while end < len(row) and row[end][1:] == (fg, bg):
+                    end += 1
+                put(y, x, "".join(c[0] for c in row[x:end]), fg, bg)
+                x = end
+        # Weather and news, down the right-hand side.
+        tw = self.TILE_W
+        if w >= tw + 20:
+            x, y = w - tw - 2, 1
+            for title, lines in tiles:
+                th = len(lines) + 2
+                if y + th + 1 > h:
+                    break
+                for yy in range(y + 1, y + th + 1):   # shadow
+                    put(yy, x + tw, "  ", DARKGREY, BLACK)
+                put(y + th, x + 2, " " * tw, DARKGREY, BLACK)
+                put(y, x, "┌" + "─" * (tw - 2) + "┐", BLACK, LIGHTGREY)
+                put(y, x + (tw - len(title) - 2) // 2, " %s " % title, BLUE, LIGHTGREY)
+                for i, line in enumerate(lines):
+                    put(y + 1 + i, x, "│ " + line[:tw - 4].ljust(tw - 4) + " │", BLACK, LIGHTGREY)
+                put(y + th - 1, x, "└" + "─" * (tw - 2) + "┘", BLACK, LIGHTGREY)
+                y += th + 1
+        return win
 
     def draw_bars(self):
         """Menu bar and taskbar: drawn last, so windows never cover them."""
         H, W = self.s.size()
-        clock = time.strftime("%a %d %b  %H:%M")
-        bar = " ■ Kilobyte  │  [New window]  │  F12 window menu   Alt+Tab next window"
-        self.s.put(0, 0, bar.ljust(W - len(clock) - 1)[:max(0, W - len(clock) - 1)] + clock + " ", BLACK, LIGHTGREY)
+        st = self.status
+        # Right: what the computer is doing. Left: what can be clicked.
+        right = []
+        if st.update:
+            right.append("▲ Update")
+        if st.network:
+            right.append(st.network)
+        if st.battery:
+            right.append("Battery " + st.battery)
+        right.append(time.strftime("%a %d %b  %H:%M"))
+        items = [("menu", " ■ Kilobyte "), ("new", " New window "), ("tile", " Tile "), ("cascade", " Cascade ")]
+        hint = "  F12 menu   Alt+Tab next window"
+        while True:
+            rtext = "  │  ".join(right) + " "
+            left = sum(len(t) + 1 for _, t in items)
+            if left + len(rtext) + 2 <= W or (len(items) <= 2 and len(right) <= 1):
+                break
+            if len(items) > 2:
+                items.pop()                        # narrow screens: fewer buttons,
+            else:
+                right.pop(0)                       # then less status
+        self.s.put(0, 0, " " * W, BLACK, LIGHTGREY)
+        self.bar_items = []
+        x = 0
+        for action, text in items:
+            self.s.put(0, x, text, BLACK, LIGHTGREY)
+            self.bar_items.append((x, x + len(text), action))
+            x += len(text)
+            self.s.put(0, x, "│", DARKGREY, LIGHTGREY)
+            x += 1
         self.s.put(0, 1, "■", kbui.RED, LIGHTGREY)
+        if x + len(hint) + len(rtext) + 2 <= W:
+            self.s.put(0, x, hint, DARKGREY, LIGHTGREY)
+        rx = max(x, W - len(rtext))
+        self.s.put(0, rx, rtext, BLACK, LIGHTGREY)
+        if st.update and rtext.startswith("▲"):
+            self.s.put(0, rx, "▲ Update", kbui.RED, LIGHTGREY)
+        # The taskbar.
         x = 1
         self.task_buttons = []
         self.s.put(H - 1, 0, " " * W, BLACK, CYAN)
@@ -410,7 +546,7 @@ class Desk:
         s.put(y, x, tl + hz * (w - 2) + tr, frame_fg, frame_bg)
         title = f" {win.title} "[: max(0, w - 16)]
         s.put(y, x + (w - len(title)) // 2, title, YELLOW if active else LIGHTGREY, frame_bg)
-        s.put(y, x + 1, "[■]", frame_fg, frame_bg)
+        s.put(y, x + 1, "[X]", frame_fg, frame_bg)
         s.put(y, x + w - 7, "[▼][▲]" if not win.saved else "[▼][↕]", frame_fg, frame_bg)
         for yy in range(1, h - 1):
             s.put(y + yy, x, vt, frame_fg, frame_bg)
@@ -649,10 +785,16 @@ class Desk:
             return
         if my == 0:
             if down:
-                if 14 <= mx < 29:
-                    self.new_window()
-                elif mx < 40:
-                    self.menu = {"sel": 0}
+                for x0, x1, action in self.bar_items:
+                    if x0 <= mx < x1:
+                        if action == "menu":
+                            self.menu = {"sel": 0}
+                        elif action == "new":
+                            self.new_window()
+                        elif action == "tile":
+                            self.tile()
+                        elif action == "cascade":
+                            self.cascade()
             return
         if my == H - 1:
             if down:
@@ -836,9 +978,12 @@ class Desk:
         if self.console and not self.gpm and time.time() >= self.gpm_retry:
             self.gpm = Gpm.open()
             self.gpm_retry = time.time() + 2
+        self.status.poll()
         fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
         if self.gpm:
             fds.append(self.gpm.fd)
+        if self.sock:
+            fds.append(self.sock)
         try:
             ready, _, _ = select.select(fds, [], [], 1.0)
         except InterruptedError:
@@ -852,6 +997,8 @@ class Desk:
                     win.read()
                 except Exception:
                     self.log_error()
+        if self.sock and self.sock in ready:
+            self.screen_request()
         if self.gpm and self.gpm.fd in ready:
             events = self.gpm.events()
             if events is None:
@@ -874,6 +1021,67 @@ class Desk:
         # Let more program output arrive before drawing again.
         time.sleep(0.01)
 
+    def screen_request(self):
+        """A program in a window asks for the whole screen: kb-play, for a
+        video in one of the tiny pixel fonts or as the real picture, which a
+        window cannot show. Kilobyte Windows steps aside, the player runs on
+        the console itself, and the windows come back when it ends."""
+        try:
+            conn, _ = self.sock.accept()
+        except OSError:
+            return
+        rc = 1
+        try:
+            conn.settimeout(2)
+            data = b""
+            while not data.endswith(b"\n") and len(data) < 65536:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            req = json.loads(data.decode("utf-8"))
+            args = [str(a) for a in req.get("args", [])]
+            if req.get("run") == "kb-play" and args:    # nothing else is run this way
+                rc = self.full_screen(["/usr/lib/kilobyte/kb-play"] + args, req.get("cwd"))
+        except (OSError, ValueError):
+            self.log_error()
+        try:
+            conn.settimeout(2)
+            conn.sendall(b"%d\n" % rc)
+        except OSError:
+            pass
+        conn.close()
+
+    def full_screen(self, argv, cwd=None):
+        env = dict(os.environ)
+        env.pop("KILOBYTE_DESK", None)
+        env["KB_FULL_SCREEN"] = "1"
+        curses.def_prog_mode()
+        curses.endwin()
+        # Ctrl+C is for the player, not for Kilobyte Windows.
+        old_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        def child_signals():
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+        try:
+            rc = subprocess.call(argv, cwd=cwd if cwd and os.path.isdir(cwd) else None, env=env,
+                                 preexec_fn=child_signals)
+        except OSError:
+            rc = 1
+        finally:
+            signal.signal(signal.SIGINT, old_int)
+            curses.reset_prog_mode()
+            self.s.scr.clearok(True)               # paint everything again
+            self.s.scr.refresh()
+            self.wall_key = None
+            if self.gpm:                           # what the mouse did meanwhile is old news
+                if self.gpm.events() is None:
+                    self.drop_gpm()
+            self.drag = self.outline = None
+            self.buttons.clear()
+        return rc
+
     def drop_gpm(self):
         """The connection to gpm is gone: forget it and any drag in progress."""
         if self.gpm:
@@ -892,4 +1100,16 @@ if __name__ == "__main__":
     # stay off there, or ncurses opens gpm too and takes events from the same
     # connection.
     console = os.environ.get("TERM") == "linux"
-    kbui.run(lambda s: Desk(s, argv).run(), mouse=not console)
+
+    def main(s):
+        desk = Desk(s, argv)
+        try:
+            desk.run()
+        finally:
+            if desk.sock_path:
+                try:
+                    os.unlink(desk.sock_path)
+                except OSError:
+                    pass
+
+    kbui.run(main, mouse=not console)

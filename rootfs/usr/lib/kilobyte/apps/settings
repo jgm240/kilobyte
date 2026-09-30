@@ -180,6 +180,77 @@ appearance_panel() {
 
 # --- Display --------------------------------------------------------------
 
+# --- Wallpaper: the desktop behind the windows of Kilobyte Windows -------------
+# Kept in $KB_CONF/wallpaper (see py/deskbg.py), which Kilobyte Windows reads
+# again whenever it changes.
+
+wp_get() { sed -n "s/^$1=//p" "$KB_CONF/wallpaper" 2>/dev/null | tail -n 1; }
+
+wp_set() { # wp_set KEY VALUE [KEY VALUE ...]
+    local f="$KB_CONF/wallpaper" k
+    touch "$f"
+    while [ $# -ge 2 ]; do
+        k=$1
+        { grep -v "^$k=" "$f"; printf '%s=%s\n' "$k" "$2"; } > "$f.new" && mv "$f.new" "$f"
+        shift 2
+    done
+}
+
+wp_colour() { # wp_colour TITLE CURRENT [BACKGROUND] -> name
+    local items=() c names="black red green brown blue magenta cyan lightgrey"
+    [ -z "${3:-}" ] && names="$names darkgrey lightred lightgreen yellow lightblue lightmagenta lightcyan white"
+    for c in $names; do
+        items+=("$c" "" "$([ "$c" = "$2" ] && echo on || echo off)")
+    done
+    kb_dialog --title " $1 " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
+        "Space selects, Enter uses it." 0 40 0 "${items[@]}"
+}
+
+wallpaper_panel() {
+    local sel style pattern text picture fg bg what items p label
+    while true; do
+        style=$(wp_get style) pattern=$(wp_get pattern) text=$(wp_get text) picture=$(wp_get picture)
+        fg=$(wp_get fg) bg=$(wp_get bg)
+        case ${style:-pattern} in
+            text)    what="Characters: ${text:-Kilobyte }" ;;
+            picture) what="Picture: $(basename "${picture:-none}")" ;;
+            *)       what="Pattern: ${pattern:-classic}" ;;
+        esac
+        sel=$(kb_dialog --title " Wallpaper " --ok-label "Select" --cancel-label "Back" --menu \
+"The desktop behind the windows of Kilobyte Windows.
+Now: $what" 0 66 0 \
+            Pattern    "A pattern of blocks, lines or symbols" \
+            Characters "Your own characters, repeated" \
+            Picture    "A picture, drawn with coloured blocks" \
+            Colour     "Colour of the pattern: ${fg:-lightgrey}" \
+            Background "Colour behind it: ${bg:-blue}" \
+            Reset      "Back to the classic blue desktop") || return
+        case $sel in
+            Pattern)
+                items=()
+                while IFS='|' read -r p label; do
+                    items+=("$p" "$label" "$([ "$p" = "${pattern:-classic}" ] && [ "${style:-pattern}" = pattern ] && echo on || echo off)")
+                done < <(python3 -c 'import sys; sys.path.insert(0, "/usr/lib/kilobyte/py"); import deskbg
+for k, (label, _) in deskbg.PATTERNS.items(): print(k + "|" + label)')
+                p=$(kb_dialog --title " Pattern " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
+                    "Space selects, Enter uses it." 0 50 0 "${items[@]}") && wp_set style pattern pattern "$p" ;;
+            Characters)
+                text=$(kb_input "Wallpaper" "Characters to repeat over the desktop\n(a word, a name, symbols from the Character Map):" "${text:-Kilobyte }") &&
+                    [ -n "$text" ] && wp_set style text text "$text" ;;
+            Picture)
+                p=$(kb_dialog --title " Wallpaper - Picture " --fselect "${picture:-$HOME/Pictures/}" 14 64) || continue
+                if [ -f "$p" ]; then
+                    wp_set style picture picture "$p"
+                else
+                    kb_msg "Wallpaper" "\"$p\" is not a file."
+                fi ;;
+            Colour)     p=$(wp_colour "Pattern Colour" "${fg:-lightgrey}") && wp_set fg "$p" ;;
+            Background) p=$(wp_colour "Background Colour" "${bg:-blue}" bg) && wp_set bg "$p" ;;
+            Reset)      rm -f "$KB_CONF/wallpaper" ;;
+        esac
+    done
+}
+
 display_panel() {
     local sel face size font
     sel=$(kb_dialog --title " Display " --ok-label "Apply" --cancel-label "Back" \
@@ -485,7 +556,7 @@ tiles_panel() {
         city=$(cat "$KB_CONF/tiles-city" 2>/dev/null)
         unit=$([ -e "$KB_CONF/tiles-fahrenheit" ] && echo "°F" || echo "°C")
         sel=$(kb_dialog --title " Desktop Tiles " --ok-label "Select" --cancel-label "Back" --menu \
-            "Weather and news beside the Program Manager\n(on screens at least 132 characters wide)." 14 68 4 \
+            "Weather and news beside the Program Manager (on screens at\nleast 132 characters wide), in Kilobyte Windows on the desktop." 14 68 4 \
             Show  "Show the tiles: $on" \
             City  "Weather for: ${city:-where I am (guessed)}" \
             Units "Temperatures in $unit" \
@@ -667,6 +738,7 @@ while true; do
             Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
             Appearance "Colour theme"                  "EDIT, Norton, Windows 1.0, C64, Amiga, Mac, CRT..." \
+            Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
             Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
             Tiles      "Desktop tiles"                 "Weather and news beside the Program Manager" \
@@ -692,6 +764,7 @@ while true; do
         Bluetooth)  bluetooth_panel ;;
         Network)    network_panel ;;
         Appearance) appearance_panel ;;
+        Wallpaper)  wallpaper_panel ;;
         Display)    display_panel ;;
         Saver)      saver_panel ;;
         Tiles)      tiles_panel ;;

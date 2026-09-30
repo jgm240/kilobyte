@@ -259,6 +259,7 @@ saver_minutes() {
 tiles_args() {
     local cols rows weather news wl nl x
     [ -e "$KB_CONF/tiles-off" ] && return
+    [ -n "${KILOBYTE_DESK:-}" ] && return      # Kilobyte Windows shows them on the desktop
     cols=$(tput cols) rows=$(tput lines)
     [ "$cols" -ge 132 ] && [ "$rows" -ge 30 ] || return
     "$KB_LIB/kb-tiles" refresh </dev/null >/dev/null 2>&1 &
