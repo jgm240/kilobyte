@@ -18,8 +18,8 @@
 # debs/ (the patched packages), ccache/ (their compiler cache).
 # FRESH=1 rebuilds the base; FAST=1 compresses quickly (bigger test images).
 #
-# ARCH picks the image: amd64 and i386 are PC ISOs, arm64 and armhf are
-# Raspberry Pi images. LITE=1 leaves the big Wi-Fi firmware out.
+# ARCH picks the image: amd64 and i386 are PC ISOs; arm64, armhf and armel
+# are Raspberry Pi images (Pi 3/4, Pi 2/3, Pi 1/Zero). LITE=1 leaves the big Wi-Fi firmware out.
 set -euo pipefail
 
 ARCH=${ARCH:-amd64}
@@ -34,6 +34,10 @@ case $ARCH in
     i386)  SUITE=trixie   KERNEL=linux-image-686   KIND=pc EFI=grub-efi-ia32-bin KERNEL_SUITE=bookworm ;;
     arm64) SUITE=trixie   KERNEL=linux-image-arm64 KIND=pi EFI= ;;
     armhf) SUITE=trixie   KERNEL=linux-image-armmp KIND=pi EFI= ;;
+    # The first Raspberry Pis (1, Zero) have an ARMv6 processor, older than
+    # what Debian's armhf needs: their system is Debian's armel with its
+    # kernel for exactly these boards.
+    armel) SUITE=trixie   KERNEL=linux-image-rpi   KIND=pi EFI= ;;
     *) echo "unknown ARCH $ARCH" >&2; exit 2 ;;
 esac
 EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-}

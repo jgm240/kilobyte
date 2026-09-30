@@ -459,6 +459,14 @@ esac
 command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; exit 1; }
 kb_setup_home
 
+# A Raspberry Pi 1 or Zero (one slow ARMv6 core) starts without windows: every
+# window is a terminal emulator of its own, which is too much for it. Once;
+# Settings > Login and startup switches them on all the same.
+if [ ! -e "$KB_CONF/windows-asked" ] && [ "$(uname -m)" = armv6l ]; then
+    : > "$KB_CONF/windows-asked"
+    : > "$KB_CONF/windows-off"
+fi
+
 # Windows (movable windows, several programs at once) unless switched off in
 # Settings > Login and startup. If the window system fails, carry on without.
 if [ -z "${KILOBYTE_DESK:-}" ] && [ ! -e "$KB_CONF/windows-off" ] && [ -t 0 ] &&

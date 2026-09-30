@@ -5,7 +5,8 @@
 #   ./build.sh --arch i386      32-bit PC ISO (Debian 13, Debian 12's kernel; old computers)
 #   ./build.sh --arch arm64     Raspberry Pi 3 / 4 / 400 SD card image
 #   ./build.sh --arch armhf     Raspberry Pi 2 / 3 SD card image (32-bit)
-#   ./build.sh --arch all       all four
+#   ./build.sh --arch armel     Raspberry Pi 1 / Zero / Zero W SD card image
+#   ./build.sh --arch all       all five
 #   ./build.sh --lite ...       leave the big Wi-Fi firmware out
 #   ./build.sh --fresh ...      build the Debian base system anew (it is
 #                               otherwise reused for two weeks, unless the
@@ -28,11 +29,11 @@ while [ $# -gt 0 ]; do
         --fast) FAST=1 ;;
         --arch) shift; ARCHES=$1 ;;
         --arch=*) ARCHES=${1#--arch=} ;;
-        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|all] [--lite] [--fresh] [--fast]" >&2; exit 2 ;;
+        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--fresh] [--fast]" >&2; exit 2 ;;
     esac
     shift
 done
-[ "$ARCHES" = all ] && ARCHES="amd64 i386 arm64 armhf"
+[ "$ARCHES" = all ] && ARCHES="amd64 i386 arm64 armhf armel"
 mkdir -p out
 
 # The image remembers which commit it was built from, for Kilobyte Update.
@@ -50,6 +51,7 @@ for ARCH in $ARCHES; do
         i386)  PLATFORM=linux/386    SUITE=trixie ;;
         arm64) PLATFORM=linux/arm64  SUITE=trixie ;;
         armhf) PLATFORM=linux/arm/v7 SUITE=trixie ;;
+        armel) PLATFORM=linux/arm/v5 SUITE=trixie ;;
         *) echo "unknown architecture: $ARCH" >&2; exit 2 ;;
     esac
     echo "######## Kilobyte for $ARCH"

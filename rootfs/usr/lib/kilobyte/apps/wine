@@ -13,6 +13,10 @@ mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}"
 
 have_wine() {
     command -v wine >/dev/null && return 0
+    if [ "$(dpkg --print-architecture)" = armel ]; then
+        kb_msg "$T" "Windows programs need a faster Raspberry Pi: the programs that translate PC code (box86, box64) do not run on the processor of a Pi 1 or Zero." 9 64
+        return 1
+    fi
     kb_msg "$T" "\Z1\ZbWine is not installed.\Zn\n\nInstall it in Settings > Software (package \"wine\")." 9 60
     return 1
 }

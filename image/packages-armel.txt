@@ -1,0 +1,2 @@
+# Raspberry Pi 1, Zero, Zero W (ARMv6): no Wine here. box86, which would run
+# it, needs an ARMv7 processor.
