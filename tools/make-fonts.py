@@ -124,6 +124,10 @@ def blocks(w, h):
 def build(w, h, coverage):
     glyphs = []  # (bitmap, [code points])
     glyphs.append((dither(w, h, 0.5), [0xFFFD]))  # anything unknown: grey
+    # ASCII sits at its own numbers: the console clears the screen with glyph
+    # 32 whatever the Unicode table says, and that glyph must be empty.
+    while len(glyphs) < 0x20:
+        glyphs.append(([[0] * w for _ in range(h)], []))
     for c in range(0x20, 0x7F):
         ch = chr(c)
         if ch in RAMP:
