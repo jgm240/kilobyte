@@ -1,0 +1,19 @@
+shell_patterns=0
+
+# Kilobyte's entries in the file manager's F2 menu; mc's own follow.
+
+@       Open with ...
+        /usr/lib/kilobyte/kb-open --choose %f
+
+t       Move to the trash
+        /usr/lib/kilobyte/kb-trash put %s
+
+k       Put on the desktop (a copy)
+        cp -r %s "$HOME/Desktop/"
+
+l       Put on the desktop (a link to it)
+        ln -s %d/%f "$HOME/Desktop/"
+
+p       Print
+        /usr/lib/kilobyte/apps/print %f
+

@@ -1,0 +1,5 @@
+#!/bin/sh
+# kb-notify TITLE [TEXT]: a note in the corner of the screen (Kilobyte
+# Windows). Without windows there is nowhere to show it: nothing happens.
+[ -S "${KB_DESK_SOCK:-}" ] || exit 0
+exec python3 /usr/lib/kilobyte/py/deskrun.py notify "$@" 2>/dev/null

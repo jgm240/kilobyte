@@ -1,0 +1,65 @@
+#!/bin/bash
+# Remote Kilobyte: use another Kilobyte computer (or any computer with SSH)
+# inside a window. On the other Kilobyte, "Remote login" must be switched on
+# in Settings; its Program Manager and its windows then appear here.
+. /usr/lib/kilobyte/lib.sh
+
+T="Remote Kilobyte"
+LIST="$KB_CONF/remote-hosts"       # user@host, one per line
+mkdir -p "$KB_CONF"
+touch "$LIST"
+
+connect() { # connect USER@HOST WHAT
+    local target=$1 cmd
+    case $2 in
+        kilobyte) cmd='if command -v kilobyte >/dev/null; then exec kilobyte; else echo "There is no Kilobyte on this computer: here is its command line."; exec "${SHELL:-sh}" -l; fi' ;;
+        *)        cmd="" ;;
+    esac
+    kb_title "$target"
+    clear
+    printf '\n  Connecting to %s ...\n  (The first time SSH asks whether the computer is the right one: answer yes.)\n\n' "$target"
+    if [ -n "$cmd" ]; then
+        ssh -t -o ServerAliveInterval=30 "$target" "$cmd"
+    else
+        ssh -o ServerAliveInterval=30 "$target"
+    fi
+    rc=$?
+    if [ $rc -eq 255 ]; then
+        echo
+        read -r -n 1 -s -p "  The connection failed or was lost. Press any key." || true
+    fi
+    kb_load_theme
+    kb_title "$T"
+}
+
+sel=""
+while true; do
+    items=(New "Connect to a computer")
+    while read -r h; do
+        [ -n "$h" ] && items+=("$h" "connect again")
+    done < "$LIST"
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Connect" --cancel-label "Close" \
+        --extra-button --extra-label "Forget" \
+        --menu "Use another computer in this window.\nOn a Kilobyte computer switch on Settings > Remote login first." 0 70 0 "${items[@]}")
+    rc=$?
+    case $rc in
+        "$DIALOG_EXTRA")
+            [ "$sel" != New ] && { grep -vxF "$sel" "$LIST" > "$LIST.new"; mv "$LIST.new" "$LIST"; }
+            continue ;;
+        "$DIALOG_OK") ;;
+        *) exit 0 ;;
+    esac
+    if [ "$sel" = New ]; then
+        host=$(kb_input "$T" "Name or address of the computer\n(for example 192.168.1.20 or pi.local):" "") || continue
+        host=$(printf '%s' "$host" | tr -d '[:space:]')
+        [ -n "$host" ] || continue
+        user=$(kb_input "$T" "User name on that computer:" "$USER") || continue
+        [ -n "$user" ] || continue
+        sel="$user@$host"
+        grep -qxF "$sel" "$LIST" || echo "$sel" >> "$LIST"
+    fi
+    what=$(kb_dialog --title " $sel " --ok-label "Connect" --cancel-label "Back" --menu "What should open?" 0 60 0 \
+        kilobyte "Its Kilobyte (Program Manager and windows)" \
+        shell    "Its command line") || continue
+    connect "$sel" "$what"
+done

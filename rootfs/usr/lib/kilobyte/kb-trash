@@ -1,0 +1,59 @@
+#!/bin/bash
+# kb-trash: the trash can (the usual ~/.local/share/Trash, so other systems
+# that see this home folder understand it too).
+#
+#   kb-trash put FILE...     throw files or folders away
+#   kb-trash list            NAME|where it was|when, one per line
+#   kb-trash restore NAME    put one back where it was
+#   kb-trash delete NAME     delete one for good
+#   kb-trash empty           delete everything in the trash for good
+#   kb-trash count           how many things are in it
+T="${XDG_DATA_HOME:-$HOME/.local/share}/Trash"
+mkdir -p "$T/files" "$T/info"
+
+case ${1:-} in
+    put)
+        shift
+        rc=0
+        for f in "$@"; do
+            [ -e "$f" ] || [ -L "$f" ] || { echo "kb-trash: $f: no such file" >&2; rc=1; continue; }
+            f=$(cd "$(dirname "$f")" && pwd -P)/$(basename "$f")
+            case $f in "$T"/*) continue ;; esac
+            name=$(basename "$f") n=1
+            while [ -e "$T/files/$name" ] || [ -e "$T/info/$name.trashinfo" ]; do
+                n=$((n + 1))
+                name="$(basename "$f").$n"
+            done
+            printf '[Trash Info]\nPath=%s\nDeletionDate=%s\n' "$f" "$(date +%Y-%m-%dT%H:%M:%S)" > "$T/info/$name.trashinfo"
+            mv -- "$f" "$T/files/$name" || { rm -f "$T/info/$name.trashinfo"; rc=1; }
+        done
+        exit $rc ;;
+    list)
+        for i in "$T"/info/*.trashinfo; do
+            [ -e "$i" ] || continue
+            name=$(basename "$i" .trashinfo)
+            printf '%s|%s|%s\n' "$name" "$(sed -n 's/^Path=//p' "$i")" "$(sed -n 's/^DeletionDate=//p' "$i" | tr T ' ')"
+        done ;;
+    restore)
+        name=${2:?}
+        [ -e "$T/files/$name" ] || { echo "kb-trash: $name is not in the trash" >&2; exit 1; }
+        dest=$(sed -n 's/^Path=//p' "$T/info/$name.trashinfo" 2>/dev/null)
+        [ -n "$dest" ] || dest="$HOME/$name"
+        mkdir -p "$(dirname "$dest")"
+        n=1 base=$dest
+        while [ -e "$dest" ]; do n=$((n + 1)); dest="$base.$n"; done
+        mv -- "$T/files/$name" "$dest" && rm -f "$T/info/$name.trashinfo" && echo "$dest" ;;
+    delete)
+        name=${2:?}
+        case $name in */* | . | ..) exit 1 ;; esac
+        rm -rf -- "$T/files/$name" "$T/info/$name.trashinfo" ;;
+    empty)
+        find "$T/files" "$T/info" -mindepth 1 -delete 2>/dev/null
+        rm -rf "$T/files"/* "$T/files"/.[!.]* "$T/info"/* 2>/dev/null
+        true ;;
+    count)
+        find "$T/files" -mindepth 1 -maxdepth 1 | wc -l ;;
+    *)
+        echo "usage: kb-trash put FILE... | list | restore NAME | delete NAME | empty | count" >&2
+        exit 2 ;;
+esac

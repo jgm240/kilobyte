@@ -3,11 +3,12 @@
 # Everything on screen is drawn by dialog(1): coloured character cells, line
 # drawing and block glyphs, the same way EDIT.COM or raspi-config look.
 
-KB_VERSION="1.3"
+KB_VERSION="1.4"
 KB_SHARE=/usr/share/kilobyte
 KB_LIB=/usr/lib/kilobyte
 KB_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/kilobyte"
 KB_DOCS="$HOME/Documents"
+KB_DESKTOP="$HOME/Desktop"      # its files are the icons on the desktop of Kilobyte Windows
 
 export LANG="${LANG:-C.UTF-8}"
 export ESCDELAY=25   # make Esc react at once instead of after a second
@@ -86,14 +87,37 @@ kb_network() {
     fi
 }
 
-# For the menu bar of Kilobyte Windows: three lines (network, battery,
-# "update" when a newer Kilobyte is known).
+# The mixer control that sets the loudness, if there is a sound card.
+kb_mixer() {
+    local c
+    for c in Master PCM Speaker Headphone; do
+        amixer -M sget "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }
+    done
+    return 1
+}
+
+# kb_volume [get | set PERCENT | up | down | mute]: "get" prints 0-100 or "mute".
+kb_volume() {
+    local c
+    c=$(kb_mixer) || return 1
+    case ${1:-get} in
+        get)  amixer -M sget "$c" 2>/dev/null | awk -F'[][]' '/%/ { v = $2; sub("%", "", v); print ($0 ~ /\[off\]/) ? "mute" : v; exit }' ;;
+        set)  amixer -q -M sset "$c" "${2:-50}%" unmute 2>/dev/null || amixer -q -M sset "$c" "${2:-50}%" ;;
+        up)   amixer -q -M sset "$c" 5%+ unmute 2>/dev/null || amixer -q -M sset "$c" 5%+ ;;
+        down) amixer -q -M sset "$c" 5%- ;;
+        mute) amixer -q -M sset "$c" toggle ;;
+    esac
+}
+
+# For the menu bar of Kilobyte Windows, five lines: network, battery,
+# "update" when a newer Kilobyte is known, volume, USB sticks (a;b;c).
 kb_status() {
-    kb_network
-    kb_battery || true
-    echo
-    kb_update_available && echo update
-    return 0
+    local net bat vol usb
+    net=$(kb_network)
+    bat=$(kb_battery)
+    vol=$(kb_volume get 2>/dev/null)
+    usb=$(kb_usb_list 2>/dev/null | awk -F'|' '{ l = substr($2, 1, 12); gsub(/ +$/, "", l); print l }' | paste -sd';' -)
+    printf '%s\n%s\n%s\n%s\n%s\n' "$net" "$bat" "$(kb_update_available && echo update)" "$vol" "$usb"
 }
 
 kb_backtitle() {
@@ -310,6 +334,26 @@ kb_pick_file() {
         *) f="$KB_DOCS/$choice" ;;
     esac
     printf '%s\n' "$f"
+}
+
+# Things Kilobyte expects in a home folder: the Desktop folder, and once per
+# version the file manager's Kilobyte settings (file kinds, F2 menu).
+kb_setup_home() {
+    local mc="$HOME/.config/mc" mark="$HOME/.config/mc/.kilobyte-$KB_VERSION"
+    mkdir -p "$KB_DESKTOP" "$KB_CONF" 2>/dev/null
+    [ -e "$mark" ] && return 0
+    mkdir -p "$mc" || return 0
+    if [ -r "$KB_SHARE/mc/ext.ini" ]; then
+        { cat "$KB_SHARE/mc/ext.ini"
+          [ -r /etc/mc/mc.ext.ini ] && sed '/^\[mc\.ext\.ini\]/,/^$/d' /etc/mc/mc.ext.ini
+        } > "$mc/mc.ext.ini.new" && mv "$mc/mc.ext.ini.new" "$mc/mc.ext.ini"
+    fi
+    if [ -r "$KB_SHARE/mc/menu" ]; then
+        { cat "$KB_SHARE/mc/menu"
+          [ -r /etc/mc/mc.menu ] && grep -v '^shell_patterns=' /etc/mc/mc.menu
+        } > "$mc/menu.new" && mv "$mc/menu.new" "$mc/menu"
+    fi
+    : > "$mark"
 }
 
 kb_load_theme

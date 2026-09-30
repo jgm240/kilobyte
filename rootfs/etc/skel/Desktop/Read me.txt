@@ -1,0 +1,12 @@
+This is your desktop.
+
+Every file and folder in the folder "Desktop" of your home folder shows up
+as an icon on the desktop of Kilobyte Windows. Double-click an icon to open
+it; click it with the right mouse button for more (open with another
+program, move it to the trash).
+
+To put something here: in the file manager press F2 and choose "Put on the
+desktop", or save or copy it into ~/Desktop.
+
+The icons of programs are chosen in Settings > Desktop icons. You may
+delete this file.

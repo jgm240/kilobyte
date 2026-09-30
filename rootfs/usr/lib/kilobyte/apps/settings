@@ -517,7 +517,22 @@ about_panel() {
 # --- Kilobyte Update ------------------------------------------------------
 
 update_panel() {
-    local old new changes n
+    local old new changes n prev sel
+    prev=$(cat /var/lib/kilobyte/previous/share/commit 2>/dev/null)
+    if [ -n "$prev" ]; then
+        sel=$(kb_dialog --title " Kilobyte Update " --ok-label "Select" --cancel-label "Back" --menu \
+            "Installed: $(cut -c1-7 "$KB_SHARE/commit" 2>/dev/null)" 0 66 0 \
+            Check "Look for a newer Kilobyte" \
+            Undo  "Undo the last update (back to ${prev:0:7})") || return
+        if [ "$sel" = Undo ]; then
+            kb_yesno "Kilobyte Update" "Go back to the Kilobyte from before the last update (${prev:0:7})?\n\nYour files and settings stay. Programs the update installed stay too." 10 66 || return
+            kb_sudo || return
+            if kb_run_pause sudo "$KB_LIB/kb-root" kilobyte undo; then
+                exit 42
+            fi
+            return
+        fi
+    fi
     kb_info "Asking GitHub for the newest Kilobyte..."
     if ! read -r old new < <("$KB_LIB/kb-update" check 2>/dev/null); then
         kb_msg "Kilobyte Update" "\Z1\ZbGitHub cannot be reached.\Zn\n\nCheck the Internet connection in Settings > Wi-Fi." 9 60
@@ -648,6 +663,12 @@ saver_panel() {
     min=$(kb_dialog --title " Screen Saver " --default-item "$min" --ok-label "Save" --cancel-label "Back" \
         --menu "Start after how many minutes?" 14 40 6 1 "minute" 2 "minutes" 5 "minutes" 10 "minutes" 15 "minutes" 30 "minutes") || return
     echo "$min" > "$KB_CONF/saver-minutes"
+    if kb_dialog --title " Screen Saver " $([ -e "$KB_CONF/saver-lock" ] || echo --defaultno) --yesno \
+        "Ask for your password when the screen saver ends?\n\n(Kilobyte Windows; Accessories > Lock the screen locks at once.)" 9 64; then
+        : > "$KB_CONF/saver-lock"
+    else
+        rm -f "$KB_CONF/saver-lock"
+    fi
 }
 
 # --- Desktop tiles ---------------------------------------------------------
@@ -827,6 +848,155 @@ bluetooth_panel() {
 
 # --- main -----------------------------------------------------------------
 
+# --- Users: several people, each with their own files; switching ----------------
+
+users_list() { awk -F: '$3 >= 1000 && $3 < 60000 { print $1 }' /etc/passwd; }
+
+# "N USER" for every console somebody is logged in on.
+console_sessions() {
+    loginctl list-sessions --no-legend 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) if ($i ~ /^tty[1-6]$/) { print substr($i, 4), $3; break } }' | sort -u
+}
+
+switch_user_panel() {
+    local here items=() n u free="" sel
+    here=$(cat /sys/class/tty/tty0/active 2>/dev/null)
+    here=${here#tty}
+    while read -r n u; do
+        [ "$n" = "$here" ] && continue
+        items+=("$n" "$u (console $n, Ctrl+Alt+F$n)")
+    done < <(console_sessions)
+    for n in 2 3 4 5 6 1; do
+        console_sessions | grep -q "^$n " || { [ "$n" != "$here" ] && { free=$n; break; }; }
+    done
+    [ -n "$free" ] && items+=("$free" "Somebody else: a login prompt (console $free)")
+    [ ${#items[@]} -gt 0 ] || { kb_msg "Switch User" "All six consoles are in use."; return; }
+    sel=$(kb_dialog --title " Switch User " --ok-label "Switch" --cancel-label "Back" --menu \
+"Your programs keep running. You come back to this session
+with Ctrl+Alt+F${here:-1}, or with Switch user from the other one." 0 66 0 "${items[@]}") || return
+    if kb_dialog --title " Switch User " --yesno "Lock your session while you are away?\n\n(It asks for your password when you come back.)" 9 60; then
+        ( sleep 1; "$KB_LIB/apps/lock" ) &
+    fi
+    sudo -n "$KB_LIB/kb-root" vt switch "$sel" ||
+        kb_msg "Switch User" "Switching did not work. Try Ctrl+Alt+F$sel."
+    wait 2>/dev/null
+}
+
+user_add() {
+    local name pass pass2 groups admin
+    name=$(kb_input "Add a User" "User name (lower case letters and digits, e.g. \"ada\"):" "") || return
+    [[ $name =~ ^[a-z][a-z0-9_-]{0,30}$ ]] || { kb_msg "Add a User" "A user name starts with a letter and has only lower case letters, digits, - and _."; return; }
+    id "$name" >/dev/null 2>&1 && { kb_msg "Add a User" "There is a user \"$name\" already."; return; }
+    pass=$(kb_password "Add a User" "Password for $name:") || return
+    pass2=$(kb_password "Add a User" "The same password again:") || return
+    [ -n "$pass" ] && [ "$pass" = "$pass2" ] || { kb_msg "Add a User" "The two passwords are not the same (or empty)."; return; }
+    . "$KB_LIB/setup-questions.sh"
+    groups=$(user_groups /etc/group)
+    if kb_dialog --title " Add a User " --defaultno --yesno "May $name change settings of the whole computer\n(install programs, add users, update Kilobyte)?" 8 62; then
+        admin=yes
+    else
+        groups=$(printf '%s' "$groups" | sed 's/^sudo,//; s/,sudo//')
+    fi
+    kb_sudo || return
+    if sudo useradd -m -s /bin/bash -G "$groups" "$name" && printf '%s:%s\n' "$name" "$pass" | sudo chpasswd; then
+        kb_msg "Add a User" "\Zb$name\Zn can log in now: Switch user, or at the next start." 8 60
+    else
+        kb_msg "Add a User" "\Z1The user could not be added.\Zn"
+    fi
+}
+
+user_remove() {
+    local items=() u sel keep
+    while read -r u; do
+        [ "$u" = "$USER" ] || items+=("$u" "$(getent passwd "$u" | cut -d: -f6)")
+    done < <(users_list)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "Remove a User" "There is no other user."; return; }
+    sel=$(kb_dialog --title " Remove a User " --ok-label "Remove" --cancel-label "Back" --menu "Who?" 0 60 0 "${items[@]}") || return
+    if loginctl list-sessions --no-legend 2>/dev/null | awk '{ print $3 }' | grep -qx "$sel"; then
+        kb_msg "Remove a User" "$sel is logged in. Log that session out first."
+        return
+    fi
+    keep=""
+    kb_dialog --title " Remove a User " --defaultno --yes-label "Delete files" --no-label "Keep files" --yesno \
+        "Delete the files of $sel too ($(getent passwd "$sel" | cut -d: -f6))?\n\nDeleted files cannot be brought back." 9 64 || keep=1
+    kb_dialog --title " Remove a User " --defaultno --yesno "Remove the user \Zb$sel\Zn now?" 7 50 || return
+    kb_sudo || return
+    if sudo userdel $([ -z "$keep" ] && echo -r) "$sel" 2>/dev/null; then
+        kb_msg "Remove a User" "$sel was removed."
+    else
+        kb_msg "Remove a User" "\Z1$sel could not be removed.\Zn"
+    fi
+}
+
+users_panel() {
+    local sel
+    while true; do
+        sel=$(kb_dialog --title " Users " --ok-label "Select" --cancel-label "Back" --menu \
+            "Everybody has their own files, settings and desktop.\nUsers: $(users_list | xargs)" 0 66 0 \
+            Switch   "Switch user (your programs keep running)" \
+            Add      "Add a user" \
+            Remove   "Remove a user" \
+            Password "Change your password") || return
+        case $sel in
+            Switch)   switch_user_panel ;;
+            Add)      user_add ;;
+            Remove)   user_remove ;;
+            Password) kb_run_pause passwd ;;
+        esac
+    done
+}
+
+# --- Remote login: let other computers use this one (SSH) ---------------------------
+
+remote_panel() {
+    local on addrs
+    on=$(systemctl is-active ssh 2>/dev/null)
+    addrs=$(ip -4 -o addr show scope global 2>/dev/null | awk '{ sub("/.*", "", $4); print $4 }' | xargs)
+    if [ "$on" = active ]; then
+        kb_dialog --title " Remote Login " --yes-label "Switch off" --no-label "Back" --defaultno --yesno \
+"Remote login is \ZbON\Zn.
+
+On another Kilobyte: Internet > Remote Kilobyte
+  computer:  ${addrs:-(no network address)}
+  user:      $USER   (and its password)
+
+From any other computer:  ssh $USER@${addrs%% *}" 14 66 || return
+        kb_sudo && sudo systemctl disable --now ssh.service >/dev/null 2>&1
+    else
+        kb_dialog --title " Remote Login " --yes-label "Switch on" --no-label "Back" --defaultno --yesno \
+"Remote login is OFF.
+
+Switched on, everyone who knows a user name and its password can
+use this computer over the network (SSH), for example with
+Internet > Remote Kilobyte on another Kilobyte.
+$(kb_is_live && printf '\n\\Z1On the live system the password of \"user\" is \"live\" and everybody\nknows it: change it first (Settings > Password).\\Zn')" 15 70 || return
+        kb_sudo || return
+        sudo ssh-keygen -A >/dev/null 2>&1
+        if sudo systemctl enable --now ssh.service >/dev/null 2>&1; then
+            kb_msg "Remote Login" "\ZbRemote login is on.\Zn\n\nThis computer: ${addrs:-(no network address yet)}\nUser: $USER" 10 60
+        else
+            kb_msg "Remote Login" "\Z1It could not be switched on.\Zn"
+        fi
+    fi
+}
+
+# --- Desktop: which programs have an icon (Kilobyte Windows) --------------------------
+
+desktop_panel() {
+    local cur items=() id cat name rest seen=" " sel
+    cur=" $(cat "$KB_CONF/desktop-apps" 2>/dev/null | xargs) "
+    [ -e "$KB_CONF/desktop-apps" ] || cur=" Files Editor Web Terminal Settings Trash "
+    while IFS='|' read -r id cat name rest; do
+        case $seen in *" $id "*) continue ;; esac
+        seen+="$id "
+        items+=("$id" "$name" "$(case $cur in *" $id "*) echo on ;; *) echo off ;; esac)")
+    done < <(/usr/bin/kilobyte --list-apps)
+    sel=$(kb_dialog --title " Desktop Icons " --ok-label "Save" --cancel-label "Back" --no-tags --separate-output --checklist \
+"Programs with an icon on the desktop of Kilobyte Windows (Space ticks).
+Files and folders you put into ~/Desktop appear there too." 22 70 13 "${items[@]}") || return
+    printf '%s\n' "$sel" > "$KB_CONF/desktop-apps"
+}
+
 page=${1:-}
 sel=Update
 while true; do
@@ -842,6 +1012,7 @@ while true; do
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
             Appearance "Colour theme"                  "EDIT, Norton, Windows 1.0, C64, Amiga, Mac, CRT..." \
             Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
+            Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
             Swap       "Swap and memory"               "Compressed memory (zram), a swap file, how readily to swap" \
             Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
@@ -854,6 +1025,8 @@ while true; do
             Date       "Date, time and time zone"      "Set the clock and the time zone" \
             Software   "Add or remove programs"        "Search, install and update Debian packages" \
             Login      "Login and startup"             "Windows, automatic login, start-up screen" \
+            Users      "Users"                         "Switch user, add and remove users" \
+            Remote     "Remote login"                  "Let other computers use this one (SSH)" \
             Password   "Change your password"          "Change the password of $USER" \
             Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
             About      "About this computer"           "Processor, memory, disk and version") || exit 0
@@ -881,6 +1054,10 @@ while true; do
         Date)       datetime_panel ;;
         Software)   software_panel ;;
         Login)      login_panel ;;
+        Users)      users_panel ;;
+        SwitchUser) switch_user_panel ;;
+        Remote)     remote_panel ;;
+        Desktop)    desktop_panel ;;
         Password)   kb_run_pause passwd ;;
         Tasks)      kb_run htop ;;
         About)      about_panel ;;

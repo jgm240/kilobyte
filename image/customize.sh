@@ -56,8 +56,12 @@ echo "xserver-xorg-legacy xserver-xorg-legacy/xwrapper/allowed_users select Anyb
 chmod 644 /etc/X11/Xwrapper.config 2>/dev/null || true
 
 # --- services
-systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post kilobyte-bootlogo kilobyte-swap
+systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post kilobyte-bootlogo kilobyte-swap kilobyte-undo
 systemctl disable wpa_supplicant.service hostapd.service 2>/dev/null || true   # started on demand
+# Remote login is off until Settings > Remote login switches it on; every
+# computer makes its own host keys then (none are in the image).
+systemctl disable ssh.service ssh.socket 2>/dev/null || true
+rm -f /etc/ssh/ssh_host_*
 systemctl mask systemd-networkd-wait-online.service
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 passwd -l root

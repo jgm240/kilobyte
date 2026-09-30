@@ -1,0 +1,86 @@
+#!/bin/bash
+# kb-open [--here] [--choose] FILE: open a file or folder with the program
+# for its kind (used by the desktop's icons, the file manager's F2 menu and
+# "Open with").
+#
+#   --choose   ask which program to use
+#   --here     run in this terminal; otherwise, in Kilobyte Windows, the
+#              program gets a window of its own
+. /usr/lib/kilobyte/lib.sh
+
+here= choose=
+while :; do
+    case ${1:-} in
+        --here)   here=1 ;;
+        --choose) choose=1 ;;
+        *) break ;;
+    esac
+    shift
+done
+f=${1:?usage: kb-open [--here] [--choose] FILE}
+case $f in /*) ;; *) f="$PWD/$f" ;; esac
+[ -e "$f" ] || { kb_msg "Open" "\"$f\" is not there any more." 7 60; exit 1; }
+
+if [ -z "$here" ] && [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
+    python3 "$KB_LIB/py/deskrun.py" window "$(basename "$f")" L "$0" --here ${choose:+--choose} "$f" && exit 0
+fi
+
+# The program for a kind of file: an ID of the Program Manager's table
+# (kilobyte --list-apps), or View (the picture viewer) and PDF.
+kind_of() {
+    [ -d "$1" ] && { echo Files; return; }
+    case ${1,,} in
+        *.docx | *.odt | *.txt | *.md | *.log | *.conf | *.ini | *.sh | *.py | *.c | *.h | *.css | *.js | *.json | *.xml | *.tex | *.rtf)
+            echo Editor ;;
+        *.xlsx | *.ods | *.csv | *.tsv | *.sc) echo Spreadsheet ;;
+        *.png | *.jpg | *.jpeg | *.gif | *.bmp | *.webp | *.tif | *.tiff) echo View ;;
+        *.mp3 | *.ogg | *.oga | *.flac | *.wav | *.m4a | *.opus | *.aac | *.wma | *.m3u) echo Music ;;
+        *.mp4 | *.mkv | *.avi | *.mov | *.webm | *.mpg | *.mpeg | *.flv | *.wmv | *.m4v) echo Video ;;
+        *.html | *.htm) echo Web ;;
+        *.pdf) echo PDF ;;
+        *.exe | *.msi | *.bat | *.com) echo Wine ;;
+        *.ica) echo Citrix ;;
+        *)
+            # Anything that is text goes to the editor.
+            if file -b --mime-type "$1" 2>/dev/null | grep -q '^text/'; then echo Editor; else echo; fi ;;
+    esac
+}
+
+run() { # run KIND
+    case $1 in
+        View) kb_run "$KB_LIB/kb-view" "$f" ;;
+        PDF)
+            # Text-mode PDF: its text, laid out as on the page.
+            tmp=$(mktemp)
+            if pdftotext -layout "$f" "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+                kb_textfile "$(basename "$f")" "$tmp"
+            else
+                kb_msg "Open" "This PDF has no text that can be shown (it may be scanned pages).\n\nPrint it, or copy it to a computer with a PDF viewer." 10 64
+            fi
+            rm -f "$tmp" ;;
+        Web)   exec /usr/bin/kilobyte --app Web "file://$f" ;;
+        Files) if [ -d "$f" ]; then exec /usr/bin/kilobyte --app Files "$f"; else exec /usr/bin/kilobyte --app Files "$(dirname "$f")"; fi ;;
+        "")    choose=1 ;;
+        *)     exec /usr/bin/kilobyte --app "$1" "$f" ;;
+    esac
+}
+
+kind=$(kind_of "$f")
+if [ -z "$choose" ] && [ -n "$kind" ]; then
+    run "$kind"
+    exit 0
+fi
+sel=$(kb_dialog --title " Open with " --default-item "${kind:-Editor}" --ok-label "Open" --cancel-label "Cancel" \
+    --menu "Open $(basename "$f") with:" 0 64 0 \
+    Editor      "Text editor" \
+    Spreadsheet "Spreadsheet" \
+    Web         "Web browser" \
+    View        "Picture viewer (blocks, in this window)" \
+    Paint       "Paint" \
+    Music       "Music player" \
+    Video       "Video player" \
+    PDF         "PDF as text" \
+    Print       "Print it" \
+    Wine        "Windows program (Wine)" \
+    Files       "File manager, in its folder") || exit 0
+run "$sel"

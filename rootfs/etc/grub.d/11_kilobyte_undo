@@ -1,0 +1,23 @@
+#!/bin/sh
+# Kilobyte: a boot menu entry that undoes the last Kilobyte update, for the
+# day an update leaves Kilobyte unusable. It starts the newest kernel with
+# "kilobyte.undo", which kilobyte-undo.service acts on. There is no entry
+# while no earlier Kilobyte is kept (/var/lib/kilobyte/previous).
+[ -d /var/lib/kilobyte/previous/lib ] || exit 0
+[ -r /usr/share/grub/grub-mkconfig_lib ] || exit 0
+. /usr/share/grub/grub-mkconfig_lib
+
+kernel=$(ls -1 /boot/vmlinuz-* 2>/dev/null | sort -V | tail -n 1)
+[ -n "$kernel" ] || exit 0
+version=${kernel#/boot/vmlinuz-}
+[ -e "/boot/initrd.img-$version" ] || exit 0
+[ -n "${GRUB_DEVICE_UUID:-}" ] || exit 0
+dir=$(make_system_path_relative_to_its_root /boot) || exit 0
+sha=$(cut -c1-7 /var/lib/kilobyte/previous/share/commit 2>/dev/null)
+
+echo "menuentry 'Kilobyte: undo the last update${sha:+ (back to $sha)}' {"
+prepare_grub_to_access_device "${GRUB_DEVICE_BOOT:-$GRUB_DEVICE}" | sed 's/^/\t/'
+printf '\tlinux\t%s/vmlinuz-%s root=UUID=%s ro %s %s kilobyte.undo\n' \
+    "$dir" "$version" "$GRUB_DEVICE_UUID" "${GRUB_CMDLINE_LINUX:-}" "${GRUB_CMDLINE_LINUX_DEFAULT:-}"
+printf '\tinitrd\t%s/initrd.img-%s\n' "$dir" "$version"
+echo "}"

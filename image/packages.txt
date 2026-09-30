@@ -30,5 +30,12 @@ fdisk e2fsprogs dosfstools exfatprogs
 # X server of its own only while a graphical Windows program runs ---
 xserver-xorg-core xserver-xorg-legacy xserver-xorg-input-libinput xserver-xorg-video-fbdev xinit
 
+# --- network drives (Windows shares, SFTP), remote Kilobyte (SSH; the server is
+# off until switched on in Settings) ---
+cifs-utils sshfs openssh-server
+
+# --- opening files from the desktop and the file manager: kinds, PDF as text ---
+file poppler-utils
+
 # --- firmware ---
 firmware-linux-free firmware-realtek

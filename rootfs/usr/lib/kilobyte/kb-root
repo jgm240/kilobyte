@@ -85,6 +85,46 @@ case "${1:-} ${2:-}" in
     "kilobyte update")
         exec /usr/lib/kilobyte/kb-update apply "${3:-}"
         ;;
+    "kilobyte undo")
+        exec /usr/lib/kilobyte/kb-update undo
+        ;;
+    "smb mount")
+        # kb-root smb mount //SERVER/SHARE NAME [USER]: the password on
+        # standard input. Mounted in the caller's ~/Network/NAME, as theirs.
+        [ -n "$user" ] && [ "$user" != root ] || { echo "run through sudo as the user" >&2; exit 1; }
+        share=${3:-} name=${4:-} smbuser=${5:-}
+        printf '%s' "$share" | grep -Eq '^//[A-Za-z0-9._-]+/[^[:space:],]+$' || { echo "not a share: $share" >&2; exit 1; }
+        printf '%s' "$name" | grep -Eq '^[A-Za-z0-9._-]+$' || { echo "not a usable name: $name" >&2; exit 1; }
+        printf '%s' "$smbuser" | grep -Eq '^[^,[:space:]]*$' || { echo "not a usable user name" >&2; exit 1; }
+        home=$(getent passwd "$user" | cut -d: -f6)
+        mnt="$home/Network/$name"
+        mkdir -p "$mnt"
+        chown "$user": "$home/Network" "$mnt"
+        mountpoint -q "$mnt" && exit 0
+        cred=$(mktemp)
+        trap 'rm -f "$cred"' EXIT
+        chmod 600 "$cred"
+        if [ -n "$smbuser" ]; then
+            { printf 'username=%s\npassword=' "$smbuser"; cat; printf '\n'; } > "$cred"
+            opts="credentials=$cred"
+        else
+            opts=guest
+        fi
+        mount -t cifs "$share" "$mnt" -o "$opts,uid=$(id -u "$user"),gid=$(id -g "$user"),iocharset=utf8,nosuid,nodev"
+        ;;
+    "smb umount")
+        [ -n "$user" ] && [ "$user" != root ] || { echo "run through sudo as the user" >&2; exit 1; }
+        name=${3:-}
+        printf '%s' "$name" | grep -Eq '^[A-Za-z0-9._-]+$' || { echo "not a usable name: $name" >&2; exit 1; }
+        mnt="$(getent passwd "$user" | cut -d: -f6)/Network/$name"
+        [ "$(findmnt -no FSTYPE "$mnt" 2>/dev/null)" = cifs ] || { echo "not a network drive: $mnt" >&2; exit 1; }
+        umount "$mnt"
+        ;;
+    "vt switch")
+        # kb-root vt switch N: show console N (another user's session, or a
+        # free one with a login prompt). Consoles 1 to 6 only.
+        case ${3:-} in [1-6]) chvt "$3" ;; *) echo "usage: kb-root vt switch 1-6" >&2; exit 2 ;; esac
+        ;;
     "wifi on")
         rm -f /etc/kilobyte/wifi-off
         systemctl restart kilobyte-wifi.service

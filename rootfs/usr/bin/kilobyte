@@ -17,18 +17,18 @@ APPS=/usr/lib/kilobyte/apps
 
 # Programs launched from the menus.
 
-run_editor() {
-    local f
-    f=$(kb_pick_file "Edit" "*") || return
+run_editor() { # run_editor [FILE]
+    local f=${1:-}
+    [ -n "$f" ] || f=$(kb_pick_file "Edit" "*") || return
     case ${f,,} in
         *.docx | *.odt) office_document "$f" ;;
         *)              kb_guarded '\e[21~' mcedit "$f" ;;   # F10 quits, asking to save first
     esac
 }
 
-run_spreadsheet() {
-    local f
-    f=$(kb_pick_file "Spreadsheet" "*.sc" "*.csv" "*.tsv" "*.xlsx" "*.ods") || return
+run_spreadsheet() { # run_spreadsheet [FILE]
+    local f=${1:-}
+    [ -n "$f" ] || f=$(kb_pick_file "Spreadsheet" "*.sc" "*.csv" "*.tsv" "*.xlsx" "*.ods") || return
     case $f in *.*) ;; *) f="$f.sc" ;; esac
     case ${f,,} in
         *.xlsx | *.ods) office_sheet "$f" ;;
@@ -107,8 +107,8 @@ run_web() {
     kb_run elinks "${1:-file://$KB_SHARE/start.html}"
 }
 
-run_files() {
-    kb_guarded '\e[21~' mc "$HOME" "$KB_DOCS"
+run_files() { # run_files [FOLDER]
+    kb_guarded '\e[21~' mc "${1:-$HOME}" "$KB_DESKTOP"
 }
 
 run_terminal() {
@@ -121,111 +121,172 @@ run_terminal() {
     kb_load_theme
 }
 
-# Submenus. Each returns to the Program Manager when closed.
+# --- the programs ------------------------------------------------------------
+# One table for the Program Manager's menus, the Programs menu and the icons
+# of Kilobyte Windows (kilobyte --list-apps), and kb-open:
+#
+#   ID|category|name|help line|two characters for an icon|window size
+#
+# Window size: S small, M usual, L as large as the desktop allows.
 
-submenu() { # submenu TITLE TEXT TAG DESC HELP ...; prints the chosen tag
-    local title=$1 text=$2; shift 2
-    kb_dialog --title " $title " --item-help --ok-label "Run" --cancel-label "Back" \
-        --default-item "${SUB_DEFAULT:-}" --menu "$text" 0 64 0 "$@"
+apps_table() {
+    cat <<'TABLE'
+Editor|main|Text editor|Text files and documents (also DOCX, ODT); F9 opens the menus|Ed|L
+Spreadsheet|main|Spreadsheet|Tables and formulas, also XLSX and ODS (sc-im: :w saves, :q quits)|##|L
+Web|main|Web browser|Web pages with CSS and JavaScript (ELinks; Esc opens its menus)|@ |L
+Mail|main|Email|Read and write email (Alpine; the first start sets up your account)|M@|L
+Files|main|File manager|Two-panel file manager (mc, F10 quits); F2 has Open with, Trash, Desktop|▓▓|L
+Terminal|main|Terminal|Command line, type exit to come back|>_|M
+Web|internet|Web browser|Web pages with CSS and JavaScript (ELinks)|@ |L
+Mail|internet|Email|Read and write email (Alpine)|M@|L
+Chat|internet|Chat|Talk in chat rooms (IRC with WeeChat)|☺☺|L
+BBS|internet|BBS Dialer|Call bulletin board systems that still run today|BB|M
+YouTube|internet|YouTube Downloader|Search, watch and save videos or their sound|► |M
+Network|internet|Network drives|Shared folders of Windows PCs and servers (SMB, SFTP)|⌂⌂|M
+Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡►|L
+Citrix|internet|Citrix Workspace|Remote desktops and apps of a company (needs Citrix's program)|Cx|M
+Video|media|Video Player|Videos and music as coloured blocks or the real picture|►►|M
+Pictures|media|Pictures|Photos and drawings, shown with coloured blocks|▒▓|M
+Music|media|Music Player|Songs and playlists with dancing bars|♫ |M
+YouTube|media|YouTube Downloader|Search, watch and save videos or their sound|► |M
+Disc|media|Disc Player|DVD films, audio CDs and data discs|◘ |M
+Sound|media|Sound volume|alsamixer: arrows change, M mutes, Esc closes|♪ |M
+Paint|accessories|Paint|Paint pictures with blocks; mouse or keyboard; saves PNG and ANSI art|▀▄|L
+Calculator|accessories|Calculator|Type an expression, get the answer (bc)|+-|S
+Agenda|accessories|Agenda|Calendar, appointments and to-do list (calcurse; ? inside for help)|31|M
+Clock|accessories|Clock|Big block-letter clock; any key closes it|☼ |S
+Cardfile|accessories|Cardfile|Index cards for notes and addresses, kept in ~/Cardfile|≡ |M
+Month|accessories|Calendar|Pick a date on a month calendar|Ca|S
+Battery|accessories|Battery meter|Charge, time left and battery health (laptops)|█▌|S
+Charmap|accessories|Character Map|Box drawing and block characters for your own text art|Ω |M
+Print|accessories|Print|Send a file to the printer|Pr|M
+USB|accessories|USB sticks|Open, safely remove or format a USB stick|↔ |M
+Backup|accessories|Backup|Copy documents and settings to a USB stick|»»|M
+Trash|accessories|Trash|Files you threw away: put them back or delete them for good|▄▄|M
+Wine|accessories|Windows programs|Run .exe and .msi programs with Wine (box64/box86 on a Raspberry Pi)|W |M
+Store|accessories|Store|More text-mode programs to install with a keypress|$ |M
+Saver|accessories|Screen saver|Start the screen saver now|**|L
+Lock|accessories|Lock the screen|Hide everything until your password is typed|╬ |L
+Mines|games|Mines|Clear the minefield: Space uncovers, F flags; 1/2/3 choose the size|* |M
+Solitaire|games|Solitaire|Klondike patience: Space takes and puts cards, D draws|♠♥|M
+Reversi|games|Reversi|Reversi against the computer|○◙|M
+MoonBuggy|games|Moon Buggy|Drive across the moon: Space jumps, a fires, q quits|o=|M
+Snake|games|Snake|Eat the numbers, grow longer: h j k l steer, q quits|~~|M
+Robots|games|Robots|Outwit the killer robots: hjkl yubn move, t teleports, q quits|R |M
+Hangman|games|Hangman|Guess the word: type letters|_a|M
+Adventure|games|Adventure|Colossal Cave Adventure: type commands such as GO NORTH; QUIT ends|N↑|M
+Trek|games|Trek|Star Trek: type help inside the game|-=|M
+Rain|games|Rain|Rain on the screen; Ctrl+C stops it|' |M
+Worms|games|Worms|Worms on the screen; Ctrl+C stops it|~ |M
+Settings|system|Settings|Wi-Fi, theme, wallpaper, keyboard, date, software, users...|≡≡|M
+Help|system|Help|How to use Kilobyte|? |M
+Users|system|Switch user|Let someone else log in; your programs keep running|☺ |S
+Shutdown|system|Shut down|Turn the computer off|O |S
+Restart|system|Restart|Restart the computer|<>|S
+TABLE
+    # Programs installed from the Store.
+    "$APPS/store" --table 2>/dev/null
+    kb_is_live && echo "Install|system|Install Kilobyte|Copy this system to the computer's hard disk|↓↓|M"
+    return 0
 }
 
-accessories() {
-    local sel
-    while sel=$(SUB_DEFAULT=$sel submenu "Accessories" "Small helpers." \
-        Paint      "Paint pictures with blocks" "Mouse or keyboard; saves PNG and ANSI art" \
-        Calculator "Arbitrary precision calculator" "Type an expression, get the answer (bc)" \
-        Agenda     "Calendar, appointments and to-do list" "calcurse - press ? inside for help" \
-        Clock      "Big block-letter clock" "Any key closes the clock" \
-        Cardfile   "Index cards for notes and addresses" "Notes are kept in ~/Cardfile" \
-        Month      "Pick a date on a calendar" "Shows a month calendar" \
-        Battery    "Battery meter"             "Charge, time left and battery health (laptops)" \
-        Charmap    "Box drawing and block characters" "Characters for your own text art" \
-        Print      "Print a document"          "Send a file to the printer" \
-        USB        "USB sticks"                "Open, safely remove or format a USB stick" \
-        Backup     "Back up your files"        "Copy documents and settings to a USB stick" \
-        Windows    "Windows programs (Wine)"   "Run .exe and .msi programs (box64/box86 on a Raspberry Pi)" \
-        Saver      "Screen saver"              "Start the screen saver now"); do
-        case $sel in
-            Paint)      kb_run "$APPS/paint" ;;
-            Calculator) "$APPS/calculator" ;;
-            Agenda)     kb_guarded q calcurse ;;
-            Clock)      "$APPS/clock" ;;
-            Cardfile)   "$APPS/cardfile" ;;
-            Battery)    "$APPS/battery" ;;
-            Month)      kb_dialog --title " Calendar " --ok-label "Close" --no-cancel --calendar "Use Tab and the arrow keys to move." 0 0 >/dev/null ;;
-            Charmap)    kb_textfile "Character Map" "$KB_SHARE/charmap.txt" ;;
-            Print)      "$APPS/print" ;;
-            USB)        "$APPS/usb" ;;
-            Backup)     "$APPS/backup" ;;
-            Windows)    "$APPS/wine" ;;
-            Saver)      run_saver ;;
-        esac
-    done
+app_field() { # app_field ID N: the Nth column of the program's first line
+    apps_table | awk -F'|' -v id="$1" -v n="$2" '$1 == id { print $n; exit }'
 }
 
-internet() {
-    local sel
-    while sel=$(SUB_DEFAULT=$sel submenu "Internet" "On-line, the text way." \
-        Web     "Web browser"         "Web pages with CSS and JavaScript (ELinks)" \
-        Mail    "Email"               "Read and write email (Alpine)" \
-        Chat    "Chat"                "Talk in chat rooms (IRC with WeeChat)" \
-        BBS     "BBS Dialer"          "Call bulletin board systems that still run today" \
-        YouTube "YouTube Downloader"  "Search, watch and save videos or their sound"); do
-        case $sel in
-            Web)     run_web ;;
-            Mail)    "$APPS/mail" ;;
-            Chat)    "$APPS/chat" ;;
-            BBS)     "$APPS/bbs" ;;
-            YouTube) "$APPS/youtube" ;;
-        esac
-    done
+# run_app ID [ARGUMENTS]: run that program here, in this terminal.
+run_app() {
+    local id=$1
+    shift
+    case $id in
+        Editor)      run_editor "$@" ;;
+        Spreadsheet) run_spreadsheet "$@" ;;
+        Web)         run_web "$@" ;;
+        Mail)        "$APPS/mail" ;;
+        Files)       run_files "$@" ;;
+        Terminal)    run_terminal ;;
+        Chat)        "$APPS/chat" ;;
+        BBS)         "$APPS/bbs" ;;
+        YouTube)     "$APPS/youtube" ;;
+        Network)     "$APPS/netdrives" ;;
+        Remote)      "$APPS/remote" ;;
+        Citrix)      "$APPS/citrix" "$@" ;;
+        Video)       "$APPS/player" "$@" ;;
+        Pictures)    "$APPS/pictures" "$@" ;;
+        Music)       kb_run "$APPS/music" "$@" ;;
+        Disc)        "$APPS/disc" ;;
+        Sound)       kb_guarded '\e' alsamixer ;;
+        Paint)       kb_run "$APPS/paint" "$@" ;;
+        Calculator)  "$APPS/calculator" ;;
+        Agenda)      kb_guarded q calcurse ;;
+        Clock)       "$APPS/clock" ;;
+        Cardfile)    "$APPS/cardfile" ;;
+        Battery)     "$APPS/battery" ;;
+        Month)       kb_dialog --title " Calendar " --ok-label "Close" --no-cancel --calendar "Use Tab and the arrow keys to move." 0 0 >/dev/null ;;
+        Charmap)     kb_textfile "Character Map" "$KB_SHARE/charmap.txt" ;;
+        Print)       "$APPS/print" "$@" ;;
+        USB)         "$APPS/usb" ;;
+        Backup)      "$APPS/backup" ;;
+        Trash)       "$APPS/trash" ;;
+        Wine)        "$APPS/wine" "$@" ;;
+        Store)       "$APPS/store" ;;
+        Saver)       run_saver ;;
+        Lock)        "$APPS/lock" ;;
+        Mines)       kb_run "$APPS/mines" ;;
+        Solitaire)   kb_run "$APPS/solitaire" ;;
+        Reversi)     kb_run "$APPS/reversi" ;;
+        MoonBuggy)   kb_guarded '' /usr/games/moon-buggy ;;
+        Snake)       kb_run /usr/games/worm ;;
+        Robots)      kb_run /usr/games/robots ;;
+        Hangman)     kb_run /usr/games/hangman ;;
+        Adventure)   kb_guarded '' /usr/games/adventure ;;
+        Trek)        kb_guarded '' /usr/games/trek ;;
+        Rain)        kb_run /usr/games/rain ;;
+        Worms)       kb_run /usr/games/worms ;;
+        Settings)
+            "$APPS/settings" "$@"
+            # 42: Kilobyte was updated, so the new one should run.
+            if [ $? -eq 42 ]; then
+                if [ -n "${KB_APP_WINDOW:-}" ]; then
+                    kb_yesno "Kilobyte Update" "The new Kilobyte is used after logging out and in.\n\nLog out now? (Every window is closed.)" 9 60 &&
+                        kill -USR1 "${KB_DESK_PID:-0}" 2>/dev/null
+                else
+                    [ -n "${KB_STTY:-}" ] && stty "$KB_STTY"
+                    exec /usr/bin/kilobyte
+                fi
+            fi ;;
+        Install)     kb_sudo && sudo KB_THEME="$(kb_theme_name)" /usr/sbin/kilobyte-install ;;
+        Help)        kb_textfile "Help" "$KB_SHARE/help.txt" ;;
+        Users)       "$APPS/settings" SwitchUser ;;
+        Shutdown)    shut_down ;;
+        Restart)     kb_yesno "Restart" "Restart the computer now?" && { clear; kb_sound shutdown wait; sudo -n "$KB_LIB/kb-root" power reboot; } ;;
+        Store:*)     "$APPS/store" --run "${id#Store:}" ;;
+        *)           kb_msg "Kilobyte" "There is no program called \"$id\"." ;;
+    esac
 }
 
-media() {
-    local sel
-    while sel=$(SUB_DEFAULT=$sel submenu "Media" "Videos, music and discs." \
-        Video      "Video Player"        "Videos and music as coloured blocks or the real picture" \
-        Pictures   "Pictures"            "Photos and drawings, shown with coloured blocks" \
-        YouTube    "YouTube Downloader"  "Search, watch and save videos or their sound" \
-        Disc       "Disc Player"         "DVD films, audio CDs and data discs" \
-        Sound      "Sound volume"        "alsamixer: arrows change, M mutes, Esc closes"); do
-        case $sel in
-            Video)   "$APPS/player" ;;
-            Pictures) "$APPS/pictures" ;;
-            YouTube) "$APPS/youtube" ;;
-            Disc)    "$APPS/disc" ;;
-            Sound)   kb_guarded '\e' alsamixer ;;
-        esac
-    done
+# launch ID [ARGUMENTS]: start a program. In Kilobyte Windows it gets a
+# window of its own and the Program Manager stays where it is; without
+# windows (or inside a program's window) it runs right here.
+launch() {
+    local id=$1 name size
+    if [ -n "${KILOBYTE_DESK:-}" ] && [ -z "${KB_APP_WINDOW:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
+        name=$(app_field "$id" 3) size=$(app_field "$id" 6)
+        python3 "$KB_LIB/py/deskrun.py" window "${name:-$id}" "${size:-M}" /usr/bin/kilobyte --app "$@" && return 0
+    fi
+    run_app "$@"
 }
 
-games() {
-    local sel
-    while sel=$(SUB_DEFAULT=$sel submenu "Games" "Take a break." \
-        Mines      "Clear the minefield"       "Space uncovers, F flags; 1/2/3 choose the size" \
-        Solitaire  "Klondike patience"         "Space takes and puts cards, D draws" \
-        Reversi    "Reversi against the computer" "Enclose the white stones to turn them black" \
-        MoonBuggy  "Drive across the moon"     "Space jumps, a fires, q quits" \
-        Snake      "Eat the numbers, grow longer" "h j k l steer, q quits" \
-        Robots     "Outwit the killer robots"  "hjkl yubn move, t teleports, q quits" \
-        Hangman    "Guess the word"            "Type letters" \
-        Adventure  "Colossal Cave Adventure"   "Type commands such as GO NORTH; QUIT ends" \
-        Trek       "Star Trek"                 "Type help inside the game" \
-        Rain       "Screen saver: rain"        "Ctrl+C stops it" \
-        Worms      "Screen saver: worms"       "Ctrl+C stops it"); do
-        case $sel in
-            Mines)     kb_run "$APPS/mines" ;;
-            Solitaire) kb_run "$APPS/solitaire" ;;
-            Reversi)   kb_run "$APPS/reversi" ;;
-            MoonBuggy) kb_guarded '' /usr/games/moon-buggy ;;
-            Snake)     kb_run /usr/games/worm ;;
-            Robots)    kb_run /usr/games/robots ;;
-            Hangman)   kb_run /usr/games/hangman ;;
-            Adventure) kb_guarded '' /usr/games/adventure ;;
-            Trek)      kb_guarded '' /usr/games/trek ;;
-            Rain)      kb_run /usr/games/rain ;;
-            Worms)     kb_run /usr/games/worms ;;
-        esac
+# The menu of one category.
+category_menu() { # category_menu CATEGORY TITLE TEXT
+    local sel="" items=() id cat name help rest
+    while IFS='|' read -r id cat name help rest; do
+        [ "$cat" = "$1" ] && items+=("$id" "$name" "$help")
+    done < <(apps_table)
+    [ ${#items[@]} -gt 0 ] || return 0
+    while sel=$(kb_dialog --title " $2 " --item-help --no-tags --ok-label "Run" --cancel-label "Back" \
+            --default-item "$sel" --menu "$3" 0 64 0 "${items[@]}"); do
+        launch "$sel"
     done
 }
 
@@ -311,22 +372,21 @@ quit_menu() {
 }
 
 program_manager() {
-    local sel=Editor rc items idle=0 tiles=()
+    local sel=Editor rc items idle=0 tiles=() id cat name help rest
     while true; do
         battery_warning
-        items=(
-            Editor      "Text editor"                "Text files and documents (also DOCX, ODT); F9 opens the menus"
-            Spreadsheet "Spreadsheet"                "Tables and formulas, also XLSX and ODS (sc-im: :w saves, :q quits)"
-            Web         "Web browser"                "Web pages with CSS and JavaScript (ELinks; Esc opens its menus)"
-            Mail        "Email"                      "Read and write email (Alpine; the first start sets up your account)"
-            Internet    "Internet  »"                "Chat, BBS dialer, YouTube downloader..."
-            Files       "File manager"               "Two-panel file manager (mc, F10 quits)"
-            Terminal    "Terminal"                   "Fullscreen command line, type exit to come back"
-            Media       "Media  »"                   "Video player, YouTube downloader, disc player"
-            Accessories "Accessories  »"             "Calculator, agenda, clock, cardfile..."
-            Games       "Games  »"                   "Moon Buggy, Snake, Robots, Adventure..."
-            Settings    "Settings"                   "Wi-Fi, theme, keyboard, date, software..."
+        items=()
+        while IFS='|' read -r id cat name help rest; do
+            [ "$cat" = main ] && items+=("$id" "$name" "$help")
+        done < <(apps_table)
+        items+=(
+            Internet    "Internet  »"                "Chat, BBS dialer, YouTube, network drives, remote computers..."
+            Media       "Media  »"                   "Video player, music, pictures, discs"
+            Accessories "Accessories  »"             "Paint, calculator, agenda, trash, store, lock..."
+            Games       "Games  »"                   "Mines, Solitaire, Moon Buggy, Adventure..."
         )
+        apps_table | grep -q '^[^|]*|more|' && items+=(More "More programs  »" "What you installed from the Store")
+        items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
         kb_is_live && items+=(Install "Install Kilobyte to disk" "Copy this system to the computer's hard disk")
         items+=(Help "Help" "How to use Kilobyte" Quit "Exit  »" "Log out, restart or shut down")
 
@@ -350,9 +410,11 @@ program_manager() {
         # Idle: the timeout counts toward the screen saver.
         if [ $rc -eq "$DIALOG_TIMEOUT" ]; then
             idle=$(( idle + 30 ))
-            if [ "$(saver_minutes)" -gt 0 ] && [ $idle -ge $(( $(saver_minutes) * 60 )) ] &&
+            # (In Kilobyte Windows the desktop starts the screen saver, over all windows.)
+            if [ -z "${KILOBYTE_DESK:-}" ] && [ "$(saver_minutes)" -gt 0 ] && [ $idle -ge $(( $(saver_minutes) * 60 )) ] &&
                [ "$(cat "$KB_CONF/saver-mode" 2>/dev/null)" != off ]; then
                 run_saver
+                [ -e "$KB_CONF/saver-lock" ] && "$APPS/lock"
                 idle=0
             fi
         else
@@ -363,33 +425,33 @@ program_manager() {
             "$DIALOG_CANCEL" | "$DIALOG_ESC") sel=Quit ;;
         esac
         case $sel in
-            Editor)      run_editor ;;
-            Spreadsheet) run_spreadsheet ;;
-            Web)         run_web ;;
-            Mail)        "$APPS/mail" ;;
-            Files)       run_files ;;
-            Terminal)    run_terminal ;;
-            Internet)    internet ;;
-            Media)       media ;;
-            Accessories) accessories ;;
-            Games)       games ;;
-            Settings)
-                "$APPS/settings"
-                # 42: Kilobyte was updated, so run the new Program Manager.
-                [ $? -eq 42 ] && { [ -n "$KB_STTY" ] && stty "$KB_STTY"; exec /usr/bin/kilobyte; } ;;
-            Install)     kb_sudo && sudo KB_THEME="$(kb_theme_name)" /usr/sbin/kilobyte-install ;;
-            Help)        kb_textfile "Help" "$KB_SHARE/help.txt" ;;
+            Internet)    category_menu internet "Internet" "On-line, the text way." ;;
+            Media)       category_menu media "Media" "Videos, music, pictures and discs." ;;
+            Accessories) category_menu accessories "Accessories" "Small helpers." ;;
+            Games)       category_menu games "Games" "Take a break." ;;
+            More)        category_menu more "More Programs" "Installed from the Store." ;;
             Quit)        quit_menu; rc=$?; [ $rc -ne 0 ] && return $rc ;;
+            *)           launch "$sel" ;;
         esac
     done
 }
 
 case "${1:-}" in
-    --version) echo "Kilobyte $KB_VERSION"; exit 0 ;;
-    --help)    echo "usage: kilobyte [--version]"; exit 0 ;;
+    --version)   echo "Kilobyte $KB_VERSION"; exit 0 ;;
+    --help)      echo "usage: kilobyte [--version | --list-apps | --app ID [ARGUMENTS]]"; exit 0 ;;
+    --list-apps) apps_table; exit 0 ;;
+    --app)
+        # One program, here (Kilobyte Windows gives it a window of its own).
+        shift
+        [ $# -gt 0 ] || { echo "usage: kilobyte --app ID [ARGUMENTS]" >&2; exit 2; }
+        export KILOBYTE=1 KB_APP_WINDOW=1
+        stty susp undef 2>/dev/null
+        run_app "$@"
+        exit 0 ;;
 esac
 
 command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; exit 1; }
+kb_setup_home
 
 # Windows (movable windows, several programs at once) unless switched off in
 # Settings > Login and startup. If the window system fails, carry on without.

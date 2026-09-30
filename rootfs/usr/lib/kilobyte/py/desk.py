@@ -1,15 +1,22 @@
 #!/usr/bin/python3
-"""Kilobyte Windows: movable windows and multitasking in text mode.
+"""Kilobyte Windows: a desktop with movable windows, in text mode.
 
 Every window is a terminal of its own (a pseudo terminal, emulated with
-pyte) running a program, normally a Program Manager. Windows have a title
-bar, a close box [■], minimise [▼] and maximise [▲] boxes and a shadow; the
-active one has a double frame. A taskbar at the bottom lists all windows.
+pyte) running a program. Windows have a title bar, a close box [X], minimise
+[▼] and maximise [▲] boxes and a shadow; the active one has a double frame.
 
-Mouse: drag a title bar to move a window, drag its lower right corner to
-resize it, double-click a title bar to maximise. Clicks inside a window go
-to its program. Keys: Alt+Tab next window, F12 the window menu (new, move,
-resize, maximise, minimise, tile, cascade, close, leave).
+The desktop behind them has a wallpaper, the weather and news tiles, icons
+for programs and for the files in ~/Desktop, and notes that pop up in the
+corner. The menu bar at the top opens the Programs menu (■ Kilobyte, or
+F12) and shows network, volume, battery and clock; the bar at the bottom
+lists the windows.
+
+Mouse: drag a title bar to move a window (an outline shows where it goes),
+drag its lower right corner to resize it, double-click a title bar to
+maximise, double-click an icon to open it, right-click it for more. Drag
+over text to copy it (hold Shift where a program uses the mouse itself),
+click the middle button or press F11 to paste. Alt+Tab goes to the next
+window.
 
     desk [PROGRAM [ARGS...]]     first window runs PROGRAM (default: kilobyte)
 """
@@ -134,7 +141,7 @@ class Gpm:
         return g if g.fd >= 0 else None
 
     def events(self):
-        """Every gpm event that is waiting -> list of (x, y, kind, button),
+        """Every gpm event that is waiting -> list of (x, y, kind, button, shift),
         or None when the connection to gpm is gone (gpm was restarted).
         A mouse sends events much faster than the screen is redrawn, so a run
         of movements counts as its last one; otherwise the pointer and a
@@ -154,17 +161,19 @@ class Gpm:
                     log.write("raw buttons=%d dx=%d dy=%d x=%d y=%d type=%d clicks=%d vc=%d\n"
                               % (ev.buttons, ev.dx, ev.dy, ev.x, ev.y, ev.type, ev.clicks, ev.vc))
             x, y = ev.x - 1, ev.y - 1
-            button = 1 if ev.buttons & self.B_LEFT else 3 if ev.buttons & self.B_RIGHT else 0
+            button = (1 if ev.buttons & self.B_LEFT else 3 if ev.buttons & self.B_RIGHT
+                      else 2 if ev.buttons & self.B_MIDDLE else 0)
+            shift = bool(ev.modifiers & 1)
             if ev.wdy or ev.buttons & (self.B_UP | self.B_DOWN):
-                e = (x, y, "wheel", 4 if (ev.wdy > 0 or ev.buttons & self.B_UP) else 5)
+                e = (x, y, "wheel", 4 if (ev.wdy > 0 or ev.buttons & self.B_UP) else 5, shift)
             elif ev.type & self.DOWN:
-                e = (x, y, "down", button)
+                e = (x, y, "down", button, shift)
             elif ev.type & self.UP:
-                e = (x, y, "up", button or 1)
+                e = (x, y, "up", button or 1, shift)
             elif ev.type & self.DRAG:
-                e = (x, y, "drag", button)
+                e = (x, y, "drag", button, shift)
             else:
-                e = (x, y, "move", 0)
+                e = (x, y, "move", 0, shift)
             if out and e[2] in ("move", "drag") and out[-1][2] == e[2]:
                 out[-1] = e
             else:
@@ -217,6 +226,7 @@ class Window:
                        KB_DESK_PID=str(os.getppid()), KB_DESK_SOCK=desk.sock_path or "",
                        NCURSES_NO_UTF8_ACS="1")   # real box characters, not VT100 line mode
             env.pop("KILOBYTE", None)
+            env.pop("KB_APP_WINDOW", None)
             env.pop("NCURSES_GPM_TERMS", None)
             os.chdir(os.path.expanduser("~"))
             try:
@@ -273,9 +283,9 @@ class Window:
         except OSError:
             pass
 
-    def close(self):
+    def close(self, sig=signal.SIGHUP):
         try:
-            os.killpg(os.getpgid(self.pid), signal.SIGHUP)
+            os.killpg(os.getpgid(self.pid), sig)
         except (ProcessLookupError, PermissionError):
             pass
 
@@ -286,8 +296,33 @@ class Window:
     def contains(self, mx, my):
         return self.x <= mx < self.x + self.w and self.y <= my < self.y + self.h
 
+    def text(self, a=None, b=None):
+        """What is on the window's screen, or the part from cell a to cell b
+        (column, row), as lines of text."""
+        rows, cols = self.rows(), self.cols()
+        if a is None:
+            a, b = (0, 0), (cols - 1, rows - 1)
+        if (a[1], a[0]) > (b[1], b[0]):
+            a, b = b, a
+        lines = []
+        for y in range(max(0, a[1]), min(rows - 1, b[1]) + 1):
+            x0 = a[0] if y == a[1] else 0
+            x1 = b[0] if y == b[1] else cols - 1
+            line = self.screen.buffer[y]
+            lines.append("".join(line[x].data or " " for x in range(max(0, x0), min(cols - 1, x1) + 1)).rstrip())
+        while lines and not lines[-1]:
+            lines.pop()
+        return "\n".join(lines)
+
+
+LIB = "/usr/lib/kilobyte"
+ICON_W, ICON_H = 14, 4                     # an icon on the desktop, in cells
+CLIPBOARD = os.path.expanduser("~/.cache/kilobyte-clipboard")
+
 
 class Desk:
+    TILE_W = 64                            # a tile with its frame
+
     def __init__(self, s, argv):
         self.s = s
         self.first_argv = argv
@@ -302,13 +337,33 @@ class Desk:
         self.gpm = Gpm.open() if self.console else None
         self.gpm_retry = time.time() + 2   # when to look for gpm again if it is not there
         self.last_click = (0, None)
-        self.menu = None
-        self.status = deskbg.Status()      # network, battery, update notice for the menu bar
+        self.menus = []                    # the open menu and its submenus
+        self.mode = None                   # "move" or "resize": arrow keys act on the window
+        self.volume_open = False           # the volume slider under the menu bar
+        self.select = None                 # text being marked: {"win", "a", "b"} in window cells
+        self.clip = ""                     # what was copied
+        self.notes = []                    # notes in the corner: [title, [lines], until]
+        self.status = deskbg.Status()      # network, battery, volume, ... for the menu bar
+        self.seen = None                   # the status the last time, to notice changes
         self.bar_items = []                # (x0, x1, action) of what can be clicked in the menu bar
-        self.wall = None                   # the desktop (wallpaper and tiles), drawn once and kept
+        self.task_buttons = []
+        self.wall = None                   # the desktop (wallpaper, tiles, icons), drawn once and kept
         self.wall_key = None
         self.wall_checked = 0
-        # Programs in windows ask here for the whole screen (kb-play: videos).
+        self.apps = []                     # the programs (kilobyte --list-apps)
+        self.apps_read = 0
+        self.icons = []                    # [(x, y, icon)] on the screen
+        self.icon_sel = None
+        self.quitting = None               # set to a time when logging out
+        self.last_input = time.time()
+        self.idle_checked = 0
+        try:
+            with open(CLIPBOARD, encoding="utf-8", errors="replace") as f:
+                self.clip = f.read()
+        except OSError:
+            pass
+        # Programs in windows ask here for things (deskrun.py): the whole
+        # screen for a video, a window for a program, a note in the corner.
         self.sock = None
         self.sock_path = None
         try:
@@ -321,7 +376,7 @@ class Desk:
                 self.sock.bind(path)
             finally:
                 os.umask(old)
-            self.sock.listen(4)
+            self.sock.listen(8)
             self.sock_path = path
         except OSError:
             self.sock = None
@@ -329,20 +384,45 @@ class Desk:
         s.scr.keypad(True)
         curses.raw()
         signal.signal(signal.SIGCHLD, lambda *a: None)
-        # "Log out" in any window: close them all.
-        signal.signal(signal.SIGUSR1, lambda *a: [w.close() for w in self.windows])
+        # "Log out" in any window: close them all and leave.
+        signal.signal(signal.SIGUSR1, lambda *a: self.logout())
+        os.makedirs(deskbg.DESKTOP, exist_ok=True)
+        self.read_apps()
         H, W = self.area()
-        if W >= 140 and not os.path.exists(os.path.join(deskbg.CONF, "tiles-off")):
-            # Wide screen: the first window leaves the tiles' column free.
+        if W >= 140:
+            # Room for a desktop: the Program Manager is a window among the
+            # icons (left) and the tiles (right).
             win = self.new_window(argv)
-            win.move(0, 1)
-            win.resize(W - self.TILE_W - 6, H)
+            win.resize(76, min(H, 30))
+            win.move(min(self.icon_columns() * ICON_W + 2, max(0, W - self.TILE_W - 80)), 1)
         else:
             self.new_window(argv, maximised=True)
 
     def area(self):
         H, W = self.s.size()
         return H - 2, W                    # rows 1..H-2 are the desktop
+
+    # --- programs ---------------------------------------------------------
+    def read_apps(self):
+        apps = deskbg.apps()
+        if apps:
+            self.apps = apps
+        self.apps_read = time.time()
+        self.wall_key = None
+
+    def app(self, ident):
+        for a in self.apps:
+            if a["id"] == ident:
+                return a
+        return None
+
+    def launch_app(self, ident, *args):
+        a = self.app(ident) or {"name": ident, "size": "M"}
+        self.open_window(["/usr/bin/kilobyte", "--app", ident] + list(args), a["name"], a["size"])
+
+    def open_file(self, path, choose=False):
+        argv = [LIB + "/kb-open", "--here"] + (["--choose"] if choose else []) + [path]
+        self.open_window(argv, os.path.basename(path) or path, "L")
 
     # --- windows --------------------------------------------------------
     def new_window(self, argv=None, maximised=False):
@@ -356,6 +436,28 @@ class Desk:
         win = Window(self, argv or ["kilobyte"], x, y, w, h)
         if maximised:
             # Where it goes when restored (or when its title bar is dragged).
+            rw, rh = max(MIN_W, W * 3 // 4), max(MIN_H, H * 3 // 4)
+            win.saved = (min(2 + 3 * n, W - rw), min(1 + 2 * n, H - rh + 1), rw, rh)
+        self.windows.append(win)
+        return win
+
+    def open_window(self, argv, title="", size="M"):
+        """A window for a program: S small, M three quarters of the desktop,
+        L nearly all of it. On a small screen M and L are maximised."""
+        H, W = self.area()
+        n = len(self.windows) % 6
+        if size == "S":
+            w, h = min(W, 72), min(H, 24)
+        elif W < 100:
+            w, h = W, H
+        elif size == "L":
+            w, h = W * 7 // 8, H
+        else:
+            w, h = W * 3 // 4, H * 3 // 4
+        x = max(0, min(4 + 3 * n, W - w))
+        y = max(1, min(1 + 2 * n, H - h + 1))
+        win = Window(self, argv, x, y, max(MIN_W, w), max(MIN_H, h), title or "Program")
+        if (w, h) == (W, H):
             rw, rh = max(MIN_W, W * 3 // 4), max(MIN_H, H * 3 // 4)
             win.saved = (min(2 + 3 * n, W - rw), min(1 + 2 * n, H - rh + 1), rw, rh)
         self.windows.append(win)
@@ -407,12 +509,24 @@ class Desk:
             win.resize(W * 3 // 4, H * 3 // 4)
             win.move(2 + 3 * i, 1 + 2 * i)
 
-    # --- drawing --------------------------------------------------------
-    TILE_W = 64                            # a tile with its frame
+    def logout(self):
+        """Close every window, then leave (Kilobyte logs out)."""
+        self.quitting = time.time()
+        for w in self.windows:
+            w.close()
+
+    # --- the desktop: wallpaper, tiles, icons ------------------------------
+    def icon_rows(self):
+        H, W = self.area()
+        return max(1, (H - 1) // ICON_H)
+
+    def icon_columns(self):
+        n = len(deskbg.icons(self.apps))
+        return max(1, (n + self.icon_rows() - 1) // self.icon_rows())
 
     def draw_desktop(self):
-        """Wallpaper and tiles. They are drawn into a window of their own
-        when something changed and copied from there for every picture."""
+        """Wallpaper, tiles and icons. They are drawn into a window of their
+        own when something changed and copied from there for every picture."""
         H, W = self.s.size()
         now = time.time()
         if now - self.wall_checked > 2 or self.wall is None:
@@ -422,7 +536,7 @@ class Desk:
             except OSError:
                 stamp = 0
             tiles = deskbg.tiles()
-            key = (H, W, stamp, repr(tiles))
+            key = (H, W, stamp, repr(tiles), deskbg.desktop_stamp(), len(self.apps))
             if key != self.wall_key:
                 self.wall_key = key
                 self.wall = self.render_desktop(H - 2, W, tiles)
@@ -431,6 +545,17 @@ class Desk:
                 self.wall.overwrite(self.s.scr)
             except curses.error:
                 pass
+        # The chosen icon: its name in other colours.
+        for x, y, icon in self.icons:
+            if icon is self.icon_sel:
+                self.s.put(y + 2, x, self.icon_label(icon), BLACK, CYAN)
+
+    @staticmethod
+    def icon_label(icon):
+        label = icon["label"]
+        if len(label) > ICON_W - 1:
+            label = label[:ICON_W - 2] + "~"
+        return label.center(ICON_W - 1)
 
     def render_desktop(self, h, w, tiles):
         if h < 1 or w < 1:
@@ -480,29 +605,56 @@ class Desk:
                     put(y + 1 + i, x, "│ " + line[:tw - 4].ljust(tw - 4) + " │", BLACK, LIGHTGREY)
                 put(y + th - 1, x, "└" + "─" * (tw - 2) + "┘", BLACK, LIGHTGREY)
                 y += th + 1
+        # Icons: programs, then what is in ~/Desktop, in columns from the left.
+        self.icons = []
+        per_col = max(1, (h - 1) // ICON_H)
+        for i, icon in enumerate(deskbg.icons(self.apps)):
+            x, y = 1 + (i // per_col) * ICON_W, 1 + (i % per_col) * ICON_H
+            if x + ICON_W > w:
+                break
+            fg = WHITE if icon["bg"] in (1, 4, 5) else BLACK
+            put(y, x + 3, ("  " + icon["glyph"] + "  ")[:6], fg, icon["bg"])
+            put(y + 1, x + 3, "      ", fg, icon["bg"])
+            put(y + 2, x, self.icon_label(icon), WHITE, BLACK)
+            self.icons.append((x, y + 1, icon))    # (in screen rows: the desktop starts at row 1)
         return win
 
+    def icon_at(self, mx, my):
+        for x, y, icon in self.icons:
+            if x <= mx < x + ICON_W - 1 and y <= my < y + 3:
+                return icon
+        return None
+
+    def open_icon(self, icon):
+        if icon["kind"] == "app":
+            self.launch_app(icon["id"])
+        else:
+            self.open_file(icon["path"])
+
+    # --- menu bar and taskbar -------------------------------------------
     def draw_bars(self):
         """Menu bar and taskbar: drawn last, so windows never cover them."""
         H, W = self.s.size()
         st = self.status
-        # Right: what the computer is doing. Left: what can be clicked.
+        # Right: what the computer is doing (each part can be clicked).
         right = []
         if st.update:
-            right.append("▲ Update")
+            right.append(("update", "▲ Update"))
         if st.network:
-            right.append(st.network)
+            right.append(("network", st.network))
+        if st.volume:
+            right.append(("volume", "♪ " + (st.volume if st.volume == "mute" else st.volume + "%")))
         if st.battery:
-            right.append("Battery " + st.battery)
-        right.append(time.strftime("%a %d %b  %H:%M"))
-        items = [("menu", " ■ Kilobyte "), ("new", " New window "), ("tile", " Tile "), ("cascade", " Cascade ")]
-        hint = "  F12 menu   Alt+Tab next window"
+            right.append(("battery", "Battery " + st.battery))
+        right.append(("clock", time.strftime("%a %d %b  %H:%M")))
+        items = [("menu", " ■ Kilobyte "), ("tile", " Tile "), ("cascade", " Cascade ")]
+        hint = "  F12 menu   Alt+Tab next window   F11 paste"
         while True:
-            rtext = "  │  ".join(right) + " "
+            rlen = sum(len(t) for _, t in right) + 5 * (len(right) - 1) + 1
             left = sum(len(t) + 1 for _, t in items)
-            if left + len(rtext) + 2 <= W or (len(items) <= 2 and len(right) <= 1):
+            if left + rlen + 2 <= W or (len(items) <= 1 and len(right) <= 1):
                 break
-            if len(items) > 2:
+            if len(items) > 1:
                 items.pop()                        # narrow screens: fewer buttons,
             else:
                 right.pop(0)                       # then less status
@@ -516,12 +668,16 @@ class Desk:
             self.s.put(0, x, "│", DARKGREY, LIGHTGREY)
             x += 1
         self.s.put(0, 1, "■", kbui.RED, LIGHTGREY)
-        if x + len(hint) + len(rtext) + 2 <= W:
+        if x + len(hint) + rlen + 2 <= W:
             self.s.put(0, x, hint, DARKGREY, LIGHTGREY)
-        rx = max(x, W - len(rtext))
-        self.s.put(0, rx, rtext, BLACK, LIGHTGREY)
-        if st.update and rtext.startswith("▲"):
-            self.s.put(0, rx, "▲ Update", kbui.RED, LIGHTGREY)
+        rx = max(x, W - rlen)
+        for i, (action, text) in enumerate(right):
+            self.s.put(0, rx, text, kbui.RED if action == "update" else BLACK, LIGHTGREY)
+            self.bar_items.append((rx, rx + len(text), action))
+            rx += len(text)
+            if i < len(right) - 1:
+                self.s.put(0, rx, "  │  ", DARKGREY, LIGHTGREY)
+                rx += 5
         # The taskbar.
         x = 1
         self.task_buttons = []
@@ -533,6 +689,9 @@ class Desk:
             self.s.put(H - 1, x, label, fg, bg)
             self.task_buttons.append((x, x + len(label), win))
             x += len(label) + 1
+        if not self.windows:
+            self.s.put(H - 1, 1, "No program is open.  F12 or ■ Kilobyte opens the Programs menu; "
+                       "double-click an icon to start it.", BLACK, CYAN)
 
     def draw_window(self, win, active):
         s, x, y, w, h = self.s, win.x, win.y, win.w, win.h
@@ -578,6 +737,16 @@ class Desk:
                 s.put(y + 1 + row, out_x, text, fg, bg & 7)
                 out_x += end - col
                 col = end
+        # Text being marked with the mouse.
+        sel = self.select
+        if sel and sel["win"] is win:
+            a, b = sel["a"], sel["b"]
+            if (a[1], a[0]) > (b[1], b[0]):
+                a, b = b, a
+            for row in range(a[1], b[1] + 1):
+                x0 = a[0] if row == a[1] else 0
+                x1 = b[0] if row == b[1] else win.cols() - 1
+                self.invert(y + 1 + row, x + 1 + x0, x1 - x0 + 1)
 
     def draw(self):
         self.draw_desktop()
@@ -588,14 +757,21 @@ class Desk:
         if self.outline:
             self.draw_outline()
         self.draw_bars()
-        if self.menu:
-            self.draw_menu()
+        self.draw_notes()
+        if self.volume_open:
+            self.draw_volume()
+        if self.menus:
+            self.draw_menus()
+        if self.mode:
+            H, W = self.s.size()
+            hint = " Arrow keys %s the window.  Enter or Esc when done. " % self.mode
+            self.s.put(H - 1, 0, hint.ljust(W), BLACK, YELLOW)
         # The mouse pointer: the cell under it with its colours swapped.
         if self.pointer:
             px, py = self.pointer
             self.invert(py, px, 1)
         # The cursor of the active window's program.
-        if act and not act.screen.cursor.hidden and not self.menu:
+        if act and not act.screen.cursor.hidden and not self.menus and not self.volume_open:
             cx, cy = act.x + 1 + act.screen.cursor.x, act.y + 1 + act.screen.cursor.y
             H, W = self.s.size()
             if 0 <= cx < W and 0 <= cy < H - 1:
@@ -636,79 +812,345 @@ class Desk:
             mark(yy, x, 1)
             mark(yy, x + w - 1, 1)
 
-    # --- the F12 window menu -------------------------------------------
-    MENU = [("n", "New window"), ("m", "Move (arrow keys, Enter)"), ("r", "Resize (arrow keys, Enter)"),
-            ("x", "Maximise / restore"), ("i", "Minimise"), ("t", "Tile all windows"), ("c", "Cascade windows"),
-            ("w", "Close this window"), ("q", "Leave windows (close all)")]
+    # --- notes in the corner ----------------------------------------------
+    NOTE_W = 46
 
-    def draw_menu(self):
+    def note(self, title, text="", seconds=8):
+        lines = []
+        for part in str(text).split("\n"):
+            while len(part) > self.NOTE_W - 4:
+                cut = part.rfind(" ", 0, self.NOTE_W - 4)
+                cut = cut if cut > 10 else self.NOTE_W - 4
+                lines.append(part[:cut])
+                part = part[cut:].lstrip()
+            if part:
+                lines.append(part)
+        self.notes.append([str(title)[:self.NOTE_W - 6], lines[:5], time.time() + seconds])
+        del self.notes[:-4]                    # four at a time are plenty
+
+    def note_boxes(self):
+        """[(x, y, h, note)], newest at the bottom right."""
         H, W = self.s.size()
-        mode = self.menu.get("mode")
-        if mode in ("move", "resize"):
-            # Moving or resizing with the keyboard: say how, and how to stop.
-            hint = " Arrow keys %s the window.  Enter or Esc when done. " % ("move" if mode == "move" else "resize")
-            self.s.put(H - 1, 0, hint.ljust(W), BLACK, YELLOW)
+        boxes, y = [], H - 1
+        for n in reversed(self.notes):
+            h = len(n[1]) + 2
+            y -= h
+            if y < 2:
+                break
+            boxes.append((W - self.NOTE_W - 1, y, h, n))
+        return boxes
+
+    def draw_notes(self):
+        now = time.time()
+        self.notes = [n for n in self.notes if n[2] > now]
+        w = self.NOTE_W
+        for x, y, h, (title, lines, _) in self.note_boxes():
+            self.s.put(y, x, "┌" + "─" * (w - 2) + "┐", BLACK, YELLOW)
+            self.s.put(y, x + 2, " %s " % title, BLACK, YELLOW)
+            for i, line in enumerate(lines):
+                self.s.put(y + 1 + i, x, "│ " + line.ljust(w - 4) + " │", BLACK, YELLOW)
+            self.s.put(y + h - 1, x, "└" + "─" * (w - 2) + "┘", BLACK, YELLOW)
+
+    def watch_status(self):
+        """Tell about what changed: network, battery, updates, USB sticks."""
+        st = self.status
+        if not st.fresh:
             return
-        w = 34
-        x, y = (W - w) // 2, max(1, (H - len(self.MENU) - 2) // 2)
-        self.s.box(y, x, len(self.MENU) + 2, w, BLACK, LIGHTGREY, title="Window")
-        for i, (key, label) in enumerate(self.MENU):
-            sel = i == self.menu["sel"]
-            fg, bg = (WHITE, BLACK) if sel else (BLACK, LIGHTGREY)
-            self.s.put(y + 1 + i, x + 1, f" {key.upper()}  {label}".ljust(w - 2), fg, bg)
-            self.s.put(y + 1 + i, x + 2, key.upper(), kbui.RED if not sel else YELLOW, bg)
-        self.menu["box"] = (x, y, w)
+        st.fresh = False
+        now = {"network": st.network, "update": st.update, "usb": list(st.usb or [])}
+        old, self.seen = self.seen, now
+        pct = st.battery.rstrip("+%")
+        low = pct.isdigit() and int(pct) <= 10 and not st.battery.endswith("+")
+        if low and not getattr(self, "battery_warned", False):
+            self.note("Battery low", "The battery is at %s%%. Plug in the charger or save your work." % pct, 20)
+        self.battery_warned = low
+        if old is None:
+            return
+        if now["network"] != old["network"] and now["network"]:
+            self.note("Network", now["network"])
+        if now["update"] and not old["update"]:
+            self.note("Kilobyte Update", "A newer Kilobyte is there: Settings > Kilobyte Update.", 12)
+        for name in now["usb"]:
+            if name not in old["usb"]:
+                self.note("USB stick", "%s was plugged in. Accessories > USB sticks opens it." % name, 12)
+        for name in old["usb"]:
+            if name not in now["usb"]:
+                self.note("USB stick", "%s was removed." % name)
+
+    # --- volume ------------------------------------------------------------
+    def volume_box(self):
+        H, W = self.s.size()
+        return max(0, W - 40), 1, 38               # x, y, width
+
+    def draw_volume(self):
+        x, y, w = self.volume_box()
+        v = self.status.volume
+        level = int(v) if v.isdigit() else 0
+        bar = w - 12
+        filled = level * bar // 100
+        self.s.box(y, x, 4, w, BLACK, LIGHTGREY, title="Volume")
+        self.s.put(y + 1, x + 2, "█" * filled + "░" * (bar - filled), BLUE, LIGHTGREY)
+        self.s.put(y + 1, x + 3 + bar, ("mute" if v == "mute" else "%3d%%" % level).rjust(5), BLACK, LIGHTGREY)
+        self.s.put(y + 2, x + 2, "← → change   M mute   Esc closes".ljust(w - 4), DARKGREY, LIGHTGREY)
+
+    def set_volume(self, what, value=None):
+        v = self.status.volume
+        level = int(v) if v.isdigit() else 50
+        if what == "set":
+            level = max(0, min(100, value))
+            self.status.volume = str(level)
+            cmd = "kb_volume set %d" % level
+        else:                                       # mute on and off
+            self.status.volume = "mute" if v != "mute" else ""
+            cmd = "kb_volume mute"
+        try:
+            subprocess.Popen(["bash", "-c", ". %s/lib.sh; %s" % (LIB, cmd)], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+        self.status.next = time.time() + 1          # ask what it really is now
+
+    def volume_key(self, k):
+        v = self.status.volume
+        level = int(v) if v.isdigit() else 0
+        if k in (curses.KEY_LEFT, "-", curses.KEY_DOWN):
+            self.set_volume("set", level - 5)
+        elif k in (curses.KEY_RIGHT, "+", "=", curses.KEY_UP):
+            self.set_volume("set", level + 5)
+        elif k in ("m", "M"):
+            self.set_volume("mute")
+        elif k in ("\x1b", "\n", "\r", "q", "\x03", curses.KEY_ENTER, curses.KEY_F12):
+            self.volume_open = False
+
+    # --- the Programs menu ---------------------------------------------------
+    # A menu is a list of (label, action, submenu); ("-", None, None) is a line.
+
+    def main_menu(self):
+        if time.time() - self.apps_read > 30:
+            self.read_apps()
+        items = [("Program Manager", "pm", None)]
+        for cat, title in deskbg.CATEGORIES:
+            sub = [(a["name"], "app:" + a["id"], None) for a in self.apps if a["cat"] == cat]
+            if sub:
+                items.append((title, None, sub))
+        files = [(i["label"], "file:" + i["path"], None) for i in deskbg.icons(self.apps) if i["kind"] == "file"]
+        if files:
+            items.append(("Desktop", None, files[:30]))
+        items += [
+            ("-", None, None),
+            ("Windows", None, [
+                ("Next window        Alt+Tab", "win:next", None),
+                ("Move", "win:move", None), ("Resize", "win:resize", None),
+                ("Maximise / restore", "win:max", None), ("Minimise", "win:min", None),
+                ("Tile all", "win:tile", None), ("Cascade all", "win:cascade", None),
+                ("Close this window", "win:close", None)]),
+            ("Copy and paste", None, [
+                ("Copy this window's text", "copy", None),
+                ("Paste                 F11", "paste", None)]),
+            ("Volume", "volume", None),
+            ("Settings", "app:Settings", None),
+            ("Help", "app:Help", None),
+            ("-", None, None),
+            ("Lock the screen", "lock", None),
+            ("Switch user", "app:Users", None),
+            ("Log out", "logout", None),
+            ("Restart", "app:Restart", None),
+            ("Shut down", "app:Shutdown", None),
+        ]
+        return items
+
+    def open_menu(self, items, x, y):
+        self.menus = [{"items": items, "sel": self.first_item(items), "x": x, "y": y}]
+        self.volume_open = False
+
+    @staticmethod
+    def first_item(items):
+        for i, it in enumerate(items):
+            if it[0] != "-":
+                return i
+        return 0
+
+    def menu_box(self, m):
+        """(x, y, w, h) of a menu, kept on the screen."""
+        H, W = self.s.size()
+        w = max(len(it[0]) for it in m["items"]) + 6
+        h = len(m["items"]) + 2
+        return max(0, min(m["x"], W - w)), max(1, min(m["y"], H - 1 - h)), w, h
+
+    def draw_menus(self):
+        for level, m in enumerate(self.menus):
+            x, y, w, h = self.menu_box(m)
+            self.s.box(y, x, h, w, BLACK, LIGHTGREY)
+            for yy in range(y + 1, y + h + 1):         # shadow
+                self.s.put(yy, x + w, "  ", DARKGREY, BLACK)
+            self.s.put(y + h, x + 2, " " * w, DARKGREY, BLACK)
+            for i, (label, action, sub) in enumerate(m["items"]):
+                if label == "-":
+                    self.s.put(y + 1 + i, x, "├" + "─" * (w - 2) + "┤", BLACK, LIGHTGREY)
+                    continue
+                chosen = i == m["sel"]
+                fg, bg = (WHITE, BLUE) if chosen else (BLACK, LIGHTGREY)
+                text = " " + label.ljust(w - 5) + ("► " if sub else "  ")
+                self.s.put(y + 1 + i, x + 1, text[:w - 2], fg, bg)
+
+    def menu_move(self, m, step):
+        n = len(m["items"])
+        i = m["sel"]
+        for _ in range(n):
+            i = (i + step) % n
+            if m["items"][i][0] != "-":
+                break
+        m["sel"] = i
+
+    def menu_enter(self):
+        m = self.menus[-1]
+        label, action, sub = m["items"][m["sel"]]
+        if sub:
+            x, y, w, h = self.menu_box(m)
+            self.menus.append({"items": sub, "sel": self.first_item(sub), "x": x + w - 1, "y": y + m["sel"]})
+        elif action:
+            self.menus = []
+            self.do(action)
 
     def menu_key(self, k):
-        m = self.menu
-        # Keys come as characters ("\n", Esc) or as curses key numbers.
-        enter = k in ("\n", "\r", " ", curses.KEY_ENTER)
-        leave = k in ("\x1b", "\x03", curses.KEY_F12)
-        if m.get("mode") in ("move", "resize"):
-            win = self.active()
-            dx = {curses.KEY_LEFT: -1, curses.KEY_RIGHT: 1}.get(k, 0)
-            dy = {curses.KEY_UP: -1, curses.KEY_DOWN: 1}.get(k, 0)
-            if win and (dx or dy):
-                if m["mode"] == "move":
-                    win.move(win.x + dx * 2, win.y + dy)
-                else:
-                    win.resize(win.w + dx * 2, win.h + dy)
-            elif enter or leave or k in ("q", "Q") or not win:
-                self.menu = None       # (never trap the keyboard in this mode)
-            return
-        if leave:
-            self.menu = None
-        elif k == curses.KEY_UP:
-            m["sel"] = (m["sel"] - 1) % len(self.MENU)
+        m = self.menus[-1]
+        if k == curses.KEY_UP:
+            self.menu_move(m, -1)
         elif k == curses.KEY_DOWN:
-            m["sel"] = (m["sel"] + 1) % len(self.MENU)
-        elif enter:
-            self.menu_do(self.MENU[m["sel"]][0])
-        elif isinstance(k, str) and k.lower() in dict(self.MENU):
-            self.menu_do(k.lower())
+            self.menu_move(m, 1)
+        elif k in (curses.KEY_RIGHT, "\n", "\r", " ", curses.KEY_ENTER):
+            self.menu_enter()
+        elif k == curses.KEY_LEFT:
+            if len(self.menus) > 1:
+                self.menus.pop()
+        elif k in ("\x1b", "\x03"):
+            self.menus.pop()
+        elif k == curses.KEY_F12:
+            self.menus = []
+        elif isinstance(k, str) and k.isprintable():
+            # A letter: the next entry that starts with it.
+            n = len(m["items"])
+            for d in range(1, n + 1):
+                i = (m["sel"] + d) % n
+                if m["items"][i][0].lower().startswith(k.lower()):
+                    m["sel"] = i
+                    break
 
-    def menu_do(self, key):
+    def menu_pointer(self, mx, my, kind):
+        """The mouse while a menu is open. Returns True if it was used."""
+        for level in range(len(self.menus) - 1, -1, -1):
+            m = self.menus[level]
+            x, y, w, h = self.menu_box(m)
+            if x <= mx < x + w and y <= my < y + h:
+                i = my - y - 1
+                if 0 <= i < len(m["items"]) and m["items"][i][0] != "-":
+                    if kind == "down" or m["sel"] != i:
+                        del self.menus[level + 1:]
+                        m["sel"] = i
+                    if kind == "down":
+                        self.menu_enter()
+                return True
+        if kind == "down":
+            self.menus = []
+        return kind == "down"
+
+    def do(self, action):
+        """What a menu entry, a button in the menu bar or an icon's menu does."""
         win = self.active()
-        self.menu = None
-        if key == "n":
-            self.new_window()
-        elif key in ("m", "r") and win:
+        if action.startswith("app:"):
+            self.launch_app(action[4:])
+        elif action.startswith("file:"):
+            self.open_file(action[5:])
+        elif action.startswith("with:"):
+            self.open_file(action[5:], choose=True)
+        elif action.startswith("trash:"):
+            self.run_quiet([LIB + "/kb-trash", "put", action[6:]])
+            self.wall_key = None
+        elif action.startswith("unpin:"):
+            apps = [a for a in deskbg.desktop_apps() if a != action[6:]]
+            try:
+                os.makedirs(deskbg.CONF, exist_ok=True)
+                with open(os.path.join(deskbg.CONF, "desktop-apps"), "w", encoding="utf-8") as f:
+                    f.write("".join(a + "\n" for a in apps))
+            except OSError:
+                pass
+            self.wall_key = None
+        elif action == "pm":
+            H, W = self.area()
+            pm = self.open_window(["kilobyte"], "Program Manager", "S" if W >= 100 else "M")
+            if W >= 100:
+                pm.resize(76, min(H, 30))
+        elif action == "menu":
+            self.open_menu(self.main_menu(), 0, 1)
+        elif action == "tile" or action == "win:tile":
+            self.tile()
+        elif action == "cascade" or action == "win:cascade":
+            self.cascade()
+        elif action == "win:next":
+            self.cycle()
+        elif action in ("win:move", "win:resize") and win:
             if win.saved:
                 self.maximise(win)
-            self.menu = {"mode": "move" if key == "m" else "resize", "sel": 0}
-        elif key == "x" and win:
+            self.mode = action[4:]
+        elif action == "win:max" and win:
             self.maximise(win)
-        elif key == "i" and win:
+        elif action == "win:min" and win:
             win.minimised = True
-        elif key == "t":
-            self.tile()
-        elif key == "c":
-            self.cascade()
-        elif key == "w" and win:
+        elif action == "win:close" and win:
             win.close()
-        elif key == "q":
-            for w in self.windows:
-                w.close()
+        elif action == "copy" and win:
+            self.copy(win.text())
+        elif action == "paste":
+            self.paste()
+        elif action == "volume":
+            if self.status.volume:
+                self.volume_open = True
+            else:
+                self.note("Volume", "No sound card was found.")
+        elif action == "update":
+            self.launch_app("Settings", "Update")
+        elif action == "network":
+            self.launch_app("Settings", "Wi-Fi")
+        elif action == "battery":
+            self.launch_app("Battery")
+        elif action == "clock":
+            self.launch_app("Month")
+        elif action == "lock":
+            self.lock()
+        elif action == "logout":
+            self.logout()
+
+    @staticmethod
+    def run_quiet(argv):
+        try:
+            subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    # --- copy and paste -------------------------------------------------------
+    def copy(self, text):
+        if not text:
+            return
+        self.clip = text
+        try:
+            os.makedirs(os.path.dirname(CLIPBOARD), exist_ok=True)
+            fd = os.open(CLIPBOARD, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(text)
+        except OSError:
+            pass
+        n = len(text)
+        self.note("Copied", "%d character%s. F11 or the middle mouse button pastes." % (n, "" if n == 1 else "s"), 4)
+
+    def paste(self):
+        win = self.active()
+        if not win or not self.clip:
+            return
+        data = self.clip.replace("\r\n", "\n").replace("\n", "\r").encode("utf-8")
+        if 2004 << 5 in win.screen.mode:            # the program knows pasted text from typed text
+            data = b"\x1b[200~" + data + b"\x1b[201~"
+        win.send(data)
 
     # --- input ----------------------------------------------------------
     def mouse(self):
@@ -719,13 +1161,14 @@ class Desk:
             return
         B = curses
         events = []
-        for bit, button in ((B.BUTTON1_PRESSED, 1), (B.BUTTON3_PRESSED, 3)):
+        for bit, button in ((B.BUTTON1_PRESSED, 1), (B.BUTTON2_PRESSED, 2), (B.BUTTON3_PRESSED, 3)):
             if b & bit:
                 events.append(("down", button))
-        for bit, button in ((B.BUTTON1_RELEASED, 1), (B.BUTTON3_RELEASED, 3)):
+        for bit, button in ((B.BUTTON1_RELEASED, 1), (B.BUTTON2_RELEASED, 2), (B.BUTTON3_RELEASED, 3)):
             if b & bit:
                 events.append(("up", button))
-        for bit, button, times in ((B.BUTTON1_CLICKED, 1, 1), (B.BUTTON1_DOUBLE_CLICKED, 1, 2), (B.BUTTON3_CLICKED, 3, 1)):
+        for bit, button, times in ((B.BUTTON1_CLICKED, 1, 1), (B.BUTTON1_DOUBLE_CLICKED, 1, 2),
+                                   (B.BUTTON2_CLICKED, 2, 1), (B.BUTTON3_CLICKED, 3, 1)):
             if b & bit:
                 events += [("down", button), ("up", button)] * times
         for name, button in (("BUTTON4_PRESSED", 4), ("BUTTON5_PRESSED", 5)):
@@ -736,10 +1179,12 @@ class Desk:
         for kind, button in events:
             self.pointer_event(mx, my, kind, button)
 
-    def pointer_event(self, mx, my, kind, button):
+    def pointer_event(self, mx, my, kind, button, shift=False):
         """One mouse event: kind is down, up, move, drag or wheel; button
-        1 (left), 3 (right), 4/5 (wheel up/down). Coordinates start at 0."""
+        1 (left), 2 (middle), 3 (right), 4/5 (wheel up/down). Coordinates
+        start at 0."""
         self.pointer = (mx, my)
+        self.last_input = time.time()
         if kind == "down":
             self.buttons.add(button)
         elif kind == "up":
@@ -750,8 +1195,8 @@ class Desk:
         H, W = self.s.size()
         down = kind == "down" and button == 1
 
-        # Moving or resizing: an outline follows the pointer (like Windows
-        # 98) and the window goes there when the button is let go.
+        # Moving or resizing: an outline follows the pointer and the window
+        # goes there when the button is let go.
         if self.drag:
             what, win, dx, dy = self.drag
             if kind in ("drag", "move", "up"):
@@ -775,26 +1220,45 @@ class Desk:
                         win.resize(w, h)
                 self.drag = self.outline = None
             return
-        if self.menu:
-            if down:
-                x, y, w = self.menu.get("box", (0, 0, 0))
-                if x <= mx < x + w and y < my <= y + len(self.MENU):
-                    self.menu_do(self.MENU[my - y - 1][0])
-                else:
-                    self.menu = None
+        # Marking text: it is copied when the button is let go.
+        if self.select:
+            win = self.select["win"]
+            if win in self.windows and kind in ("drag", "move", "up"):
+                self.select["b"] = (max(0, min(win.cols() - 1, mx - win.x - 1)),
+                                    max(0, min(win.rows() - 1, my - win.y - 1)))
+            if kind == "up" or down:
+                if win in self.windows and self.select["a"] != self.select["b"]:
+                    self.copy(win.text(self.select["a"], self.select["b"]))
+                self.select = None
             return
+        if self.mode:
+            if kind == "down":
+                self.mode = None
+            return
+        if self.menus:
+            if self.menu_pointer(mx, my, kind) or kind != "down":
+                return
+        if self.volume_open:
+            x, y, w = self.volume_box()
+            if kind in ("down", "drag") and y <= my < y + 4 and x <= mx < x + w:
+                bar = w - 12
+                if my == y + 1 and x + 2 <= mx <= x + 2 + bar:
+                    self.set_volume("set", (mx - x - 2) * 100 // bar)
+                return
+            if kind == "down":
+                self.volume_open = False
+            else:
+                return
+        if kind == "down":
+            for x, y, h, n in self.note_boxes():    # a click puts a note away
+                if x <= mx < x + self.NOTE_W and y <= my < y + h:
+                    self.notes.remove(n)
+                    return
         if my == 0:
             if down:
                 for x0, x1, action in self.bar_items:
                     if x0 <= mx < x1:
-                        if action == "menu":
-                            self.menu = {"sel": 0}
-                        elif action == "new":
-                            self.new_window()
-                        elif action == "tile":
-                            self.tile()
-                        elif action == "cascade":
-                            self.cascade()
+                        self.do(action)
             return
         if my == H - 1:
             if down:
@@ -809,7 +1273,7 @@ class Desk:
         for win in reversed(self.windows):
             if win.minimised or not win.contains(mx, my):
                 continue
-            if down and win is not self.active():
+            if kind == "down" and win is not self.active():
                 self.raise_(win)
             rx, ry = mx - win.x, my - win.y
             if ry == 0:                               # title bar
@@ -834,8 +1298,18 @@ class Desk:
                     self.drag = ("size", win, 0, 0)
                     self.outline = (win.x, win.y, win.w, win.h)
                 return
-            # Inside: hand the event to the program if it listens to the mouse.
-            if 1 <= rx < win.w - 1 and 1 <= ry < win.h - 1 and win.mouse_on():
+            if not (1 <= rx < win.w - 1 and 1 <= ry < win.h - 1):
+                return
+            if kind == "down" and button == 2:        # middle button: paste
+                self.paste()
+                return
+            listening = win.mouse_on()
+            # Mark text: where the program leaves the mouse alone, or with Shift.
+            if down and (shift or not listening):
+                self.select = {"win": win, "a": (rx - 1, ry - 1), "b": (rx - 1, ry - 1)}
+                return
+            # Otherwise the event is the program's.
+            if listening:
                 code = {1: 0, 3: 2, 4: 64, 5: 65}.get(button, 0)
                 if kind == "down":
                     win.send(b"\x1b[<%d;%d;%dM" % (code, rx, ry))
@@ -846,32 +1320,48 @@ class Desk:
                 elif kind == "drag" and (1002 << 5 in win.screen.mode or 1003 << 5 in win.screen.mode):
                     win.send(b"\x1b[<32;%d;%dM" % (rx, ry))
             return
+        # The desktop itself: icons.
+        icon = self.icon_at(mx, my)
+        if kind == "down" and button == 3:
+            self.icon_sel = icon
+            if icon and icon["kind"] == "file":
+                self.open_menu([("Open", "file:" + icon["path"], None),
+                                ("Open with ...", "with:" + icon["path"], None),
+                                ("Move to the trash", "trash:" + icon["path"], None)], mx, my)
+            elif icon:
+                self.open_menu([("Open", "app:" + icon["id"], None),
+                                ("Take off the desktop", "unpin:" + icon["id"], None)], mx, my)
+            else:
+                self.open_menu(self.main_menu(), mx, my)
+        elif down:
+            now = time.time()
+            double = icon is not None and self.last_click[1] is icon and now - self.last_click[0] < 0.6
+            self.last_click = (now, icon)
+            self.icon_sel = icon
+            if double:
+                self.open_icon(icon)
+                self.last_click = (0, None)
 
     def key(self, k):
         # An Esc first: it may start a key's escape sequence that curses did
         # not recognise (on a slow machine a sequence can come in pieces).
-        # Read the whole key here, so neither a program nor the window menu
-        # ever sees a lone Esc that was not typed.
+        # Read the whole key here, so neither a program nor a menu ever sees
+        # a lone Esc that was not typed.
+        self.last_input = time.time()
         if k == "\x1b":
             seq, extra = self.read_escape()
             if seq == "\x1b\t":                 # Alt+Tab
-                if not self.menu:
+                if not (self.menus or self.mode or self.volume_open):
                     self.cycle()
             elif seq in RAW_KEYS:                # an arrow, F-key, Home, ...
                 self.key(RAW_KEYS[seq])
-            elif self.menu:
+            elif self.menus or self.mode or self.volume_open:
                 if seq == "\x1b":
-                    self.menu_key("\x1b")
+                    self.modal_key("\x1b")
             elif self.active():
                 self.active().send(seq.encode("utf-8"))
             if extra is not None:
                 self.key(extra)
-            return
-        if self.menu:
-            self.menu_key(k)
-            return
-        if k == curses.KEY_F12:
-            self.menu = {"sel": 0}
             return
         if k == curses.KEY_MOUSE:
             self.mouse()
@@ -881,6 +1371,16 @@ class Desk:
             for win in self.windows:
                 win.resize(min(win.w, W), min(win.h, H))
                 win.move(win.x, win.y)
+            self.wall_key = None
+            return
+        if self.menus or self.mode or self.volume_open:
+            self.modal_key(k)
+            return
+        if k == curses.KEY_F12:
+            self.open_menu(self.main_menu(), 0, 1)
+            return
+        if k == curses.KEY_F11:
+            self.paste()
             return
         win = self.active()
         if not win:
@@ -891,6 +1391,24 @@ class Desk:
             win.send(APP_KEYS[k])
         elif k in KEYS:
             win.send(KEYS[k])
+
+    def modal_key(self, k):
+        """A key while a menu, the volume slider or keyboard moving is on."""
+        if self.mode:
+            win = self.active()
+            dx = {curses.KEY_LEFT: -1, curses.KEY_RIGHT: 1}.get(k, 0)
+            dy = {curses.KEY_UP: -1, curses.KEY_DOWN: 1}.get(k, 0)
+            if win and (dx or dy):
+                if self.mode == "move":
+                    win.move(win.x + dx * 2, win.y + dy)
+                else:
+                    win.resize(win.w + dx * 2, win.h + dy)
+            elif k in ("\n", "\r", " ", "\x1b", "\x03", "q", "Q", curses.KEY_ENTER, curses.KEY_F12) or not win:
+                self.mode = None       # (never trap the keyboard in this mode)
+        elif self.volume_open:
+            self.volume_key(k)
+        elif self.menus:
+            self.menu_key(k)
 
     def read_escape(self):
         """After an Esc: the rest of its escape sequence, if one follows at
@@ -951,12 +1469,21 @@ class Desk:
                 self.windows.remove(win)
                 if self.drag and self.drag[1] is win:
                     self.drag = self.outline = None
+                if self.select and self.select["win"] is win:
+                    self.select = None
                 try:
                     os.waitpid(win.pid, os.WNOHANG)
                 except ChildProcessError:
                     pass
-            if not self.windows:
-                return
+            # Logging out: leave when the last window has closed (programs
+            # that do not go by themselves are ended after three seconds).
+            if self.quitting:
+                if not self.windows:
+                    return
+                if time.time() - self.quitting > 3:
+                    for w in self.windows:
+                        w.close(signal.SIGKILL)
+                    self.quitting = time.time()
             try:
                 self.step()
                 errors = 0
@@ -979,6 +1506,8 @@ class Desk:
             self.gpm = Gpm.open()
             self.gpm_retry = time.time() + 2
         self.status.poll()
+        self.watch_status()
+        self.idle()
         fds = [w.fd for w in self.windows] + [sys.stdin.fileno()]
         if self.gpm:
             fds.append(self.gpm.fd)
@@ -998,14 +1527,14 @@ class Desk:
                 except Exception:
                     self.log_error()
         if self.sock and self.sock in ready:
-            self.screen_request()
+            self.request()
         if self.gpm and self.gpm.fd in ready:
             events = self.gpm.events()
             if events is None:
                 self.drop_gpm()
-            for x, y, kind, button in events or []:
+            for x, y, kind, button, shift in events or []:
                 try:
-                    self.pointer_event(x, y, kind, button)
+                    self.pointer_event(x, y, kind, button, shift)
                 except Exception:
                     self.log_error()
         if sys.stdin.fileno() in ready or not ready:
@@ -1021,30 +1550,47 @@ class Desk:
         # Let more program output arrive before drawing again.
         time.sleep(0.01)
 
-    def screen_request(self):
-        """A program in a window asks for the whole screen: kb-play, for a
-        video in one of the tiny pixel fonts or as the real picture, which a
-        window cannot show. Kilobyte Windows steps aside, the player runs on
-        the console itself, and the windows come back when it ends."""
+    # --- requests from programs (deskrun.py) -----------------------------------
+    def request(self):
+        """A program asks for something: the whole screen (kb-play for a
+        video in a tiny pixel font or as the real picture, which a window
+        cannot show; the lock screen), a window for a program, a note, or
+        something for the clipboard."""
         try:
             conn, _ = self.sock.accept()
         except OSError:
             return
-        rc = 1
+        rc = 0
         try:
             conn.settimeout(2)
             data = b""
-            while not data.endswith(b"\n") and len(data) < 65536:
-                chunk = conn.recv(4096)
+            while not data.endswith(b"\n") and len(data) < 1 << 20:
+                chunk = conn.recv(65536)
                 if not chunk:
                     break
                 data += chunk
             req = json.loads(data.decode("utf-8"))
-            args = [str(a) for a in req.get("args", [])]
-            if req.get("run") == "kb-play" and args:    # nothing else is run this way
-                rc = self.full_screen(["/usr/lib/kilobyte/kb-play"] + args, req.get("cwd"))
+            what = req.get("run")
+            if what == "kb-play":
+                args = [str(a) for a in req.get("args", [])]
+                rc = self.full_screen([LIB + "/kb-play"] + args, req.get("cwd")) if args else 1
+            elif what == "lock":
+                rc = self.lock()
+            elif what == "window":
+                argv = [str(a) for a in req.get("argv", [])]
+                if argv:
+                    self.open_window(argv, str(req.get("title", ""))[:40], str(req.get("size", "M")))
+                else:
+                    rc = 1
+            elif what == "notify":
+                self.note(req.get("title", "Kilobyte"), req.get("text", ""))
+            elif what == "clip":
+                self.copy(str(req.get("text", "")))
+            else:
+                rc = 1
         except (OSError, ValueError):
             self.log_error()
+            rc = 1
         try:
             conn.settimeout(2)
             conn.sendall(b"%d\n" % rc)
@@ -1053,12 +1599,14 @@ class Desk:
         conn.close()
 
     def full_screen(self, argv, cwd=None):
+        """Step aside: the program runs on the console itself, and the
+        windows come back when it ends."""
         env = dict(os.environ)
         env.pop("KILOBYTE_DESK", None)
         env["KB_FULL_SCREEN"] = "1"
         curses.def_prog_mode()
         curses.endwin()
-        # Ctrl+C is for the player, not for Kilobyte Windows.
+        # Ctrl+C is for the program, not for Kilobyte Windows.
         old_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         def child_signals():
@@ -1078,9 +1626,38 @@ class Desk:
             if self.gpm:                           # what the mouse did meanwhile is old news
                 if self.gpm.events() is None:
                     self.drop_gpm()
-            self.drag = self.outline = None
+            self.drag = self.outline = self.select = None
             self.buttons.clear()
+            self.last_input = time.time()
         return rc
+
+    def lock(self):
+        self.menus = []
+        return self.full_screen(["python3", LIB + "/py/lock.py"])
+
+    def idle(self):
+        """The screen saver, after the minutes set in Settings; then the
+        lock screen, if that is wanted."""
+        now = time.time()
+        if now - self.idle_checked < 5:
+            return
+        self.idle_checked = now
+
+        def setting(name, default):
+            try:
+                with open(os.path.join(deskbg.CONF, name), encoding="utf-8") as f:
+                    return f.read().strip() or default
+            except OSError:
+                return default
+
+        mode = setting("saver-mode", "random")
+        minutes = setting("saver-minutes", "5")
+        if mode == "off" or not minutes.isdigit() or int(minutes) < 1:
+            return
+        if now - self.last_input >= int(minutes) * 60:
+            self.full_screen([LIB + "/apps/saver", mode])
+            if os.path.exists(os.path.join(deskbg.CONF, "saver-lock")):
+                self.lock()
 
     def drop_gpm(self):
         """The connection to gpm is gone: forget it and any drag in progress."""
@@ -1088,7 +1665,7 @@ class Desk:
             self.gpm.close()
         self.gpm = None
         self.gpm_retry = time.time() + 2
-        self.drag = self.outline = None
+        self.drag = self.outline = self.select = None
         self.buttons.clear()
         self.pointer = None
 

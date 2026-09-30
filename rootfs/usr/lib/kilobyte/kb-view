@@ -1,0 +1,3 @@
+#!/bin/sh
+# Kilobyte picture viewer (a Python program; see /usr/lib/kilobyte/py/view.py)
+exec python3 /usr/lib/kilobyte/py/view.py "$@"

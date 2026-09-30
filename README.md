@@ -53,6 +53,13 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
 | Media › Pictures | `mpv` | photos in coloured blocks or the real picture; opens them in Paint |
 | Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
+| Internet › Network drives | `cifs-utils`, `sshfs` | shared folders of Windows PCs, NAS boxes (SMB) and SSH servers (SFTP) as folders in `~/Network` |
+| Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
+| Internet › Citrix Workspace | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
+| Media › Music Player | Kilobyte (`ffmpeg`, `aplay`) | songs and playlists with spectrum bars |
+| Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
+| Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |
+| Accessories › Lock the screen | Kilobyte | hides everything until the user's password is typed |
 | Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
 | Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
 | Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure, Trek |
@@ -72,32 +79,71 @@ Green Screen, Amber Screen and Hot Dog Stand. On the Linux console the themes
 reprogram the 16-colour palette, so the phosphor, C64, Amiga and Mac themes
 recolour every program.
 
-**Windows and multitasking**: Kilobyte Windows (`apps/desk`) runs every
-program in a window of its own: a pseudo terminal emulated with `pyte` and
-drawn with the same character cells as everything else. Windows have a title
-bar with close `[X]`, minimise and maximise boxes, a double frame when active
-and a shadow. Drag a title bar to move a window or its corner to resize it:
-an outline shows where it will go, as in Windows 98, and it moves when you
-let go. Double-click maximises. Alt+Tab or the taskbar switch between them,
-and F12 opens the window menu (move and resize by keyboard, tile, cascade).
-Clicks inside a window reach its program. Settings › Login and startup turns
-windows off.
+**Kilobyte Windows** (`py/desk.py`, `py/deskbg.py`) is a desktop in text
+mode. Every program runs in a window of its own: a pseudo terminal emulated
+with `pyte` and drawn with the same character cells as everything else. The
+Program Manager is one of those windows and stays where it is.
 
-The **menu bar** has the window menu, New window, Tile and Cascade on the
-left, and on the right the update notice, the network (Wi-Fi name and signal,
-Wired or Offline), the battery and the clock. The weather and news **tiles**
-are drawn on the desktop, and on wide screens the first window leaves their
-column free. **Wallpaper** (Settings › Wallpaper, `py/deskbg.py`): one of 15
-patterns, your own characters repeated, any two colours, or a picture, which
-is cropped to the screen and dithered into half-block "pixels" in the 16
-console colours.
+- **Windows** have a title bar with close `[X]`, minimise and maximise boxes,
+  a double frame when active and a shadow. Drag a title bar to move a window
+  or its corner to resize it: an outline shows where it will go and it moves
+  when you let go. Alt+Tab or the bottom bar switch between them.
+- **Menu bar** (top): `■ Kilobyte` or F12 opens the *Programs* menu, a
+  pull-down with every program by category, the desktop's files, window
+  actions, copy and paste, volume, lock, switch user, log out, restart and
+  shut down. On the right: update notice, network (Wi-Fi name and signal,
+  Wired or Offline), volume (click for a slider), battery and clock; each
+  part can be clicked.
+- **Desktop**: a wallpaper (Settings › Wallpaper: 15 patterns, your own
+  characters, two colours, or a picture dithered into half-block pixels),
+  the weather and news tiles, and **icons**: the programs chosen in
+  Settings › Desktop icons and every file and folder in `~/Desktop`.
+  Double-click opens (files with the program for their kind, `kb-open`); the
+  right mouse button offers "Open with" and "Move to the trash".
+- **Copy and paste**: drag over text to copy it (with Shift where the program
+  uses the mouse itself); the middle button or F11 pastes into the window in
+  front, as bracketed paste where the program supports it.
+- **Notes** pop up in the lower right corner: download finished, USB stick
+  plugged in or removed, network changed, battery low, update available.
+  Any program can show one with `kb-notify TITLE TEXT`.
+- **Screen saver and lock**: the saver covers every window after the idle
+  time from Settings; the lock screen (`py/lock.py`) checks the password
+  with PAM's `unix_chkpwd`, so it needs no root.
+
+Programs talk to Kilobyte Windows over a private socket (`KB_DESK_SOCK`,
+`py/deskrun.py`): open a window for a program, show a note, put text on the
+clipboard, or borrow the whole screen.
 
 **Video in Kilobyte Windows**: a window is a pseudo terminal, so it cannot
 switch the console to a pixel font or draw on the screen itself. For the
-block modes and the real picture `kb-play` therefore asks Kilobyte Windows
-for the whole screen (a private socket, `KB_DESK_SOCK`): the windows step
-aside, the video plays exactly as without windows, and they return when it
-ends. The Text picture mode and sound play inside the window.
+block modes and the real picture `kb-play` therefore borrows the whole
+screen: the windows step aside, the video plays exactly as without windows,
+and they return when it ends. The Text picture mode and sound play inside
+the window.
+
+**Files**: the file manager (mc) opens files with Kilobyte's programs
+(`~/.config/mc/mc.ext.ini`, set up on the first start): documents in the
+editor, tables in the spreadsheet, pictures in the block viewer (`kb-view`,
+also F3), music in the Music Player, PDF as text. Its F2 menu has "Open
+with", "Move to the trash", "Put on the desktop" and "Print".
+
+**Several people**: Settings › Users adds and removes users. "Switch user"
+shows another console (a login prompt, or a session that is already there)
+while your programs keep running.
+
+**Remote Kilobyte and Citrix**: Settings › Remote login switches the SSH
+server on (it is off, and has no host keys, until then); Internet › Remote
+Kilobyte on another computer then runs that Kilobyte in a window. Citrix
+Workspace is proprietary and may not be redistributed, so Kilobyte cannot
+include it: Internet › Citrix Workspace installs the Debian package you
+download from Citrix (amd64, arm64, armhf) and runs it, and `.ica` files, on
+the graphics screen that Windows programs use (`kb-x`).
+
+**Undoing an update**: Kilobyte Update keeps the previous Kilobyte in
+`/var/lib/kilobyte/previous`. Settings › Kilobyte Update can go back to it,
+and installed PCs get a boot menu entry "Kilobyte: undo the last update"
+(`/etc/grub.d/11_kilobyte_undo`, `kilobyte-undo.service`) for the day an
+update leaves Kilobyte unusable.
 
 **Office files**: `kb-office` turns Word and Writer documents (DOCX, ODT) into
 plain text for the Editor. Headings become `#`, lists `-` and table rows
@@ -213,15 +259,28 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 
 | Image | For | Build |
 |---|---|---|
-| `kilobyte-1.3-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
-| `kilobyte-1.3-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
-| `kilobyte-1.3-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
-| `kilobyte-1.3-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
-| `kilobyte-1.3-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
+| `kilobyte-1.4-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
+| `kilobyte-1.4-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
+| `kilobyte-1.4-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
+| `kilobyte-1.4-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400 | `./build.sh --arch arm64` |
+| `kilobyte-1.4-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
 
-`./build.sh --arch all` builds all four. You need Docker. Debian is installed
-in a container of the target architecture (emulated when your computer has a
-different one); compression runs natively. `--lite` leaves out the large
+`./build.sh --arch all` builds all four (the PC builds also write a
+`-usb.img`).
+
+The long part of a build, installing Debian and some 1,500 packages in an
+emulated container, is **cached**: the base system of each architecture is
+kept in its Docker volume and reused until the package lists or the patched
+packages change (or it is two weeks old). A rebuild after changing only
+Kilobyte's own files copies the base, adds the files and runs
+`image/customize.sh`: minutes instead of most of an hour. Downloaded
+packages and the compiler cache of the patched packages (ccache) are kept
+too. `--fresh` rebuilds the base, `--fast` compresses quickly for test
+images.
+
+You need Docker. Debian is installed in a container of the target
+architecture (emulated when your computer has a different one); compression
+runs natively. `--lite` leaves out the large
 Wi-Fi firmware (about 70 MB).
 
 The 64-bit image boots from 64-bit UEFI and falls back to 32-bit EFI GRUB
@@ -230,7 +289,7 @@ is 64-bit (old EFI 1.x PCs, the first Intel Macs); Setup installs both, at
 the removable-media paths that every firmware looks at.
 
 **Intel Macs** (and UEFI PCs that don't list the ISO stick in their boot
-menu): write `kilobyte-1.3-amd64-usb.img` to the stick instead (`dd`, Etcher),
+menu): write `kilobyte-1.4-amd64-usb.img` to the stick instead (`dd`, Etcher),
 hold ⌥ Option at the chime and choose **EFI Boot**. It is a plain stick: one
 FAT32 EFI partition with GRUB, the kernel and the live system, listed in both
 a GPT and a hybrid MBR, which is what Apple's firmware looks for. The hybrid

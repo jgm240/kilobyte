@@ -63,6 +63,17 @@ about() {
     kb_msg "$T" "Wine runs many Windows programs without Windows.\n\n$how\n\nGraphical programs open full screen in a Windows desktop; when they close you are back here. Ctrl+Alt+Backspace leaves at once.\n\nPrograms you install are kept in ~/.wine (drive C:)." 18 66
 }
 
+# wine FILE: run that program (opened from the desktop or the file manager).
+if [ -n "${1:-}" ]; then
+    have_wine || exit 0
+    prepare
+    case $1 in
+        *.msi | *.MSI) run_x msiexec /i "$1" ;;
+        *)             run_x "$1" ;;
+    esac
+    exit 0
+fi
+
 sel=""
 while sel=$(kb_dialog --title " $T " --default-item "$sel" --cancel-label "Close" \
         --menu "Run Windows programs with Wine." 0 64 0 \

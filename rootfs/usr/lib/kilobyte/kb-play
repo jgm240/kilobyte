@@ -28,7 +28,7 @@ if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
         extreme | fine | medium | real)
             clear
             printf '\n  Playing on the whole screen ...\n\n  Space pauses, the arrow keys seek, q or Ctrl+C stops.\n'
-            python3 "$KB_LIB/py/deskrun.py" "$mode" "$src" "$@"
+            python3 "$KB_LIB/py/deskrun.py" play "$mode" "$src" "$@"
             rc=$?
             clear
             [ $rc -ne 125 ] && exit $rc

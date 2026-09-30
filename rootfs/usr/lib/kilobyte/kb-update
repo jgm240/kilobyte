@@ -4,6 +4,9 @@
 #   kb-update check     print "INSTALLED LATEST" commit ids (any user)
 #   kb-update changes   list the changes between them, one per line (any user)
 #   kb-update apply SHA install that commit (root; run through kb-root)
+#   kb-update undo      go back to the Kilobyte from before the last update
+#                       (root; also done at start-up with "kilobyte.undo" on
+#                       the kernel command line, a boot menu entry)
 #
 # The repository and branch are set in /usr/share/kilobyte/update.conf. The
 # commit this system was built from is in /usr/share/kilobyte/commit.
@@ -94,6 +97,51 @@ cmd_apply_from() {
     install_tree "$src" "$sha"
 }
 
+# The files of Kilobyte outside its two directories.
+OWN_FILES="usr/bin/kilobyte usr/sbin/kilobyte-install usr/sbin/kilobyte-firstboot etc/profile.d/kilobyte.sh
+    etc/sudoers.d/kilobyte etc/gpm.conf etc/elinks/elinks.conf etc/default/grub etc/grub.d/11_kilobyte_undo
+    etc/systemd/system/kilobyte-wifi.service etc/systemd/system/kilobyte-post.service
+    etc/systemd/system/kilobyte-resize.service etc/systemd/system/kilobyte-bootlogo.service
+    etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service
+    etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage
+    etc/initramfs-tools/scripts/init-top/kilobyte-logo etc/initramfs-tools/scripts/init-bottom/kilobyte-logo"
+PREV=/var/lib/kilobyte/previous
+
+# Keep the Kilobyte that is installed now, so the update can be undone.
+save_previous() {
+    local f
+    rm -rf "$PREV.new"
+    mkdir -p "$PREV.new/files"
+    cp -a /usr/lib/kilobyte "$PREV.new/lib" && cp -a /usr/share/kilobyte "$PREV.new/share" || { rm -rf "$PREV.new"; return 0; }
+    for f in $OWN_FILES; do
+        [ -e "/$f" ] && { mkdir -p "$PREV.new/files/$(dirname "$f")"; cp -a "/$f" "$PREV.new/files/$f"; }
+    done
+    rm -rf "$PREV"
+    mv "$PREV.new" "$PREV"
+}
+
+cmd_undo() {
+    local d sha note
+    [ "$(id -u)" -eq 0 ] || { echo "kb-update: undo needs root" >&2; exit 1; }
+    [ -d "$PREV/lib" ] && [ -d "$PREV/share" ] || { echo "There is no earlier Kilobyte to go back to." >&2; exit 1; }
+    sha=$(cat "$PREV/share/commit" 2>/dev/null)
+    echo "Going back to Kilobyte ${sha:0:7} ..."
+    for d in lib share; do
+        rm -rf "/usr/$d/kilobyte.undone"
+        mv "/usr/$d/kilobyte" "/usr/$d/kilobyte.undone"
+        mv "$PREV/$d" "/usr/$d/kilobyte"
+        rm -rf "/usr/$d/kilobyte.undone"
+    done
+    [ -d "$PREV/files" ] && cp -a "$PREV/files/." /
+    rm -rf "$PREV"
+    systemctl daemon-reload 2>/dev/null || true
+    if [ ! -d /run/live/medium ]; then
+        command -v update-grub >/dev/null && update-grub >/dev/null 2>&1
+        update-initramfs -u -k all >/dev/null 2>&1 || true
+    fi
+    echo "Kilobyte is back at ${sha:0:7}."
+}
+
 install_tree() {
     local src=$1 sha=$2 d f old_pkgs new_pkgs added=() missing=() failed=() p kind
     if [ -z "${KB_UPDATE_TMP:-}" ] && [ -f "$src/usr/lib/kilobyte/kb-update" ] &&
@@ -116,6 +164,7 @@ install_tree() {
         new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-wifi.txt")" | sort -u)
 
     echo "Installing ..."
+    save_previous
     # Kilobyte's own directories are swapped in as a whole.
     for d in usr/lib/kilobyte usr/share/kilobyte; do
         rm -rf "/$d.new" "/$d.old"
@@ -139,7 +188,7 @@ install_tree() {
              etc/yt-dlp.conf etc/elinks/elinks.conf etc/gpm.conf etc/issue etc/systemd/network/20-wired.network \
              etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
              etc/systemd/network/25-wireless.network etc/systemd/system/kilobyte-bootlogo.service \
-             etc/systemd/system/kilobyte-swap.service \
+             etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service \
              etc/X11/Xwrapper.config etc/X11/xorg.conf.d/10-kilobyte.conf; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
     done
@@ -152,6 +201,9 @@ install_tree() {
         cmp -s "$src/$f" "/$f" || initramfs_changed=1
         install -D -m 755 "$src/$f" "/$f"
     done
+    if [ -f "$src/etc/grub.d/11_kilobyte_undo" ] && [ -d /etc/grub.d ]; then
+        install -m 755 "$src/etc/grub.d/11_kilobyte_undo" /etc/grub.d/11_kilobyte_undo
+    fi
     # Installed PCs: Kilobyte's boot menu (not on the live system).
     if [ -f "$src/etc/default/grub" ] && [ ! -d /run/live/medium ] && command -v update-grub >/dev/null &&
        ! cmp -s "$src/etc/default/grub" /etc/default/grub; then
@@ -178,6 +230,10 @@ install_tree() {
         [ "$p" = live-boot ] && continue
         dpkg-query -W -f '${Status}' "$p" 2>/dev/null | grep -q 'ok installed' || missing+=("$p")
     done
+    # Remote login stays off when it comes with an update: Debian would
+    # start the SSH server as soon as it is installed.
+    local had_ssh=
+    dpkg-query -W -f '${Status}' openssh-server 2>/dev/null | grep -q 'ok installed' && had_ssh=1
     if [ ${#missing[@]} -gt 0 ]; then
         echo "New programs: ${missing[*]}"
         export DEBIAN_FRONTEND=noninteractive
@@ -194,9 +250,17 @@ install_tree() {
         fi
         [ ${#failed[@]} -eq 0 ] || echo "Could not install: ${failed[*]} (try again later in Settings > Software)"
     fi
+    if [ -z "$had_ssh" ] && dpkg-query -W -f '${Status}' openssh-server 2>/dev/null | grep -q 'ok installed'; then
+        systemctl disable --now ssh.service ssh.socket >/dev/null 2>&1 || true
+    fi
 
     # New services and groups that came with the update.
-    systemctl enable kilobyte-post.service kilobyte-bootlogo.service kilobyte-swap.service 2>/dev/null || true
+    systemctl enable kilobyte-post.service kilobyte-bootlogo.service kilobyte-swap.service \
+        kilobyte-undo.service 2>/dev/null || true
+    # The boot menu gets its "undo the last update" entry.
+    if [ ! -d /run/live/medium ] && command -v update-grub >/dev/null; then
+        update-grub >/dev/null 2>&1 || true
+    fi
     if [ -n "$initramfs_changed" ] && [ ! -d /run/live/medium ]; then
         echo "Updating the start-up files ..."
         update-initramfs -u -k all >/dev/null 2>&1 || true
@@ -219,5 +283,6 @@ case "${1:-}" in
     changes) cmd_changes ;;
     apply)   cmd_apply "${2:-}" ;;
     apply-from) cmd_apply_from "${2:-}" "${3:-}" ;;
-    *) echo "usage: kb-update check | changes | apply COMMIT-ID" >&2; exit 2 ;;
+    undo)    cmd_undo ;;
+    *) echo "usage: kb-update check | changes | apply COMMIT-ID | undo" >&2; exit 2 ;;
 esac

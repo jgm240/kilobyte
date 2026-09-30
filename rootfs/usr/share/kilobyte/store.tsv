@@ -1,0 +1,39 @@
+# The Kilobyte Store: text-mode programs from Debian, chosen to fit Kilobyte.
+# id|packages|command|category|name|description|flags
+# flags: "pause" waits for a key when the program ends (for programs that
+# print and stop); commands starting with kb-x open a graphics screen.
+btop|btop|btop|Tools|System monitor (btop)|Processor, memory, disks and network at a glance|
+ncdu|ncdu|ncdu ~|Tools|Disk usage (ncdu)|See what fills your folders, and clean up|
+tmux|tmux|tmux|Tools|tmux|Several command lines in one terminal, side by side|
+ranger|ranger|ranger|Tools|Ranger|A file manager with three columns and previews|
+micro|micro|micro|Tools|Micro editor|An editor with the usual keys: Ctrl+S saves, Ctrl+Q quits|
+vim|vim|vim|Tools|Vim|The editor that is on every Unix computer|
+emacs|emacs-nox|emacs -nw|Tools|Emacs|The extensible editor, in text mode|
+lnav|lnav|lnav|Tools|Log viewer (lnav)|Read the system's logs with colours and search|
+nload|nload|nload|Tools|Network load (nload)|How much is going in and out right now|
+tig|tig|tig|Tools|tig|Browse the history of a Git project|
+lynx|lynx|lynx https://lite.duckduckgo.com/lite|Internet|Lynx|The classic text web browser|
+w3m|w3m|w3m https://lite.duckduckgo.com/lite|Internet|w3m|A text web browser that lays out tables|
+newsboat|newsboat|newsboat|Internet|Newsboat|Read news feeds (RSS): add them with its help|
+irssi|irssi|irssi|Internet|Irssi|The classic IRC chat program|
+neomutt|neomutt|neomutt|Internet|NeoMutt|Email for people who like the keyboard|
+rtorrent|rtorrent|rtorrent|Internet|rTorrent|Download torrents|
+speedtest|speedtest-cli|speedtest-cli|Internet|Speed test|Measure the speed of your Internet connection|pause
+cmus|cmus|cmus|Media|cmus|A music player for large collections|
+moc|moc|mocp|Media|MOC|Music on Console: a two-panel music player|
+wordgrinder|wordgrinder|wordgrinder|Office|WordGrinder|A word processor that gets out of your way|
+visidata|visidata|vd|Office|VisiData|Explore tables: CSV, Excel, JSON and more|
+abook|abook|abook|Office|Address book (abook)|Names, addresses and phone numbers|
+nethack|nethack-console|nethack|Games|NetHack|The dungeon adventure, since 1987|
+crawl|crawl|crawl|Games|Dungeon Crawl|Stone Soup: explore dungeons, find the Orb of Zot|
+cataclysm|cataclysm-dda-curses|cataclysm|Games|Cataclysm|Dark Days Ahead: survive after the end of the world|
+ninvaders|ninvaders|ninvaders|Games|nInvaders|Shoot the invaders from space|
+pacman|pacman4console|pacman4console|Games|Pacman|Eat the dots, avoid the ghosts|
+greed|greed|greed|Games|Greed|Eat as many numbers as you can|
+nudoku|nudoku|nudoku|Games|Sudoku (nudoku)|Number puzzles|
+gnuchess|gnuchess|gnuchess|Games|GNU Chess|Chess against the computer (type moves such as e2e4)|
+dosbox|dosbox|/usr/lib/kilobyte/kb-x /usr/bin/dosbox|Games|DOSBox|Run old DOS programs and games (opens a graphics screen)|
+cmatrix|cmatrix|cmatrix|Fun|Digital rain (cmatrix)|Green letters falling down the screen; q stops|
+sl|sl|sl|Fun|Steam locomotive (sl)|A train crosses the screen|pause
+cowsay|fortune-mod cowsay|cowsay "$(fortune)"|Fun|Fortune cow|A cow tells you a saying|pause
+bb|bb|bb|Fun|BB demo|A demo made of nothing but characters|

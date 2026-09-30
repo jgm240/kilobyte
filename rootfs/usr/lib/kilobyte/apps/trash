@@ -1,0 +1,35 @@
+#!/bin/bash
+# Trash: what was thrown away (file manager: F2 > Move to the trash; desktop:
+# right-click an icon). Put things back or delete them for good.
+. /usr/lib/kilobyte/lib.sh
+TRASH="$KB_LIB/kb-trash"
+
+sel=""
+while true; do
+    items=()
+    while IFS='|' read -r name path when; do
+        items+=("$name" "$(printf '%-16s  from %s' "$when" "$(dirname "$path" | sed "s|^$HOME|~|")")")
+    done < <("$TRASH" list | sort -t'|' -k3 -r)
+    if [ ${#items[@]} -eq 0 ]; then
+        kb_msg "Trash" "The trash is empty.\n\nFile manager: F2, then \"Move to the trash\".\nDesktop: right-click an icon." 10 56
+        exit 0
+    fi
+    sel=$(kb_dialog --title " Trash " --default-item "$sel" --ok-label "Put back" --cancel-label "Close" \
+        --extra-button --extra-label "Delete" --help-button --help-label "Empty the trash" \
+        --menu "$(( ${#items[@]} / 2 )) thing(s) in the trash:" 20 76 12 "${items[@]}")
+    case $? in
+        "$DIALOG_OK")
+            if dest=$("$TRASH" restore "$sel" 2>&1); then
+                kb_msg "Trash" "Put back:\n\n$dest" 9 66
+            else
+                kb_msg "Trash" "\Z1That did not work:\Zn\n\n$dest" 9 66
+            fi ;;
+        "$DIALOG_EXTRA")
+            kb_dialog --title " Trash " --defaultno --yesno "Delete \Zb$sel\Zn for good?\n\nThis cannot be undone." 9 56 &&
+                "$TRASH" delete "$sel" ;;
+        "$DIALOG_HELP")
+            kb_dialog --title " Trash " --defaultno --yesno "Delete \ZbEVERYTHING\Zn in the trash for good?\n\nThis cannot be undone." 9 56 &&
+                "$TRASH" empty ;;
+        *) exit 0 ;;
+    esac
+done

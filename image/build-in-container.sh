@@ -4,10 +4,19 @@
 # per architecture) at /work and the output directory at /out.
 #
 #   debs     container of the target architecture: Kilobyte's patched packages
-#   rootfs   container of the target architecture: Debian with mmdebstrap
-#   squash   any architecture: compress it for the live ISO (the slow part)
+#   base     container of the target architecture: Debian and every package,
+#            with mmdebstrap. Kept and reused until the package lists change
+#            (or it is two weeks old), so most builds skip this long stage
+#   rootfs   container of the target architecture: a copy of the base with
+#            Kilobyte's own files and settings (image/customize.sh)
+#   squash   any architecture: compress it for the live ISO
 #   iso      container of the target architecture: kernel, initrd, GRUB
+#   usbimg   the same as a USB stick image for UEFI PCs and Intel Macs
 #   piimage  any architecture: Raspberry Pi SD card image (.img.xz)
+#
+# Caches in the work volume: base/ (above), apt-cache/ (downloaded packages),
+# debs/ (the patched packages), ccache/ (their compiler cache).
+# FRESH=1 rebuilds the base; FAST=1 compresses quickly (bigger test images).
 #
 # ARCH picks the image: amd64 and i386 are PC ISOs, arm64 and armhf are
 # Raspberry Pi images. LITE=1 leaves the big Wi-Fi firmware out.
@@ -63,8 +72,9 @@ stage_debs() {
     else
         echo "deb-src $MIRROR $SUITE main" > /etc/apt/sources.list.d/kilobyte-src.list
     fi
-    tools dpkg-dev build-essential fakeroot patch
-    rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src"
+    tools dpkg-dev build-essential fakeroot patch ccache
+    rm -rf "$WORK/debs" "$WORK/src" && mkdir -p "$WORK/debs" "$WORK/src" "$WORK/ccache"
+    export PATH="/usr/lib/ccache:$PATH" CCACHE_DIR="$WORK/ccache"
     export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
     for pkg in $(ls /src/image/debs); do
         (
@@ -142,12 +152,33 @@ CONTROL
     ls -l "$WORK/debs/"
 }
 
-stage_rootfs() {
-    local packages
+# The key of a base system: everything that decides what is in it.
+base_key() {
+    {
+        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}"
+        echo "$1"                                   # the package list
+        cat "$WORK/debs/.recipes" 2>/dev/null
+        ls "$WORK/debs" 2>/dev/null
+        if [ $KIND = pi ]; then cat /src/image/wine-x86.sh; fi
+    } | sha256sum | cut -c1-16
+}
+
+stage_base() {
+    local packages key age
     local lists=(/src/image/packages.txt "/src/image/packages-$KIND.txt")
     [ -f "/src/image/packages-$ARCH.txt" ] && lists+=("/src/image/packages-$ARCH.txt")
     packages="$(pkgs "${lists[@]}"),$KERNEL${EFI:+,$EFI}${EFI32:+,$EFI32}"
     [ -n "${LITE:-}" ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
+
+    key=$(base_key "$packages")
+    if [ -z "${FRESH:-}" ] && [ -d "$WORK/base" ] && [ "$(cat "$WORK/base.key" 2>/dev/null)" = "$key" ]; then
+        age=$(( ($(date +%s) - $(stat -c %Y "$WORK/base.key")) / 86400 ))
+        if [ "$age" -lt 14 ]; then
+            echo "==> Reusing the Debian base system ($age days old, $(cat "$WORK/base.size" 2>/dev/null))"
+            return 0
+        fi
+        echo "(the base system is $age days old: building a new one with Debian's updates)"
+    fi
 
     echo "==> Installing build tools"
     # The firmware is in non-free-firmware: the check below must see it.
@@ -159,27 +190,32 @@ stage_rootfs() {
     fi
     tools mmdebstrap ca-certificates curl
 
-    # Leave out what this Debian release does not have (the 32-bit PC image
-    # is Debian 12, which lacks a few newer packages), with a warning.
-    local p kept=() missing=()
+    # Leave out what this Debian release does not have, with a warning.
+    # (One list of every package name: asking apt about each package takes
+    # seconds apiece in an emulated container.)
+    local p kept=() missing=() names
+    names=$(mktemp)
+    apt-cache pkgnames | sort > "$names"
     for p in ${packages//,/ }; do
-        if [[ $p == *:* ]] || apt-cache show "$p" >/dev/null 2>&1; then
+        if [[ $p == *:* ]] || grep -qxF "$p" "$names"; then
             kept+=("$p")
         else
             missing+=("$p")
         fi
     done
+    rm -f "$names"
     [ ${#missing[@]} -eq 0 ] || echo "WARNING: not in Debian $SUITE, left out: ${missing[*]}"
     packages=$(IFS=,; echo "${kept[*]}")
-    rm -rf "$WORK/rootfs" "$WORK/iso"   # (the patched packages in $WORK/debs stay)
+    rm -rf "$WORK/base" "$WORK/base.key" "$WORK/rootfs" "$WORK/iso"
+    mkdir -p "$WORK/apt-cache"
 
-    echo "==> Building the Debian $SUITE root file system for $ARCH"
-    export KB_PACKAGES="$packages"   # recorded in the image for Kilobyte Update
-    KB_VARIANT=$([ $KIND = pc ] && echo live || echo pi)
-    export KB_VARIANT KERNEL_SUITE
+    echo "==> Building the Debian $SUITE base system for $ARCH (kept for the next builds)"
+    export KERNEL_SUITE
+    # Downloaded packages are kept in apt-cache/ and offered to apt again.
     mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
         --components="main non-free-firmware" \
         --include="$packages" \
+        --skip=download/empty --skip=essential/unlink \
         --aptopt='APT::Install-Recommends "false"' \
         --dpkgopt='path-exclude=/usr/share/man/*' \
         --dpkgopt='path-exclude=/usr/share/info/*' \
@@ -192,31 +228,66 @@ stage_rootfs() {
         --dpkgopt='path-exclude=/usr/games/snake' \
         --dpkgopt='path-exclude=/usr/games/snscore' \
         --setup-hook='if [ -n "$KERNEL_SUITE" ]; then mkdir -p "$1/etc/apt/preferences.d" && printf "Package: *\nPin: release n=%s\nPin-Priority: 100\n" "$KERNEL_SUITE" > "$1/etc/apt/preferences.d/kilobyte-kernel"; fi' \
+        --setup-hook='mkdir -p "$1/var/cache/apt/archives" && { cp -n /work/apt-cache/*.deb "$1/var/cache/apt/archives/" 2>/dev/null || true; }' \
         --essential-hook='echo "debconf debconf/frontend select Noninteractive" | chroot "$1" debconf-set-selections' \
-        --customize-hook='tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$1" -xf -' \
-        --customize-hook='curl -fsSL -o "$1/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 "$1/usr/local/bin/yt-dlp"' \
-        --customize-hook='echo "${KB_COMMIT:-unknown}" > "$1/usr/share/kilobyte/commit"' \
-        --customize-hook='echo "$KB_PACKAGES" | tr , "\n" | sort -u > "$1/usr/share/kilobyte/packages.txt"' \
+        --customize-hook='cp -n "$1"/var/cache/apt/archives/*.deb /work/apt-cache/ 2>/dev/null || true' \
         --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && cp /work/debs/*.deb "$1/tmp/kb-debs/" && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
-        --customize-hook='bash /src/image/wine-x86.sh "$1"' \
-        --customize-hook='cp /src/image/customize.sh "$1/tmp/customize.sh"' \
-        --customize-hook='chroot "$1" bash /tmp/customize.sh "$KB_VARIANT"' \
-        "$SUITE" "$WORK/rootfs" \
+        --customize-hook='mkdir -p "$1/usr/local/bin" && bash /src/image/wine-x86.sh "$1"' \
+        --customize-hook='rm -f "$1"/var/cache/apt/archives/*.deb' \
+        "$SUITE" "$WORK/base" \
         "deb $MIRROR $SUITE main non-free-firmware" \
         "deb $MIRROR $SUITE-updates main non-free-firmware" \
         "deb http://security.debian.org/debian-security $SUITE-security main non-free-firmware" \
         ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE main non-free-firmware"} \
         ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE-updates main non-free-firmware"} \
         ${KERNEL_SUITE:+"deb http://security.debian.org/debian-security $KERNEL_SUITE-security main non-free-firmware"}
-    du -sh "$WORK/rootfs"
+    # Old versions of packages pile up in the download cache: keep a month.
+    find "$WORK/apt-cache" -name '*.deb' -mtime +30 -delete 2>/dev/null || true
+    echo "$packages" | tr , '\n' | sort -u > "$WORK/base.packages"
+    du -sh "$WORK/base" | cut -f1 > "$WORK/base.size"
+    echo "$key" > "$WORK/base.key"
+    echo "base system: $(cat "$WORK/base.size")"
+}
+
+# Kilobyte itself on a copy of the base system: its files, the newest
+# yt-dlp, and the settings of image/customize.sh. A few minutes.
+stage_rootfs() {
+    local r="$WORK/rootfs" m
+    [ -d "$WORK/base" ] || { echo "no base system: run the base stage first" >&2; exit 1; }
+    echo "==> Adding Kilobyte to a copy of the base system"
+    tools ca-certificates curl
+    rm -rf "$r" "$WORK/iso"
+    cp -a "$WORK/base" "$r"
+    tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$r" -xf -
+    curl -fsSL -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+    chmod 755 "$r/usr/local/bin/yt-dlp"
+    echo "${KB_COMMIT:-unknown}" > "$r/usr/share/kilobyte/commit"
+    cp "$WORK/base.packages" "$r/usr/share/kilobyte/packages.txt"
+    cp /src/image/customize.sh "$r/tmp/customize.sh"
+    # customize.sh runs in the system: it needs /proc, /sys and /dev there,
+    # and no service may be started by a package script.
+    printf '#!/bin/sh\nexit 101\n' > "$r/usr/sbin/policy-rc.d"
+    chmod 755 "$r/usr/sbin/policy-rc.d"
+    for m in proc sys dev; do mount --bind "/$m" "$r/$m"; done
+    trap 'for m in dev sys proc; do umount -l "'"$r"'/$m" 2>/dev/null; done' EXIT
+    chroot "$r" bash /tmp/customize.sh "$([ $KIND = pc ] && echo live || echo pi)"
+    for m in dev sys proc; do umount -l "$r/$m"; done
+    trap - EXIT
+    rm -f "$r/usr/sbin/policy-rc.d" "$r/tmp/customize.sh"
+    du -sh "$r"
 }
 
 stage_squash() {
     echo "==> Compressing the root file system"
     tools squashfs-tools
     mkdir -p "$WORK/iso/live"
-    mksquashfs "$WORK/rootfs" "$WORK/iso/live/filesystem.squashfs" \
-        -noappend -comp xz -Xbcj x86 -b 1M -quiet -progress
+    if [ -n "${FAST:-}" ]; then     # test images: seconds instead of minutes, a fifth bigger
+        mksquashfs "$WORK/rootfs" "$WORK/iso/live/filesystem.squashfs" \
+            -noappend -comp zstd -Xcompression-level 6 -b 1M -quiet -progress
+    else
+        mksquashfs "$WORK/rootfs" "$WORK/iso/live/filesystem.squashfs" \
+            -noappend -comp xz -Xbcj x86 -b 1M -quiet -progress
+    fi
     du -sh "$WORK/iso/live/filesystem.squashfs"
 }
 
@@ -313,7 +384,7 @@ EOF
     dd if="$root" of="$img" bs=1M seek=$(( 8 + boot_mb )) conv=notrunc status=none
     rm -f "$boot" "$root"
     mkdir -p /out
-    xz -T0 -6 -c "$img" > "/out/$NAME.img.xz.tmp"
+    xz -T0 ${FAST:+-1} -c "$img" > "/out/$NAME.img.xz.tmp"
     mv "/out/$NAME.img.xz.tmp" "/out/$NAME.img.xz"
     rm -f "$img"
     ls -lh "/out/$NAME.img.xz"
@@ -322,10 +393,11 @@ EOF
 case "${1:-}" in
     debs)    stage_debs ;;
     box86)   stage_box86 ;;
+    base)    stage_base ;;
     rootfs)  stage_rootfs ;;
     squash)  stage_squash ;;
     iso)     stage_iso ;;
     piimage) stage_piimage ;;
     usbimg)  stage_usbimg ;;
-    *) echo "usage: $0 debs|box86|rootfs|squash|iso|usbimg|piimage" >&2; exit 2 ;;
+    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage" >&2; exit 2 ;;
 esac

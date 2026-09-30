@@ -1,0 +1,8 @@
+#!/bin/sh
+# Lock the screen (see /usr/lib/kilobyte/py/lock.py). In Kilobyte Windows the
+# lock covers the whole screen, not just this window.
+if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
+    python3 /usr/lib/kilobyte/py/deskrun.py lock
+    [ $? -ne 125 ] && exit 0
+fi
+exec python3 /usr/lib/kilobyte/py/lock.py

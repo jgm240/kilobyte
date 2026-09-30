@@ -55,6 +55,7 @@ download() {
         show_error "The download failed." "$log"
         return 1
     fi
+    "$KB_LIB/kb-notify" "Download complete" "$(basename "$file") is in ~/${dir#"$HOME"/}"
     if kb_dialog --title " Download Complete " --yes-label "Play" --no-label "Close" --yesno \
         "Saved as\n\n  \Zb$(basename "$file")\Zn\n\nin ~/${dir#"$HOME"/}." 11 72; then
         "$KB_LIB/apps/player" "$file"

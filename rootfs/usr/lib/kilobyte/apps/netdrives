@@ -1,0 +1,111 @@
+#!/bin/bash
+# Network drives: shared folders of Windows PCs and NAS boxes (SMB) and of
+# any computer with SSH (SFTP), connected as folders in ~/Network.
+. /usr/lib/kilobyte/lib.sh
+
+T="Network Drives"
+LIST="$KB_CONF/netdrives"          # name|kind|address|user
+mkdir -p "$KB_CONF" "$HOME/Network"
+touch "$LIST"
+
+mounted() { mountpoint -q "$HOME/Network/$1" 2>/dev/null; }
+
+add_drive() {
+    local kind name addr user
+    kind=$(kb_dialog --title " $T " --ok-label "Next" --cancel-label "Back" --menu "What kind of drive?" 0 66 0 \
+        smb  "Windows share (a PC, a NAS, a Samba server)" \
+        sftp "SFTP (any computer you can log into with SSH)") || return
+    if [ "$kind" = smb ]; then
+        addr=$(kb_input "$T" "Address of the share, as //server/share\n(the server's name or IP address, then the folder):" "//") || return
+        [[ $addr =~ ^//[A-Za-z0-9._-]+/[^[:space:],]+$ ]] || { kb_msg "$T" "That does not look like //server/share."; return; }
+        user=$(kb_input "$T" "User name on that server\n(leave empty for a share open to everyone):" "") || return
+    else
+        addr=$(kb_input "$T" "Computer and folder, as server:/folder\n(only the server for your home folder there):" "") || return
+        [ -n "$addr" ] || return
+        user=$(kb_input "$T" "User name on that computer:" "$USER") || return
+        [ -n "$user" ] || return
+    fi
+    name=$(kb_input "$T" "A short name for this drive (letters and digits):" "$(printf '%s' "${addr##*/}" | tr -cd 'A-Za-z0-9._-')") || return
+    name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9._-')
+    [ -n "$name" ] || { kb_msg "$T" "The drive needs a name."; return; }
+    grep -v "^$name|" "$LIST" > "$LIST.new"
+    printf '%s|%s|%s|%s\n' "$name" "$kind" "$addr" "$user" >> "$LIST.new"
+    mv "$LIST.new" "$LIST"
+    connect "$name"
+}
+
+connect() { # connect NAME
+    local name kind addr user pass out mnt="$HOME/Network/$1"
+    IFS='|' read -r name kind addr user <<< "$(grep "^$1|" "$LIST" | head -n 1)"
+    [ -n "$kind" ] || return 1
+    mounted "$name" && return 0
+    mkdir -p "$mnt"
+    if [ "$kind" = smb ]; then
+        pass=""
+        if [ -n "$user" ]; then
+            pass=$(kb_password "$T" "Password of $user on ${addr#//}:") || return 1
+        fi
+        kb_info "Connecting to $addr ..."
+        if ! out=$(printf '%s' "$pass" | sudo -n "$KB_LIB/kb-root" smb mount "$addr" "$name" "$user" 2>&1); then
+            kb_msg "$T" "\Z1Could not connect to $addr.\Zn\n\n$(printf '%s' "$out" | tail -n 3)\n\nCheck the address, the user name and the password." 13 68
+            return 1
+        fi
+    else
+        clear
+        printf '\n  Connecting to %s as %s ...\n  (SSH asks for the password here; the first time also whether the\n  computer is the right one: answer yes.)\n\n' "$addr" "$user"
+        case $addr in *:*) ;; *) addr="$addr:" ;; esac
+        if ! sshfs -o reconnect,ServerAliveInterval=15 "$user@$addr" "$mnt"; then
+            echo
+            read -r -n 1 -s -p "  That did not work. Press any key." || true
+            return 1
+        fi
+    fi
+    "$KB_LIB/kb-notify" "Network drive" "$name is connected: ~/Network/$name"
+}
+
+disconnect() { # disconnect NAME
+    local kind
+    kind=$(grep "^$1|" "$LIST" | head -n 1 | cut -d'|' -f2)
+    mounted "$1" || return 0
+    if [ "$kind" = smb ]; then
+        sudo -n "$KB_LIB/kb-root" smb umount "$1" 2>/dev/null
+    else
+        fusermount3 -u "$HOME/Network/$1" 2>/dev/null || fusermount -u "$HOME/Network/$1" 2>/dev/null
+    fi
+    mounted "$1" && kb_msg "$T" "$1 is still in use (a program has a file of it open)."
+    return 0
+}
+
+sel=""
+while true; do
+    items=(Add "Connect a new drive")
+    while IFS='|' read -r name kind addr user; do
+        [ -n "$name" ] || continue
+        items+=("$name" "$(printf '%-5s %-32s %s' "$kind" "$addr" "$(mounted "$name" && echo '[connected]')")")
+    done < "$LIST"
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" \
+        --menu "Shared folders of other computers, as folders in ~/Network." 0 72 0 "${items[@]}") || exit 0
+    if [ "$sel" = Add ]; then
+        add_drive
+        continue
+    fi
+    if mounted "$sel"; then
+        act=$(kb_dialog --title " $sel " --ok-label "Select" --cancel-label "Back" --menu "Connected as ~/Network/$sel." 0 56 0 \
+            Open       "Open it in the file manager" \
+            Disconnect "Disconnect" \
+            Forget     "Disconnect and forget this drive") || continue
+    else
+        act=$(kb_dialog --title " $sel " --ok-label "Select" --cancel-label "Back" --menu "Not connected." 0 56 0 \
+            Connect "Connect and open it" \
+            Forget  "Forget this drive") || continue
+    fi
+    case $act in
+        Connect) connect "$sel" && "$KB_LIB/kb-open" "$HOME/Network/$sel" ;;
+        Open)    "$KB_LIB/kb-open" "$HOME/Network/$sel" ;;
+        Disconnect) disconnect "$sel" ;;
+        Forget)
+            disconnect "$sel"
+            grep -v "^$sel|" "$LIST" > "$LIST.new"; mv "$LIST.new" "$LIST"
+            rmdir "$HOME/Network/$sel" 2>/dev/null ;;
+    esac
+done

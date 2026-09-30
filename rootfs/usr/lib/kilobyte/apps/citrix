@@ -1,0 +1,96 @@
+#!/bin/bash
+# Citrix Workspace: remote desktops and apps of a company or school.
+#
+# Citrix's program is not free software and may not be given away with
+# Kilobyte: it is downloaded from Citrix (who ask you to accept their
+# licence) and installed here from that file. It is a graphical program, so
+# it runs on the graphics screen (kb-x), like Windows programs do.
+#
+#   citrix [FILE.ica]     open a connection file downloaded from a company portal
+. /usr/lib/kilobyte/lib.sh
+
+T="Citrix Workspace"
+ICA=/opt/Citrix/ICAClient
+URL="https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html"
+
+arch_name() {
+    case $(dpkg --print-architecture) in
+        amd64) echo "x86_64 (the \"Debian Packages\" > Full Packages > x86_64 file, icaclient_..._amd64.deb)" ;;
+        arm64) echo "ARM64 (icaclient_..._arm64.deb)" ;;
+        armhf) echo "ARMHF (icaclient_..._armhf.deb)" ;;
+        *)     echo "" ;;
+    esac
+}
+
+installed() { [ -x "$ICA/wfica" ]; }
+
+x_run() { # x_run PROGRAM [ARGS]: on the graphics screen
+    kb_dialog --title " $T " --infobox "Starting ...\n\nCtrl+Alt+Backspace returns here at any time." 7 60
+    "$KB_LIB/kb-x" "$@" ||
+        kb_msg "$T" "The graphics screen could not start.\n\nDetails are in ~/.cache/kilobyte-x.log." 9 60
+}
+
+install_it() {
+    local a f
+    a=$(arch_name)
+    if [ -z "$a" ]; then
+        kb_msg "$T" "Citrix does not make its Workspace app for this kind of computer ($(dpkg --print-architecture)).\n\nIt is there for 64-bit PCs and for the Raspberry Pi." 10 66
+        return 1
+    fi
+    kb_msg "$T" "Citrix Workspace has to come from Citrix: it is not free software, and Citrix asks you to accept its licence before the download.\n\n1. On any computer, open\n   citrix.com/downloads  >  Workspace app  >  Linux\n   and download the Debian package for $a.\n\n2. Bring the file here (USB stick, or ~/Downloads) and choose it in the next step." 18 72
+    f=$(kb_dialog --title " $T - the downloaded icaclient .deb file " --fselect "$HOME/Downloads/" 14 70) || return 1
+    case $f in
+        *.deb) [ -f "$f" ] || { kb_msg "$T" "\"$f\" is not a file."; return 1; } ;;
+        *) kb_msg "$T" "That is not a Debian package (its name ends in .deb)."; return 1 ;;
+    esac
+    dpkg-deb -f "$f" Package 2>/dev/null | grep -qi '^icaclient' ||
+        { kb_msg "$T" "That package is not Citrix Workspace (icaclient)."; return 1; }
+    kb_sudo || return 1
+    clear
+    printf '\n  Installing Citrix Workspace and what it needs ...\n\n'
+    sudo apt-get update || true
+    if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$(readlink -f "$f")"; then
+        echo
+        read -r -n 1 -s -p "  That did not work (is the computer on-line?). Press any key." || true
+        return 1
+    fi
+    "$KB_LIB/kb-notify" "$T" "Citrix Workspace is installed."
+}
+
+# Opened with a connection file.
+if [ -n "${1:-}" ]; then
+    installed || install_it || exit 0
+    installed && x_run "$ICA/wfica" "$1"
+    exit 0
+fi
+
+sel=""
+while true; do
+    if installed; then
+        sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+            "Remote desktops and apps of your company or school.\nIt opens on the graphics screen; when you close it you are back here." 0 70 0 \
+            Workspace "Open Citrix Workspace (sign in to your company's store)" \
+            File      "Open a connection file (.ica) from the company's web portal" \
+            Remove    "Remove Citrix Workspace" \
+            About     "About Citrix on Kilobyte") || exit 0
+    else
+        sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+            "Citrix Workspace is not installed yet." 0 70 0 \
+            Install "Install it from the file downloaded from Citrix" \
+            About   "About Citrix on Kilobyte") || exit 0
+    fi
+    case $sel in
+        Install) install_it ;;
+        Workspace)
+            if [ -x "$ICA/selfservice" ]; then x_run "$ICA/selfservice"
+            else kb_msg "$T" "This version has no self-service window. Download a connection file (.ica) from your company's web portal and open it here." 10 66
+            fi ;;
+        File)
+            f=$(kb_dialog --title " $T - connection file " --fselect "$HOME/Downloads/" 14 70) || continue
+            [ -f "$f" ] && x_run "$ICA/wfica" "$f" ;;
+        Remove)
+            kb_yesno "$T" "Remove Citrix Workspace?" && kb_sudo && { clear; sudo apt-get remove -y icaclient; } ;;
+        About)
+            kb_msg "$T" "Citrix Workspace shows desktops and programs that run on a company's or school's servers.\n\nKilobyte cannot include it (it is Citrix's own, non-free program), but installs the package you download from Citrix and runs it on the graphics screen, as it does with Windows programs.\n\nDownload: $URL\n\nThe web browser here cannot use Citrix's download page or company portals that need a graphical browser; download the file on another computer if so." 20 74 ;;
+    esac
+done

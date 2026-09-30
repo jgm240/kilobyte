@@ -1,0 +1,14 @@
+[Unit]
+Description=Kilobyte: undo the last update (boot menu entry)
+ConditionKernelCommandLine=kilobyte.undo
+ConditionPathIsDirectory=/var/lib/kilobyte/previous/lib
+After=local-fs.target
+Before=kilobyte-post.service getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/kb-update undo
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

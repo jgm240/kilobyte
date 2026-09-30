@@ -172,16 +172,21 @@ def tiles():
 # --- status for the menu bar -------------------------------------------------
 
 class Status:
-    """Network, battery and update notice, asked from lib.sh every now and
-    then without ever making the desktop wait for the answer."""
+    """Network, battery, update notice, volume and USB sticks, asked from
+    lib.sh every now and then without ever making the desktop wait."""
 
     def __init__(self, every=15):
         self.every = every
-        self.network = self.battery = ""
+        self.network = self.battery = self.volume = ""
         self.update = False
+        self.usb = None                    # names of the sticks plugged in (None: not known yet)
         self.proc = None
         self.next = 0
         self.tiles_next = 0
+        self.fresh = False                 # True once after every answer
+
+    def ask_soon(self):
+        self.next = 0
 
     def poll(self):
         now = time.time()
@@ -191,8 +196,12 @@ class Status:
             except OSError:
                 out = []
             self.proc = None
-            out += [""] * 3
-            self.network, self.battery, self.update = out[0].strip(), out[1].strip(), out[2].strip() == "update"
+            out += [""] * 5
+            self.network, self.battery = out[0].strip(), out[1].strip()
+            self.update = out[2].strip() == "update"
+            self.volume = out[3].strip()
+            self.usb = [u for u in out[4].strip().split(";") if u]
+            self.fresh = True
         if not self.proc and now >= self.next:
             self.next = now + self.every
             try:
@@ -208,3 +217,96 @@ class Status:
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except OSError:
                 pass
+
+
+# --- programs and the icons on the desktop ---------------------------------------
+
+DESKTOP = os.path.expanduser("~/Desktop")
+DEFAULT_ICONS = ["Files", "Editor", "Web", "Terminal", "Settings", "Trash"]
+CATEGORIES = [("main", "Programs"), ("internet", "Internet"), ("media", "Media"),
+              ("accessories", "Accessories"), ("games", "Games"), ("more", "More programs")]
+
+
+def apps():
+    """The programs, as the Program Manager lists them (kilobyte --list-apps):
+    [{"id", "cat", "name", "help", "icon", "size"}]."""
+    try:
+        out = subprocess.run(["/usr/bin/kilobyte", "--list-apps"], capture_output=True, timeout=10,
+                             stdin=subprocess.DEVNULL).stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return []
+    result = []
+    for line in out.split("\n"):
+        f = line.split("|")
+        if len(f) >= 6:
+            result.append({"id": f[0], "cat": f[1], "name": f[2], "help": f[3], "icon": (f[4] + "  ")[:2], "size": f[5]})
+    return result
+
+
+def desktop_apps():
+    """The programs that have an icon on the desktop (Settings > Desktop)."""
+    try:
+        with open(os.path.join(CONF, "desktop-apps"), encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip()]
+    except OSError:
+        return list(DEFAULT_ICONS)
+
+
+# What a file's icon looks like: (two characters, background colour).
+FILE_KINDS = (
+    (("txt", "md", "log", "conf", "ini", "sh", "py", "c", "h", "html", "css", "js", "json", "xml"), "≡ ", 7),
+    (("docx", "odt", "rtf", "doc"), "Ed", 7),
+    (("xlsx", "ods", "csv", "tsv", "sc", "xls"), "##", 7),
+    (("png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "svg", "ans"), "▒▓", 5),
+    (("mp3", "ogg", "oga", "flac", "wav", "m4a", "opus", "aac", "wma", "m3u"), "♫ ", 2),
+    (("mp4", "mkv", "avi", "mov", "webm", "mpg", "mpeg", "flv", "wmv", "m4v"), "►►", 1),
+    (("exe", "msi", "bat", "com"), "W ", 4),
+    (("zip", "tar", "gz", "xz", "bz2", "7z", "rar", "deb", "tgz"), "[]", 3),
+    (("pdf", "ps", "epub"), "¶ ", 1),
+    (("ica",), "Cx", 4),
+)
+
+
+def file_icon(path):
+    if os.path.isdir(path):
+        return "▓▓", 3
+    ext = os.path.splitext(path)[1].lower().lstrip(".")
+    for exts, glyph, bg in FILE_KINDS:
+        if ext in exts:
+            return glyph, bg
+    return "· ", 7
+
+
+def icons(app_list):
+    """What is on the desktop: program shortcuts, then the files and folders
+    in ~/Desktop. [{"kind": "app"|"file", "id"|"path", "label", "glyph", "bg"}]"""
+    by_id = {}
+    for a in app_list:
+        by_id.setdefault(a["id"], a)
+    out = []
+    for i in desktop_apps():
+        a = by_id.get(i)
+        if a:
+            out.append({"kind": "app", "id": i, "label": a["name"], "glyph": a["icon"], "bg": 6})
+    try:
+        names = sorted(os.listdir(DESKTOP), key=lambda n: (not os.path.isdir(os.path.join(DESKTOP, n)), n.lower()))
+    except OSError:
+        names = []
+    for n in names:
+        if n.startswith("."):
+            continue
+        path = os.path.join(DESKTOP, n)
+        glyph, bg = file_icon(path)
+        out.append({"kind": "file", "path": path, "label": n, "glyph": glyph, "bg": bg})
+    return out
+
+
+def desktop_stamp():
+    """Changes whenever the desktop's icons may have changed."""
+    stamps = []
+    for path in (DESKTOP, os.path.join(CONF, "desktop-apps")):
+        try:
+            stamps.append(os.stat(path).st_mtime)
+        except OSError:
+            stamps.append(0)
+    return tuple(stamps)

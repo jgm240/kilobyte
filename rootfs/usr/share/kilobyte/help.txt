@@ -59,6 +59,10 @@
                       Text blocks - the same in the normal font
                       Real picture - the video itself, straight on screen
                     Space pause, left/right seek, 9/0 volume, q stops.
+     Music Player   Songs from ~/Music with dancing bars. Enter plays, Space
+                    pauses, N and P next and previous, + and - volume,
+                    S shuffle, R repeat, W saves the list as a playlist,
+                    L opens one.
      YouTube        Search YouTube or paste a link, then watch, save the
                     video (MP4) or save only the sound (MP3). If YouTube
                     stops working, choose "Update the downloader".
@@ -71,31 +75,86 @@
                   manager. Swap: on a computer with little memory, switch
                   on compressed memory (it also works on the live system);
                   an installed Kilobyte can have a swap file on the disk too.
+                  Kilobyte Update can undo the last update; an installed PC
+                  also has "undo the last update" in its boot menu.
 
 
- WINDOWS
- ───────
-   Kilobyte runs its programs in movable windows, several at once.
-     New window (top line) or F12 > New     another Program Manager
+ THE DESKTOP (KILOBYTE WINDOWS)
+ ──────────────────────────────
+   Every program runs in a window of its own; the Program Manager stays.
+     ■ Kilobyte (top line) or F12           the Programs menu: every program,
+                                            the windows, copy and paste,
+                                            volume, lock, log out, shut down
+     icons on the desktop                   double-click opens; the right
+                                            mouse button has more
      drag the title bar                     move a window: an outline shows
                                             where it goes, let go to put it
      drag the lower right corner            resize it
      double-click the title, or [▲]         maximise / restore
-     [▼]                                    minimise (the taskbar brings it back)
-     [X]                                    close (the last window: log out)
-     Alt+Tab, or click the taskbar          switch windows
-     F12, or ■ Kilobyte (top line)          the window menu: move and resize
-                                            with the arrow keys (Enter ends),
-                                            tile, cascade
-   The top line also shows the network (Wi-Fi name and strength, Wired or
-   Offline), the battery and the clock. Weather and news sit on the desktop.
-   Settings > Wallpaper changes the desktop: a pattern, your own characters,
-   two colours, or a picture drawn with coloured blocks.
+     [▼]                                    minimise (the bottom line brings
+                                            it back)
+     [X]                                    close
+     Alt+Tab, or click the bottom line      switch windows
+   Your files on the desktop: whatever is in the folder Desktop of your home
+   folder has an icon. In the file manager, F2 > "Put on the desktop".
+   Settings > Desktop icons chooses the programs that have one.
+
+   Copy and paste: drag the mouse over text and it is copied (hold Shift
+   in programs that use the mouse themselves, such as the file manager).
+   The middle mouse button or F11 pastes it into the window in front.
+   The Programs menu can also copy all the text of a window.
+
+   The top line shows the network, the volume (click it for a slider),
+   the battery and the clock; notes appear in the lower right corner when
+   a download is done, a USB stick is plugged in or the battery runs low.
+   Weather and news sit on the desktop. Settings > Wallpaper changes the
+   desktop: a pattern, your own characters, colours, or a picture.
+
    Videos in the block modes and as the real picture take the whole screen
-   while they play and the windows come back afterwards; the Text picture
-   mode plays inside the window.
+   while they play; the Text picture mode plays inside the window.
    Settings > Login and startup switches windows off (one program at a time,
    fullscreen).
+
+
+ FILES
+ ─────
+   File manager   Enter opens a file with the right program: documents in the
+                  editor, tables in the spreadsheet, pictures in blocks, music
+                  in the Music Player, PDF files as text. F3 on a picture shows
+                  it. F2 has "Open with", "Move to the trash", "Put on the
+                  desktop" and "Print".
+   Trash          Accessories > Trash puts things back or deletes them for good.
+   Network drives Internet > Network drives connects shared folders of Windows
+                  PCs and NAS boxes, and of any computer with SSH; they appear
+                  as folders in ~/Network.
+
+
+ SEVERAL PEOPLE
+ ──────────────
+   Settings > Users adds users; everybody has their own files and desktop.
+   Switch user (Programs menu, or Settings > Users) lets somebody else log
+   in on another console while your programs keep running; Ctrl+Alt+F1 to
+   F6 go back and forth. Lock the screen (Programs menu, Accessories) hides
+   everything until your password is typed; Settings > Screen saver can do
+   that after the screen saver too.
+
+
+ OTHER COMPUTERS
+ ───────────────
+   Remote Kilobyte  Internet > Remote Kilobyte uses another Kilobyte computer
+                    in a window. On that computer switch on Settings > Remote
+                    login first.
+   Citrix           Internet > Citrix Workspace opens the desktops and programs
+                    of a company or school. Citrix's program is not part of
+                    Kilobyte: download its Debian package from citrix.com and
+                    choose the file there; it then opens on the graphics screen.
+
+
+ THE STORE
+ ─────────
+   Accessories > Store installs more text-mode programs with a keypress:
+   editors, system monitors, web browsers, chat, games, DOSBox. They show up
+   under "More programs".
 
 
  MORE PROGRAMS
@@ -111,10 +170,11 @@
                   weather and news tiles, sounds, automatic login.
 
 
- FILES
- ─────
+ WHERE THINGS ARE
+ ────────────────
    Your documents are kept in ~/Documents, index cards in ~/Cardfile,
-   videos in ~/Videos and music in ~/Music.
+   videos in ~/Videos, music in ~/Music, the desktop's files in ~/Desktop
+   and network drives in ~/Network.
 
 
  WINDOWS PROGRAMS

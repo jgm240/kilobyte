@@ -7,6 +7,10 @@
 #   ./build.sh --arch armhf     Raspberry Pi 2 / 3 SD card image (32-bit)
 #   ./build.sh --arch all       all four
 #   ./build.sh --lite ...       leave the big Wi-Fi firmware out
+#   ./build.sh --fresh ...      build the Debian base system anew (it is
+#                               otherwise reused for two weeks, unless the
+#                               package lists change)
+#   ./build.sh --fast ...       quick compression, for test images
 #
 # Debian is installed in a container of the target architecture (emulated if
 # the computer has a different one); compression runs natively.
@@ -15,12 +19,16 @@ cd "$(dirname "$0")"
 
 ARCHES=amd64
 LITE=
+FRESH=
+FAST=
 while [ $# -gt 0 ]; do
     case $1 in
         --lite) LITE=1 ;;
+        --fresh) FRESH=1 ;;
+        --fast) FAST=1 ;;
         --arch) shift; ARCHES=$1 ;;
         --arch=*) ARCHES=${1#--arch=} ;;
-        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|all] [--lite]" >&2; exit 2 ;;
+        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|all] [--lite] [--fresh] [--fast]" >&2; exit 2 ;;
     esac
     shift
 done
@@ -51,12 +59,14 @@ for ARCH in $ARCHES; do
         name=$1
         shift
         docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e KB_COMMIT="$KB_COMMIT" \
+            -e FRESH="$FRESH" -e FAST="$FAST" \
             -v "$PWD:/src:ro" -v "kilobyte-work-$ARCH:/work" -v "$PWD/out:/out" \
             "debian:$SUITE" bash /src/image/build-in-container.sh "$name"
     }
 
     stage debs --platform "$PLATFORM"
     [ "$ARCH" = armhf ] && stage box86 --platform "$NATIVE"
+    stage base --privileged --platform "$PLATFORM"
     stage rootfs --privileged --platform "$PLATFORM"
     case $ARCH in
         amd64 | i386)

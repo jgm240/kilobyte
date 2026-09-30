@@ -1,0 +1,3 @@
+#!/bin/sh
+# Kilobyte music player (a Python program; see /usr/lib/kilobyte/py/music.py)
+exec python3 /usr/lib/kilobyte/py/music.py "$@"

@@ -1,0 +1,110 @@
+#!/bin/bash
+# Store: text-mode programs from Debian that fit Kilobyte, to install with a
+# keypress. What is installed shows up in the Program Manager under
+# "More programs" and in the Programs menu of Kilobyte Windows.
+#
+#   store                 the store
+#   store --table         installed programs, as lines of the Program Manager's
+#                         table (see apps_table in /usr/bin/kilobyte)
+#   store --run ID        run one
+LIST=/usr/share/kilobyte/store.tsv
+
+# The program that is there when a store entry is installed.
+binary_of() { # binary_of COMMAND
+    local first rest
+    read -r first rest <<< "$1"
+    case $first in */kb-x) read -r first rest <<< "$rest" ;; esac
+    echo "$first"
+}
+installed() { command -v "$(binary_of "$1")" >/dev/null 2>&1 || [ -x "/usr/games/$(binary_of "$1")" ]; }
+
+if [ "${1:-}" = --table ]; then
+    # (No lib.sh here: this runs for every menu.)
+    PATH=$PATH:/usr/games
+    while IFS='|' read -r id pkgs cmd cat name desc flags; do
+        case $id in ''|'#'*) continue ;; esac
+        installed "$cmd" && printf 'Store:%s|more|%s|%s|%s|M\n' "$id" "$name" "$desc" "${name:0:2}"
+    done < "$LIST"
+    exit 0
+fi
+
+. /usr/lib/kilobyte/lib.sh
+PATH=$PATH:/usr/games
+
+entry() { grep "^$1|" "$LIST" | head -n 1; }   # entry ID: its line
+
+run_entry() { # run_entry ID
+    local id pkgs cmd cat name desc flags
+    IFS='|' read -r id pkgs cmd cat name desc flags <<< "$(entry "$1")"
+    [ -n "$cmd" ] || { kb_msg "Store" "There is no program \"$1\" in the Store."; return 1; }
+    installed "$cmd" || { kb_msg "Store" "$name is not installed."; return 1; }
+    kb_title "$name"
+    clear
+    tput cnorm 2>/dev/null
+    bash -c "$cmd"
+    if [ "$flags" = pause ]; then
+        echo
+        read -r -n 1 -s -p "Press any key to return to Kilobyte." || true
+    fi
+    kb_load_theme
+    kb_title "Program Manager"
+}
+
+if [ "${1:-}" = --run ]; then
+    run_entry "${2:-}"
+    exit
+fi
+
+install_entry() { # install_entry NAME PACKAGES
+    kb_sudo || return 1
+    clear
+    printf '\n  Installing %s ...\n\n' "$1"
+    # The package lists, if they are older than a day (or not there).
+    if [ -z "$(find /var/lib/apt/lists -maxdepth 1 -name '*_Packages*' -mmin -1440 2>/dev/null | head -n 1)" ]; then
+        sudo apt-get update || true
+    fi
+    # shellcheck disable=SC2086
+    if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $2; then
+        "$KB_LIB/kb-notify" "Store" "$1 is installed: More programs."
+        return 0
+    fi
+    echo
+    read -r -n 1 -s -p "That did not work (is the computer on-line?). Press any key." || true
+    return 1
+}
+
+sel_cat="" sel=""
+while true; do
+    cats=()
+    while read -r c; do
+        n=$(grep -c "^[^#|]*|[^|]*|[^|]*|$c|" "$LIST")
+        cats+=("$c" "$n programs")
+    done < <(grep -v '^#' "$LIST" | cut -d'|' -f4 | awk 'NF && !seen[$0]++')
+    sel_cat=$(kb_dialog --title " Store " --default-item "$sel_cat" --ok-label "Open" --cancel-label "Close" \
+        --menu "Text-mode programs from Debian that fit Kilobyte.\nInstalling needs the Internet and the administrator's password." 0 66 0 "${cats[@]}") || exit 0
+    while true; do
+        items=()
+        while IFS='|' read -r id pkgs cmd cat name desc flags; do
+            [ "$cat" = "$sel_cat" ] || continue
+            items+=("$id" "$(printf '%s %-24s %s' "$(installed "$cmd" && echo '[■]' || echo '[ ]')" "$name" "$desc" | cut -c1-96)")
+        done < <(grep -v '^#' "$LIST")
+        sel=$(kb_dialog --title " Store - $sel_cat " --default-item "$sel" --ok-label "Select" --cancel-label "Back" --no-tags \
+            --menu "[■] is installed." 0 0 0 "${items[@]}") || break
+        IFS='|' read -r id pkgs cmd cat name desc flags <<< "$(entry "$sel")"
+        if installed "$cmd"; then
+            act=$(kb_dialog --title " $name " --ok-label "Select" --cancel-label "Back" --menu "$desc\n\nIt is installed." 0 60 0 \
+                Run    "Start it now" \
+                Remove "Remove it") || continue
+            case $act in
+                Run)    run_entry "$id" ;;
+                Remove) kb_yesno "$name" "Remove $name?" && kb_sudo && { clear
+                            # shellcheck disable=SC2086
+                            sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y $pkgs
+                            sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y; } ;;
+            esac
+        else
+            kb_dialog --title " $name " --yes-label "Install" --no-label "Back" --yesno \
+                "$desc\n\nDebian package: $pkgs\n\nInstall it?" 0 60 && install_entry "$name" "$pkgs"
+        fi
+    done
+done
