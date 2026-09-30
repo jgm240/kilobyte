@@ -141,14 +141,14 @@ Web|internet|Web browser|Web pages with CSS and JavaScript (ELinks)|@ |L
 Mail|internet|Email|Read and write email (Alpine)|M@|L
 Chat|internet|Chat|Talk in chat rooms (IRC with WeeChat)|☺☺|L
 BBS|internet|BBS Dialer|Call bulletin board systems that still run today|BB|M
-YouTube|internet|YouTube Downloader|Search, watch and save videos or their sound|► |M
+YouTube|internet|YouTube Downloader|Search, watch and save videos or their sound|Yt|M
 Network|internet|Network drives|Shared folders of Windows PCs and servers (SMB, SFTP)|⌂⌂|M
-Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡►|L
+Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡→|L
 Citrix|internet|Citrix Workspace|Remote desktops and apps of a company (needs Citrix's program)|Cx|M
-Video|media|Video Player|Videos and music as coloured blocks or the real picture|►►|M
+Video|media|Video Player|Videos and music as coloured blocks or the real picture|Tv|M
 Pictures|media|Pictures|Photos and drawings, shown with coloured blocks|▒▓|M
 Music|media|Music Player|Songs and playlists with dancing bars|♫ |M
-YouTube|media|YouTube Downloader|Search, watch and save videos or their sound|► |M
+YouTube|media|YouTube Downloader|Search, watch and save videos or their sound|Yt|M
 Disc|media|Disc Player|DVD films, audio CDs and data discs|◘ |M
 Sound|media|Sound volume|alsamixer: arrows change, M mutes, Esc closes|♪ |M
 Paint|accessories|Paint|Paint pictures with blocks; mouse or keyboard; saves PNG and ANSI art|▀▄|L
@@ -275,6 +275,12 @@ launch() {
         python3 "$KB_LIB/py/deskrun.py" window "${name:-$id}" "${size:-M}" /usr/bin/kilobyte --app "$@" && return 0
     fi
     run_app "$@"
+}
+
+submenu() { # submenu TITLE TEXT TAG DESC HELP ...; prints the chosen tag
+    local title=$1 text=$2; shift 2
+    kb_dialog --title " $title " --item-help --ok-label "Run" --cancel-label "Back" \
+        --default-item "${SUB_DEFAULT:-}" --menu "$text" 0 64 0 "$@"
 }
 
 # The menu of one category.

@@ -305,7 +305,7 @@ def main(s, args):
                 i = top + row
                 if i < len(songs):
                     name = info[songs[i]][0] if songs[i] in info else os.path.splitext(os.path.basename(songs[i]))[0]
-                    mark = "► " if i == current else "  "
+                    mark = "→ " if i == current else "  "
                     line = (" " + mark + name).ljust(w - 1)[:w - 1]
                     if i == chosen:
                         s.put(1 + row, 0, line, BLACK, CYAN)

@@ -259,7 +259,7 @@ FILE_KINDS = (
     (("xlsx", "ods", "csv", "tsv", "sc", "xls"), "##", 7),
     (("png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "svg", "ans"), "▒▓", 5),
     (("mp3", "ogg", "oga", "flac", "wav", "m4a", "opus", "aac", "wma", "m3u"), "♫ ", 2),
-    (("mp4", "mkv", "avi", "mov", "webm", "mpg", "mpeg", "flv", "wmv", "m4v"), "►►", 1),
+    (("mp4", "mkv", "avi", "mov", "webm", "mpg", "mpeg", "flv", "wmv", "m4v"), "Tv", 1),
     (("exe", "msi", "bat", "com"), "W ", 4),
     (("zip", "tar", "gz", "xz", "bz2", "7z", "rar", "deb", "tgz"), "[]", 3),
     (("pdf", "ps", "epub"), "¶ ", 1),

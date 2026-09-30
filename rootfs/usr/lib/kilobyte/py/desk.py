@@ -220,6 +220,7 @@ class Window:
         self.screen.set_mode(pyte.modes.LNM)
         self.stream = pyte.ByteStream(self.screen)
         self.alive = True
+        self.closed = None                 # when the window was closed by hand
         pid, fd = pty.fork()
         if pid == 0:
             env = dict(os.environ, TERM="xterm", KILOBYTE_DESK="1", COLORTERM="",
@@ -283,11 +284,35 @@ class Window:
         except OSError:
             pass
 
-    def close(self, sig=signal.SIGHUP):
+    def signal(self, sig):
+        """Send a signal to the window's programs: the one in the foreground
+        of its terminal and the one the window was opened with."""
+        groups = []
+        for get in (lambda: os.tcgetpgrp(self.fd), lambda: os.getpgid(self.pid)):
+            try:
+                g = get()
+            except OSError:
+                continue
+            if g > 1 and g not in groups:
+                groups.append(g)
+        for g in groups:
+            try:
+                os.killpg(g, sig)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+    def close(self):
+        """Close the window the way a terminal is closed: hang up. Whatever
+        runs in it is told to end, and the window is gone at once; programs
+        that stay anyway are ended a little later (see Desk.run)."""
+        self.signal(signal.SIGHUP)
+        self.signal(signal.SIGCONT)        # (a stopped program cannot act on the hang-up)
         try:
-            os.killpg(os.getpgid(self.pid), sig)
-        except (ProcessLookupError, PermissionError):
+            os.close(self.fd)
+        except OSError:
             pass
+        self.alive = False
+        self.closed = time.time()
 
     def mouse_on(self):
         modes = self.screen.mode
@@ -355,6 +380,7 @@ class Desk:
         self.icons = []                    # [(x, y, icon)] on the screen
         self.icon_sel = None
         self.quitting = None               # set to a time when logging out
+        self.dying = []                    # (pid, since) of closed windows' programs still running
         self.last_input = time.time()
         self.idle_checked = 0
         try:
@@ -990,7 +1016,7 @@ class Desk:
                     continue
                 chosen = i == m["sel"]
                 fg, bg = (WHITE, BLUE) if chosen else (BLACK, LIGHTGREY)
-                text = " " + label.ljust(w - 5) + ("► " if sub else "  ")
+                text = " " + label.ljust(w - 5) + ("» " if sub else "  ")
                 self.s.put(y + 1 + i, x + 1, text[:w - 2], fg, bg)
 
     def menu_move(self, m, step):
@@ -1471,19 +1497,28 @@ class Desk:
                     self.drag = self.outline = None
                 if self.select and self.select["win"] is win:
                     self.select = None
+                if win.closed is None:         # the program ended by itself
+                    try:
+                        os.close(win.fd)
+                    except OSError:
+                        pass
+                self.dying.append((win.pid, time.time()))
+            # The programs of closed windows: gone, or ended after three seconds.
+            for pid, since in list(self.dying):
                 try:
-                    os.waitpid(win.pid, os.WNOHANG)
+                    done, _ = os.waitpid(pid, os.WNOHANG)
                 except ChildProcessError:
-                    pass
-            # Logging out: leave when the last window has closed (programs
-            # that do not go by themselves are ended after three seconds).
-            if self.quitting:
-                if not self.windows:
-                    return
-                if time.time() - self.quitting > 3:
-                    for w in self.windows:
-                        w.close(signal.SIGKILL)
-                    self.quitting = time.time()
+                    done = pid
+                if done:
+                    self.dying.remove((pid, since))
+                elif time.time() - since > 3:
+                    try:
+                        os.killpg(pid, signal.SIGKILL)   # (the window's program leads its own group)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+            # Logging out: leave when the last window has closed.
+            if self.quitting and not self.windows and (not self.dying or time.time() - self.quitting > 5):
+                return
             try:
                 self.step()
                 errors = 0
