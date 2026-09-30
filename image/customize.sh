@@ -56,7 +56,7 @@ echo "xserver-xorg-legacy xserver-xorg-legacy/xwrapper/allowed_users select Anyb
 chmod 644 /etc/X11/Xwrapper.config 2>/dev/null || true
 
 # --- services
-systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post kilobyte-bootlogo
+systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post kilobyte-bootlogo kilobyte-swap
 systemctl disable wpa_supplicant.service hostapd.service 2>/dev/null || true   # started on demand
 systemctl mask systemd-networkd-wait-online.service
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf

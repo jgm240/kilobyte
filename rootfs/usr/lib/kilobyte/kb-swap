@@ -1,0 +1,138 @@
+#!/bin/bash
+# kb-swap: swap settings (Settings > Swap).
+#
+#   kb-swap status             what is set and in use (any user)
+#   kb-swap zram PERCENT|off   compressed memory: a swap area in RAM that holds
+#                              pages compressed, PERCENT of the memory's size
+#   kb-swap file MEGABYTES|off a swap file on the disk (/swapfile)
+#   kb-swap swappiness N       how readily memory is swapped out (0-200)
+#   kb-swap boot               set up the compressed memory at start-up
+#                              (kilobyte-swap.service)
+#
+# Settings are kept in /etc/kilobyte/swap (zram=PERCENT), /etc/fstab (the
+# swap file) and /etc/sysctl.d/90-kilobyte-swap.conf (swappiness).
+set -u
+
+CONF=/etc/kilobyte/swap
+FILE=/swapfile
+SYSCTL=/etc/sysctl.d/90-kilobyte-swap.conf
+
+need_root() { [ "$(id -u)" -eq 0 ] || { echo "kb-swap: this needs root" >&2; exit 1; }; }
+is_number() { case $1 in '' | *[!0-9]*) return 1 ;; esac; }
+mem_kb() { awk '/^MemTotal/ { print $2 }' /proc/meminfo; }
+zram_setting() { sed -n 's/^zram=//p' "$CONF" 2>/dev/null | tail -n 1; }
+zram_devices() { swapon --noheadings --raw --show=NAME 2>/dev/null | grep '^/dev/zram'; }
+# The live system runs from memory: a file on "/" would be in RAM itself.
+on_disk() { [ ! -d /run/live/medium ] && [ "$(findmnt -no FSTYPE /)" != overlay ]; }
+
+zram_stop() {
+    local dev rc=0
+    for dev in $(zram_devices); do
+        swapoff "$dev" || rc=1
+        zramctl --reset "$dev" 2>/dev/null || true
+    done
+    return $rc
+}
+
+zram_start() { # zram_start PERCENT
+    local dev size
+    modprobe zram 2>/dev/null || true
+    [ -e /sys/class/zram-control ] || [ -b /dev/zram0 ] ||
+        { echo "kb-swap: this kernel has no compressed memory (zram)" >&2; return 1; }
+    size=$(( $(mem_kb) * $1 / 100 ))K
+    # zstd packs best; older kernels only have their default.
+    dev=$(zramctl --find --algorithm zstd --size "$size" 2>/dev/null) ||
+        dev=$(zramctl --find --size "$size") || return 1
+    mkswap -q "$dev" >/dev/null && swapon --priority 100 "$dev"
+}
+
+case "${1:-}" in
+    status)
+        echo "memory_kb=$(mem_kb)"
+        echo "available_kb=$(awk '/^MemAvailable/ { print $2 }' /proc/meminfo)"
+        echo "swap_total_kb=$(awk '/^SwapTotal/ { print $2 }' /proc/meminfo)"
+        echo "swap_free_kb=$(awk '/^SwapFree/ { print $2 }' /proc/meminfo)"
+        echo "zram=$(zram_setting)"
+        echo "zram_active=$([ -n "$(zram_devices)" ] && echo yes || echo no)"
+        if [ -f "$FILE" ]; then
+            echo "file_mb=$(( $(stat -c %s "$FILE") / 1048576 ))"
+        else
+            echo "file_mb="
+        fi
+        echo "file_possible=$(on_disk && echo yes || echo no)"
+        echo "swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null)"
+        ;;
+    zram)
+        need_root
+        arg=${2:-}
+        mkdir -p /etc/kilobyte
+        if [ "$arg" = off ]; then
+            rm -f "$CONF"
+            zram_stop || { echo "kb-swap: the compressed memory is in use and did not fit back into memory; it ends at the next start" >&2; exit 1; }
+            exit 0
+        fi
+        is_number "$arg" && [ "$arg" -ge 10 ] && [ "$arg" -le 200 ] ||
+            { echo "usage: kb-swap zram PERCENT (10-200) | off" >&2; exit 2; }
+        zram_stop || true
+        if zram_start "$arg"; then
+            echo "zram=$arg" > "$CONF"
+        else
+            exit 1
+        fi
+        ;;
+    file)
+        need_root
+        arg=${2:-}
+        if [ "$arg" = off ]; then
+            if [ -f "$FILE" ]; then
+                swapoff "$FILE" 2>/dev/null
+                if swapon --noheadings --raw --show=NAME | grep -qx "$FILE"; then
+                    echo "kb-swap: the swap file is in use and did not fit back into memory" >&2
+                    exit 1
+                fi
+                rm -f "$FILE"
+            fi
+            sed -i "\|^$FILE[[:space:]]|d" /etc/fstab
+            exit 0
+        fi
+        is_number "$arg" && [ "$arg" -ge 64 ] && [ "$arg" -le 65536 ] ||
+            { echo "usage: kb-swap file MEGABYTES (64-65536) | off" >&2; exit 2; }
+        on_disk || { echo "kb-swap: a swap file needs Kilobyte installed on a disk (this is the live system)" >&2; exit 1; }
+        [ -f "$FILE" ] && { swapoff "$FILE" 2>/dev/null; rm -f "$FILE"; }
+        free_mb=$(( $(df --output=avail -k / | tail -n 1) / 1024 ))
+        [ "$free_mb" -ge $(( arg + 512 )) ] ||
+            { echo "kb-swap: not enough room on the disk ($free_mb MB free; the file and 512 MB to spare are needed)" >&2; exit 1; }
+        # (dd where the file system cannot preallocate a swap file)
+        fallocate -l "${arg}M" "$FILE" 2>/dev/null ||
+            dd if=/dev/zero of="$FILE" bs=1M count="$arg" status=none || { rm -f "$FILE"; exit 1; }
+        chmod 600 "$FILE"
+        if ! { mkswap -q "$FILE" >/dev/null && swapon --priority 10 "$FILE"; }; then
+            rm -f "$FILE"
+            dd if=/dev/zero of="$FILE" bs=1M count="$arg" status=none && chmod 600 "$FILE" &&
+                mkswap -q "$FILE" >/dev/null && swapon --priority 10 "$FILE" || { rm -f "$FILE"; exit 1; }
+        fi
+        sed -i "\|^$FILE[[:space:]]|d" /etc/fstab
+        printf '%s  none  swap  sw,pri=10  0  0\n' "$FILE" >> /etc/fstab
+        ;;
+    swappiness)
+        need_root
+        arg=${2:-}
+        is_number "$arg" && [ "$arg" -le 200 ] || { echo "usage: kb-swap swappiness N (0-200)" >&2; exit 2; }
+        # Kernels before 5.8 stop at 100.
+        if ! echo "$arg" > /proc/sys/vm/swappiness 2>/dev/null; then
+            arg=100
+            echo "$arg" > /proc/sys/vm/swappiness
+        fi
+        printf '# Set in Settings > Swap.\nvm.swappiness = %s\n' "$arg" > "$SYSCTL"
+        ;;
+    boot)
+        need_root
+        pct=$(zram_setting)
+        is_number "$pct" || exit 0
+        [ -n "$(zram_devices)" ] || zram_start "$pct"
+        ;;
+    *)
+        echo "usage: kb-swap status | zram PERCENT|off | file MEGABYTES|off | swappiness N | boot" >&2
+        exit 2
+        ;;
+esac

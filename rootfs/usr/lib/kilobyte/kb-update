@@ -139,6 +139,7 @@ install_tree() {
              etc/yt-dlp.conf etc/elinks/elinks.conf etc/gpm.conf etc/issue etc/systemd/network/20-wired.network \
              etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
              etc/systemd/network/25-wireless.network etc/systemd/system/kilobyte-bootlogo.service \
+             etc/systemd/system/kilobyte-swap.service \
              etc/X11/Xwrapper.config etc/X11/xorg.conf.d/10-kilobyte.conf; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
     done
@@ -195,7 +196,7 @@ install_tree() {
     fi
 
     # New services and groups that came with the update.
-    systemctl enable kilobyte-post.service kilobyte-bootlogo.service 2>/dev/null || true
+    systemctl enable kilobyte-post.service kilobyte-bootlogo.service kilobyte-swap.service 2>/dev/null || true
     if [ -n "$initramfs_changed" ] && [ ! -d /run/live/medium ]; then
         echo "Updating the start-up files ..."
         update-initramfs -u -k all >/dev/null 2>&1 || true

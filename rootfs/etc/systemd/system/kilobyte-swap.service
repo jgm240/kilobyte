@@ -1,0 +1,12 @@
+[Unit]
+Description=Kilobyte compressed memory (Settings > Swap)
+ConditionPathExists=/etc/kilobyte/swap
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/kilobyte/kb-swap boot
+
+[Install]
+WantedBy=multi-user.target

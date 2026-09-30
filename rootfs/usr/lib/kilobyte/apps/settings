@@ -251,6 +251,109 @@ for k, (label, _) in deskbg.PATTERNS.items(): print(k + "|" + label)')
     done
 }
 
+# --- Swap: compressed memory, a swap file, how readily to swap -----------------
+# The work is done by kb-swap (as root, after asking for the password).
+
+swap_get() { sed -n "s/^$1=//p" <<< "$SWAP_STATUS" | tail -n 1; }
+
+swap_mb() { echo "$(( ${1:-0} / 1024 )) MB"; }
+
+swap_do() { # swap_do ARGS...: run kb-swap as root, show what went wrong
+    local out
+    kb_sudo || return 1
+    kb_dialog --title " Swap " --infobox "Working ..." 5 40
+    if ! out=$(sudo "$KB_LIB/kb-swap" "$@" 2>&1); then
+        kb_msg "Swap" "That did not work:\n\n${out:-unknown error}" 12 66
+        return 1
+    fi
+}
+
+swap_panel() {
+    local sel zram zact file possible swp total used zlabel flabel slabel v mem
+    while true; do
+        SWAP_STATUS=$("$KB_LIB/kb-swap" status 2>/dev/null)
+        zram=$(swap_get zram) zact=$(swap_get zram_active) file=$(swap_get file_mb)
+        possible=$(swap_get file_possible) swp=$(swap_get swappiness)
+        mem=$(swap_get memory_kb) total=$(swap_get swap_total_kb)
+        used=$(( ${total:-0} - $(swap_get swap_free_kb) ))
+        if [ -n "$zram" ]; then
+            zlabel="ON, $zram% of the memory$([ "$zact" = yes ] || echo " (from the next start)")"
+        else
+            zlabel="OFF"
+        fi
+        if [ -n "$file" ]; then flabel="$file MB"
+        elif [ "$possible" = yes ]; then flabel="OFF"
+        else flabel="not on the live system"
+        fi
+        case $swp in
+            ''|*[!0-9]*) slabel="?" ;;
+            *) if   [ "$swp" -le 20 ];  then slabel="only when memory is nearly full ($swp)"
+               elif [ "$swp" -le 80 ];  then slabel="normally ($swp)"
+               else                          slabel="early ($swp)"
+               fi ;;
+        esac
+        sel=$(kb_dialog --title " Swap " --ok-label "Select" --cancel-label "Back" --menu \
+"Swap gives programs more room than the memory has.
+Memory: $(swap_mb "$mem"), $(swap_mb "$(swap_get available_kb)") free.   Swap: $(swap_mb "$total"), $(swap_mb "$used") in use." 0 72 0 \
+            Compressed "Compressed memory (zram): $zlabel" \
+            File       "Swap file on the disk: $flabel" \
+            Eagerness  "Use swap: $slabel" \
+            Details    "What is in use right now") || return
+        case $sel in
+            Compressed)
+                v=$(kb_dialog --title " Compressed Memory " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
+"Pages that are not needed at the moment are kept compressed in
+memory instead of on a disk: fast, no wear on SD cards and sticks,
+and it works on the live system. Good for computers with little
+memory; it costs a little processor time." 0 70 0 \
+                    off "Off"                        "$([ -z "$zram" ] && echo on || echo off)" \
+                    25  "A quarter of the memory"    "$([ "$zram" = 25 ] && echo on || echo off)" \
+                    50  "Half of the memory (usual)" "$([ "$zram" = 50 ] && echo on || echo off)" \
+                    100 "As much as the memory"      "$([ "$zram" = 100 ] && echo on || echo off)" \
+                    150 "One and a half times"       "$([ "$zram" = 150 ] && echo on || echo off)") || continue
+                swap_do zram "$v" ;;
+            File)
+                if [ "$possible" != yes ]; then
+                    kb_msg "Swap File" "The live system runs from memory, so a swap file would be in memory too.\n\nInstall Kilobyte to a disk first, or use compressed memory." 10 64
+                    continue
+                fi
+                v=$(kb_dialog --title " Swap File " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
+"A file on the disk (/swapfile) for what does not fit in memory.
+Slower than memory, and on an SD card it wears the card; with
+compressed memory on, it is only used when that is full." 0 70 0 \
+                    off   "Off"                  "$([ -z "$file" ] && echo on || echo off)" \
+                    512   "512 MB"               "$([ "$file" = 512 ] && echo on || echo off)" \
+                    1024  "1 GB"                 "$([ "$file" = 1024 ] && echo on || echo off)" \
+                    2048  "2 GB"                 "$([ "$file" = 2048 ] && echo on || echo off)" \
+                    4096  "4 GB"                 "$([ "$file" = 4096 ] && echo on || echo off)" \
+                    other "Another size ..."     off) || continue
+                if [ "$v" = other ]; then
+                    v=$(kb_input "Swap File" "Size in megabytes (64 to 65536):" "${file:-1024}") || continue
+                    case $v in ''|*[!0-9]*) kb_msg "Swap File" "\"$v\" is not a number."; continue ;; esac
+                fi
+                swap_do file "$v" ;;
+            Eagerness)
+                v=$(kb_dialog --title " Use Swap " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
+"How readily the computer moves things out of memory
+(the kernel's \"swappiness\")." 0 70 0 \
+                    10  "Only when memory is nearly full"          "$([ "$swp" = 10 ] && echo on || echo off)" \
+                    60  "Normally"                                  "$([ "$swp" = 60 ] && echo on || echo off)" \
+                    100 "Early (good with compressed memory)"       "$([ "$swp" = 100 ] && echo on || echo off)" \
+                    180 "Very early (compressed memory only)"       "$([ "$swp" = 180 ] && echo on || echo off)") || continue
+                swap_do swappiness "$v" ;;
+            Details)
+                v=$( { echo "Swap areas in use:"; echo
+                       swapon --show=NAME,TYPE,SIZE,USED,PRIO 2>/dev/null | sed 's/^/  /'
+                       [ -n "$(swapon --noheadings 2>/dev/null)" ] || echo "  (none)"
+                       echo; echo "Compressed memory:"; echo
+                       zramctl 2>/dev/null | sed 's/^/  /' | cut -c1-70
+                       [ -n "$(zramctl --noheadings 2>/dev/null)" ] || echo "  (not in use)"
+                       echo; free -h | sed 's/^/  /'; } 2>&1 )
+                kb_msg "Swap" "$v" 0 0 ;;
+        esac
+    done
+}
+
 display_panel() {
     local sel face size font
     sel=$(kb_dialog --title " Display " --ok-label "Apply" --cancel-label "Back" \
@@ -740,6 +843,7 @@ while true; do
             Appearance "Colour theme"                  "EDIT, Norton, Windows 1.0, C64, Amiga, Mac, CRT..." \
             Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
+            Swap       "Swap and memory"               "Compressed memory (zram), a swap file, how readily to swap" \
             Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
             Tiles      "Desktop tiles"                 "Weather and news beside the Program Manager" \
             Sound      "Sound"                         "Volume, start-up and shut-down sounds" \
@@ -766,6 +870,7 @@ while true; do
         Appearance) appearance_panel ;;
         Wallpaper)  wallpaper_panel ;;
         Display)    display_panel ;;
+        Swap)       swap_panel ;;
         Saver)      saver_panel ;;
         Tiles)      tiles_panel ;;
         Sound)      sound_panel ;;
