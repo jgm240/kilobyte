@@ -66,8 +66,11 @@
                     shown: pick a title; the main film is marked.
      Sound volume   alsamixer. Arrows change, M mutes, Esc closes.
 
-   Settings       Wi-Fi, colour theme, font size, keyboard layout, date and
-                  time zone, installing programs, password, task manager.
+   Settings       Wi-Fi, colour theme, wallpaper, font size, keyboard layout,
+                  date and time zone, installing programs, password, task
+                  manager. Swap: on a computer with little memory, switch
+                  on compressed memory (it also works on the live system);
+                  an installed Kilobyte can have a swap file on the disk too.
 
 
  WINDOWS

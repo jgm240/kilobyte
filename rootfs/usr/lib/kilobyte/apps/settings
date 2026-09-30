@@ -305,7 +305,7 @@ Memory: $(swap_mb "$mem"), $(swap_mb "$(swap_get available_kb)") free.   Swap: $
 "Pages that are not needed at the moment are kept compressed in
 memory instead of on a disk: fast, no wear on SD cards and sticks,
 and it works on the live system. Good for computers with little
-memory; it costs a little processor time." 0 70 0 \
+memory; it costs a little processor time." 17 70 5 \
                     off "Off"                        "$([ -z "$zram" ] && echo on || echo off)" \
                     25  "A quarter of the memory"    "$([ "$zram" = 25 ] && echo on || echo off)" \
                     50  "Half of the memory (usual)" "$([ "$zram" = 50 ] && echo on || echo off)" \
@@ -320,7 +320,7 @@ memory; it costs a little processor time." 0 70 0 \
                 v=$(kb_dialog --title " Swap File " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
 "A file on the disk (/swapfile) for what does not fit in memory.
 Slower than memory, and on an SD card it wears the card; with
-compressed memory on, it is only used when that is full." 0 70 0 \
+compressed memory on, it is only used when that is full." 17 70 6 \
                     off   "Off"                  "$([ -z "$file" ] && echo on || echo off)" \
                     512   "512 MB"               "$([ "$file" = 512 ] && echo on || echo off)" \
                     1024  "1 GB"                 "$([ "$file" = 1024 ] && echo on || echo off)" \
@@ -335,7 +335,7 @@ compressed memory on, it is only used when that is full." 0 70 0 \
             Eagerness)
                 v=$(kb_dialog --title " Use Swap " --ok-label "Use" --cancel-label "Back" --no-tags --radiolist \
 "How readily the computer moves things out of memory
-(the kernel's \"swappiness\")." 0 70 0 \
+(the kernel's \"swappiness\")." 14 70 4 \
                     10  "Only when memory is nearly full"          "$([ "$swp" = 10 ] && echo on || echo off)" \
                     60  "Normally"                                  "$([ "$swp" = 60 ] && echo on || echo off)" \
                     100 "Early (good with compressed memory)"       "$([ "$swp" = 100 ] && echo on || echo off)" \

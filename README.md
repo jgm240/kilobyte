@@ -56,8 +56,15 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 | Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
 | Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
 | Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure, Trek |
-| Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme, font, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
+| Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme, wallpaper, font, swap, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
 | Install | `kilobyte-install` | installs the live system to disk (PC live medium only) |
+
+**Swap** (Settings › Swap, `kb-swap`): compressed memory (zram, a quarter to
+one and a half times the memory's size, zstd), a swap file on the disk
+(`/swapfile`, installed systems only: the live system runs from memory) and
+how readily the kernel swaps (swappiness). Compressed memory is set up again
+at every start by `kilobyte-swap.service`. Nothing is on by default; on a
+computer with little memory, compressed memory is the one to switch on.
 
 **Themes** (Settings › Appearance): Classic Blue (EDIT.COM), Norton
 Commander, Windows 1.0, Commodore 64, Amiga Workbench 1.3, Mac System 1,
