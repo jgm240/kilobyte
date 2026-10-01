@@ -1,0 +1,21 @@
+# Programs to choose from in Settings > Defaults.
+# kind|id|name|command (the file or address goes after it)|Debian package
+# The id "kilobyte" is Kilobyte's own choice; its command is empty.
+editor|kilobyte|Editor (mcedit: menus with F9, F2 saves, F10 quits)||mc
+editor|nano|nano (Ctrl+O saves, Ctrl+X quits)|nano|nano
+editor|vi|vi (Vim: i types, Esc then :wq saves and quits)|vi|vim-tiny
+editor|vim|Vim (the full one, with colours)|vim|vim
+editor|micro|Micro (Ctrl+S saves, Ctrl+Q quits)|micro|micro
+editor|emacs|Emacs (Ctrl+X Ctrl+S saves, Ctrl+X Ctrl+C quits)|emacs -nw|emacs-nox
+web|kilobyte|ELinks (with CSS and JavaScript)||elinks
+web|lynx|Lynx|lynx|lynx
+web|w3m|w3m (lays out tables)|w3m|w3m
+files|kilobyte|Midnight Commander (two panels)||mc
+files|ranger|Ranger (three columns, previews)|ranger|ranger
+mail|kilobyte|Alpine||alpine
+mail|neomutt|NeoMutt|neomutt|neomutt
+spreadsheet|kilobyte|sc-im||sc-im
+spreadsheet|visidata|VisiData (CSV, Excel, JSON)|vd|visidata
+music|kilobyte|Music Player (playlists and dancing bars)||
+music|cmus|cmus (large collections)|cmus|cmus
+music|moc|MOC (two panels)|mocp|moc

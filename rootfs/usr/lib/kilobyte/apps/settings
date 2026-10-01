@@ -997,6 +997,90 @@ Files and folders you put into ~/Desktop appear there too." 22 70 13 "${items[@]
     printf '%s\n' "$sel" > "$KB_CONF/desktop-apps"
 }
 
+# --- Defaults: which program opens what ---------------------------------------
+DEFAULT_KINDS=(editor "Text editor" web "Web browser" files "File manager"
+               mail "Email" spreadsheet "Spreadsheet" music "Music player")
+
+default_name() { # default_name KIND ID
+    local k i name rest
+    while IFS='|' read -r k i name rest; do
+        [ "$k" = "$1" ] && [ "$i" = "$2" ] && { printf '%s' "${name%% (*}"; return; }
+    done < "$KB_SHARE/defaults.tsv"
+    printf '%s' "$2"
+}
+
+default_set() { # default_set KIND ID
+    local f="$KB_CONF/defaults" k v
+    {
+        if [ -r "$f" ]; then
+            while IFS='=' read -r k v; do
+                [ -n "$k" ] && [ "$k" != "$1" ] && printf '%s=%s\n' "$k" "$v"
+            done < "$f"
+        fi
+        printf '%s=%s\n' "$1" "$2"
+    } > "$f.new" && mv "$f.new" "$f"
+    # The file manager's F4 opens the chosen editor, or mc's own.
+    if [ "$1" = editor ] && [ -f "$HOME/.config/mc/ini" ]; then
+        local internal=false
+        [ "$2" = kilobyte ] && internal=true
+        if grep -q '^use_internal_edit=' "$HOME/.config/mc/ini"; then
+            sed -i "s/^use_internal_edit=.*/use_internal_edit=$internal/" "$HOME/.config/mc/ini"
+        else
+            sed -i "/^\[Midnight-Commander\]/a use_internal_edit=$internal" "$HOME/.config/mc/ini"
+        fi
+    fi
+}
+
+default_choose() { # default_choose KIND TITLE
+    local kind=$1 title=$2 cur items=() k i name cmd pkg state sel bin
+    cur=$(kb_default_id "$kind")
+    while IFS='|' read -r k i name cmd pkg; do
+        [ "$k" = "$kind" ] || continue
+        bin=${cmd%% *}
+        if [ -z "$bin" ] || command -v "$bin" >/dev/null 2>&1; then
+            state=""
+        else
+            state="  (gets installed)"
+        fi
+        items+=("$i" "$([ "$i" = "$cur" ] && echo "»" || echo " ") $name$state")
+    done < <(grep -v '^#' "$KB_SHARE/defaults.tsv")
+    sel=$(kb_dialog --title " $title " --default-item "$cur" --ok-label "Choose" --cancel-label "Back" --no-tags --menu \
+        "Which program opens when you start the $title, or open a\nfile of its kind (» is the one now):" 0 78 0 "${items[@]}") || return
+    [ -n "$sel" ] || return
+    while IFS='|' read -r k i name cmd pkg; do
+        [ "$k" = "$kind" ] && [ "$i" = "$sel" ] || continue
+        bin=${cmd%% *}
+        if [ -n "$bin" ] && ! command -v "$bin" >/dev/null 2>&1; then
+            kb_yesno "$title" "${name%% (*} is not installed yet.\n\nInstall it now (Debian package $pkg)?" 10 60 || return
+            kb_sudo || return
+            clear
+            printf '\n  Installing %s ...\n\n' "${name%% (*}"
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$pkg" ||
+                { sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$pkg"; }
+            command -v "$bin" >/dev/null 2>&1 ||
+                { kb_msg "$title" "${name%% (*} could not be installed (is the computer on-line?)." 8 60; return; }
+        fi
+        default_set "$kind" "$sel"
+        "$KB_LIB/kb-notify" "Defaults" "$title: ${name%% (*}" >/dev/null 2>&1 || true
+    done < <(grep -v '^#' "$KB_SHARE/defaults.tsv")
+}
+
+defaults_panel() {
+    local sel=editor items i kind title
+    while true; do
+        items=()
+        for ((i = 0; i < ${#DEFAULT_KINDS[@]}; i += 2)); do
+            kind=${DEFAULT_KINDS[i]} title=${DEFAULT_KINDS[i+1]}
+            items+=("$kind" "$(printf '%-14s %s' "$title" "$(default_name "$kind" "$(kb_default_id "$kind")")")")
+        done
+        sel=$(kb_dialog --title " Defaults " --default-item "$sel" --ok-label "Change" --cancel-label "Back" --no-tags \
+            --menu "The programs Kilobyte starts for each job. They open from the\nProgram Manager, the desktop and the file manager." 0 70 0 "${items[@]}") || return
+        for ((i = 0; i < ${#DEFAULT_KINDS[@]}; i += 2)); do
+            [ "${DEFAULT_KINDS[i]}" = "$sel" ] && default_choose "$sel" "${DEFAULT_KINDS[i+1]}"
+        done
+    done
+}
+
 page=${1:-}
 sel=Update
 while true; do
@@ -1013,6 +1097,7 @@ while true; do
             Appearance "Colour theme"                  "EDIT, Norton, Windows 1.0, C64, Amiga, Mac, CRT..." \
             Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
             Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
+            Defaults   "Default programs"              "Text editor, web browser, file manager, email, music..." \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
             Swap       "Swap and memory"               "Compressed memory (zram), a swap file, how readily to swap" \
             Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
@@ -1058,6 +1143,7 @@ while true; do
         SwitchUser) switch_user_panel ;;
         Remote)     remote_panel ;;
         Desktop)    desktop_panel ;;
+        Defaults)   defaults_panel ;;
         Password)   kb_run_pause passwd ;;
         Tasks)      kb_run htop ;;
         About)      about_panel ;;

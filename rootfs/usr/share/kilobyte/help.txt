@@ -77,6 +77,10 @@
                   an installed Kilobyte can have a swap file on the disk too.
                   Kilobyte Update can undo the last update; an installed PC
                   also has "undo the last update" in its boot menu.
+                  Defaults chooses the programs that open for each job: the
+                  text editor (Kilobyte's, nano, vi, Vim, Micro, Emacs), the
+                  web browser, file manager, email, spreadsheet and music
+                  player. One that is not installed yet gets installed.
 
 
  THE DESKTOP (KILOBYTE WINDOWS)

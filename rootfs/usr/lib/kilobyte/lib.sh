@@ -214,6 +214,45 @@ kb_usb_mount() {
     [ -d "$mnt" ] && printf '%s\n' "$mnt"
 }
 
+# --- default programs (Settings > Defaults) --------------------------------
+# $KB_CONF/defaults has lines KIND=ID; the choices are in defaults.tsv.
+
+# kb_default_id KIND: the chosen program's id ("kilobyte": Kilobyte's own).
+kb_default_id() {
+    local k v id=kilobyte
+    if [ -r "$KB_CONF/defaults" ]; then
+        while IFS='=' read -r k v; do
+            [ "$k" = "$1" ] && [ -n "$v" ] && id=$v
+        done < "$KB_CONF/defaults"
+    fi
+    printf '%s' "$id"
+}
+
+# kb_default KIND: the command line of the chosen program; false when that is
+# Kilobyte's own, or the chosen one is not installed (any more).
+kb_default() {
+    local id k i name cmd pkg
+    id=$(kb_default_id "$1")
+    [ "$id" = kilobyte ] && return 1
+    while IFS='|' read -r k i name cmd pkg; do
+        [ "$k" = "$1" ] && [ "$i" = "$id" ] && [ -n "$cmd" ] || continue
+        command -v "${cmd%% *}" >/dev/null 2>&1 || return 1
+        printf '%s' "$cmd"
+        return 0
+    done < "$KB_SHARE/defaults.tsv"
+    return 1
+}
+
+# The editor other programs start (git, crontab, mc's F4, sudoedit ...).
+kb_export_editor() {
+    local e
+    if e=$(kb_default editor); then
+        export EDITOR="$e" VISUAL="$e"
+    else
+        export EDITOR=mcedit VISUAL=mcedit
+    fi
+}
+
 # --- updates from GitHub --------------------------------------------------
 
 # True when the last check found a newer Kilobyte than the installed one.
