@@ -47,7 +47,7 @@ EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-} RPI_REPO=${
 RPI_MIRROR=http://archive.raspberrypi.com/debian
 RPI_KEY=/usr/share/keyrings/raspberrypi-archive-keyring.pgp
 if [ $KIND = pc ]; then
-    NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}"
+    NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}${CD:+-cd}"
 else
     NAME="kilobyte-$VERSION-raspberrypi-$ARCH${LITE:+-lite}"
 fi
@@ -184,7 +184,12 @@ base_key() {
 stage_base() {
     local packages key age
     local lists=(/src/image/packages.txt "/src/image/packages-$KIND.txt")
-    [ -f "/src/image/packages-$ARCH.txt" ] && lists+=("/src/image/packages-$ARCH.txt")
+    # The CD version (CD=1) has its own list for the architecture, if there is one.
+    if [ -n "${CD:-}" ] && [ -f "/src/image/packages-$ARCH-cd.txt" ]; then
+        lists+=("/src/image/packages-$ARCH-cd.txt")
+    elif [ -f "/src/image/packages-$ARCH.txt" ]; then
+        lists+=("/src/image/packages-$ARCH.txt")
+    fi
     packages="$(pkgs "${lists[@]}"),$KERNEL${EFI:+,$EFI}${EFI32:+,$EFI32}"
     [ -n "${LITE:-}" ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
 
@@ -288,6 +293,9 @@ stage_rootfs() {
     chmod 755 "$r/usr/local/bin/yt-dlp"
     echo "${KB_COMMIT:-unknown}" > "$r/usr/share/kilobyte/commit"
     cp "$WORK/base.packages" "$r/usr/share/kilobyte/packages.txt"
+    # Which version this is, for Kilobyte Update (it picks the package list).
+    mkdir -p "$r/etc/kilobyte"
+    if [ -n "${CD:-}" ]; then echo cd > "$r/etc/kilobyte/variant"; else rm -f "$r/etc/kilobyte/variant"; fi
     cp /src/image/customize.sh "$r/tmp/customize.sh"
     # customize.sh runs in the system: it needs /proc, /sys and /dev there,
     # and no service may be started by a package script.

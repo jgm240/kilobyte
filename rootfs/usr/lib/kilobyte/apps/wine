@@ -17,6 +17,10 @@ have_wine() {
         kb_msg "$T" "Windows programs need a faster Raspberry Pi: the programs that translate PC code (box86, box64) do not run on the processor of a Pi 1 or Zero." 9 64
         return 1
     fi
+    if [ "$(cat /etc/kilobyte/variant 2>/dev/null)" = cd ]; then
+        kb_msg "$T" "This is the CD version of Kilobyte: it has DOSBox for DOS programs (Accessories > DOS programs) instead of Wine, to fit on a CD.\n\nOn a Kilobyte installed to disk, Wine can be added in Settings > Add or remove programs (package \"wine\", about 650 MB)." 12 66
+        return 1
+    fi
     kb_msg "$T" "\Z1\ZbWine is not installed.\Zn\n\nInstall it in Settings > Software (package \"wine\")." 9 60
     return 1
 }
@@ -69,6 +73,11 @@ about() {
 
 # wine FILE: run that program (opened from the desktop or the file manager).
 if [ -n "${1:-}" ]; then
+    # A DOS program goes to DOSBox: Wine no longer runs those.
+    case ${1,,} in
+        *.com | *.bat) exec "$KB_LIB/apps/dos" "$1" ;;
+        *.exe) case $(file -b "$1" 2>/dev/null) in *Windows* | PE32*) ;; *) exec "$KB_LIB/apps/dos" "$1" ;; esac ;;
+    esac
     have_wine || exit 0
     prepare
     case $1 in

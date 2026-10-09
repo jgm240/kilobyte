@@ -158,8 +158,13 @@ install_tree() {
         amd64 | i386) kind=pc ;;
         *)            kind=pi ;;
     esac
-    new_pkgs=$(package_list "$src/../image/packages.txt" "$src/../image/packages-$kind.txt" \
-        "$src/../image/packages-$(dpkg --print-architecture).txt")
+    # The CD version of the 32-bit PC image has DOSBox instead of Wine.
+    local variant="" arch_list
+    { read -r variant < /etc/kilobyte/variant; } 2>/dev/null
+    arch_list="$src/../image/packages-$(dpkg --print-architecture).txt"
+    [ -n "$variant" ] && [ -f "$src/../image/packages-$(dpkg --print-architecture)-$variant.txt" ] &&
+        arch_list="$src/../image/packages-$(dpkg --print-architecture)-$variant.txt"
+    new_pkgs=$(package_list "$src/../image/packages.txt" "$src/../image/packages-$kind.txt" "$arch_list")
     grep -qx firmware-iwlwifi <<< "$old_pkgs" &&   # not a --lite image
         new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-wifi.txt")" | sort -u)
 

@@ -8,6 +8,8 @@
 #   ./build.sh --arch armel     Raspberry Pi 1 / Zero / Zero W SD card image
 #   ./build.sh --arch all       all five
 #   ./build.sh --lite ...       leave the big Wi-Fi firmware out
+#   ./build.sh --cd ...         CD version: DOSBox instead of Wine, so the
+#                               32-bit PC ISO fits on a 650 MB CD
 #   ./build.sh --fresh ...      build the Debian base system anew (it is
 #                               otherwise reused for two weeks, unless the
 #                               package lists change)
@@ -20,16 +22,18 @@ cd "$(dirname "$0")"
 
 ARCHES=amd64
 LITE=
+CD=
 FRESH=
 FAST=
 while [ $# -gt 0 ]; do
     case $1 in
         --lite) LITE=1 ;;
+        --cd) CD=1 ;;
         --fresh) FRESH=1 ;;
         --fast) FAST=1 ;;
         --arch) shift; ARCHES=$1 ;;
         --arch=*) ARCHES=${1#--arch=} ;;
-        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--fresh] [--fast]" >&2; exit 2 ;;
+        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--cd] [--fresh] [--fast]" >&2; exit 2 ;;
     esac
     shift
 done
@@ -55,14 +59,23 @@ for ARCH in $ARCHES; do
         *) echo "unknown architecture: $ARCH" >&2; exit 2 ;;
     esac
     echo "######## Kilobyte for $ARCH"
-    docker volume create "kilobyte-work-$ARCH" >/dev/null
+    # A variant has a work area of its own (its base system differs); the
+    # first time, it starts with the downloads and packages of the usual one.
+    VOL="kilobyte-work-$ARCH${CD:+-cd}"
+    if ! docker volume inspect "$VOL" >/dev/null 2>&1; then
+        docker volume create "$VOL" >/dev/null
+        if [ "$VOL" != "kilobyte-work-$ARCH" ] && docker volume inspect "kilobyte-work-$ARCH" >/dev/null 2>&1; then
+            docker run --rm -v "kilobyte-work-$ARCH:/from:ro" -v "$VOL:/to" "debian:$SUITE" \
+                sh -c 'for d in apt-cache debs ccache; do [ -d /from/$d ] && cp -a /from/$d /to/; done; true'
+        fi
+    fi
 
     stage() { # stage NAME [docker options...]
         name=$1
         shift
-        docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e KB_COMMIT="$KB_COMMIT" \
+        docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e CD="$CD" -e KB_COMMIT="$KB_COMMIT" \
             -e FRESH="$FRESH" -e FAST="$FAST" \
-            -v "$PWD:/src:ro" -v "kilobyte-work-$ARCH:/work" -v "$PWD/out:/out" \
+            -v "$PWD:/src:ro" -v "$VOL:/work" -v "$PWD/out:/out" \
             "debian:$SUITE" bash /src/image/build-in-container.sh "$name"
     }
 

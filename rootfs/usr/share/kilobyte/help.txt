@@ -181,6 +181,13 @@
    and network drives in ~/Network.
 
 
+ DOS PROGRAMS
+ ────────────
+   Accessories > DOS programs runs DOS programs and games in DOSBox, an
+   emulated DOS PC with VGA graphics and Sound Blaster sound. The folder DOS
+   in your home folder is drive C:. Opening a DOS .exe, .com or .bat file
+   starts it there. Ctrl+F9 ends DOSBox.
+
  WINDOWS PROGRAMS
  ────────────────
    Accessories > Windows programs runs .exe and .msi files with Wine.

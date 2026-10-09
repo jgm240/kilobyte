@@ -228,6 +228,7 @@ Print|accessories|Print|Send a file to the printer|Pr|M
 USB|accessories|USB sticks|Open, safely remove or format a USB stick|↔ |M
 Backup|accessories|Backup|Copy documents and settings to a USB stick|»»|M
 Trash|accessories|Trash|Files you threw away: put them back or delete them for good|▄▄|M
+DOS|accessories|DOS programs|Run DOS programs and games in DOSBox, an emulated DOS PC|C:|M
 Wine|accessories|Windows programs|Run .exe and .msi programs with Wine (box64/box86 on a Raspberry Pi)|W |M
 Store|accessories|Store|More text-mode programs to install with a keypress|$ |M
 Saver|accessories|Screen saver|Start the screen saver now|**|L
@@ -294,6 +295,7 @@ run_app() {
         Backup)      "$APPS/backup" ;;
         Trash)       "$APPS/trash" ;;
         Wine)        "$APPS/wine" "$@" ;;
+        DOS)         "$APPS/dos" "$@" ;;
         Store)       "$APPS/store" ;;
         Saver)       run_saver ;;
         Lock)        "$APPS/lock" ;;

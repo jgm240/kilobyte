@@ -31,7 +31,6 @@ ninvaders|ninvaders|ninvaders|Games|nInvaders|Shoot the invaders from space|
 greed|greed|greed|Games|Greed|Eat as many numbers as you can|
 nudoku|nudoku|nudoku|Games|Sudoku (nudoku)|Number puzzles|
 gnuchess|gnuchess|gnuchess|Games|GNU Chess|Chess against the computer (type moves such as e2e4)|
-dosbox|dosbox|/usr/lib/kilobyte/kb-x /usr/bin/dosbox|Games|DOSBox|Run old DOS programs and games (opens a graphics screen)|
 cmatrix|cmatrix|cmatrix|Fun|Digital rain (cmatrix)|Green letters falling down the screen; q stops|
 sl|sl|sl|Fun|Steam locomotive (sl)|A train crosses the screen|pause
 cowsay|fortune-mod cowsay|cowsay "$(fortune)"|Fun|Fortune cow|A cow tells you a saying|pause

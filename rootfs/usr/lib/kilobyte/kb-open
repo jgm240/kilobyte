@@ -38,7 +38,14 @@ kind_of() {
         *.mp4 | *.mkv | *.avi | *.mov | *.webm | *.mpg | *.mpeg | *.flv | *.wmv | *.m4v) echo Video ;;
         *.html | *.htm) echo Web ;;
         *.pdf) echo PDF ;;
-        *.exe | *.msi | *.bat | *.com) echo Wine ;;
+        *.msi) echo Wine ;;
+        *.bat | *.com) echo DOS ;;
+        *.exe)
+            # A program for DOS or for Windows: its header tells.
+            case $(file -b "$1" 2>/dev/null) in
+                *Windows* | PE32*) echo Wine ;;
+                *) echo DOS ;;
+            esac ;;
         *.ica) echo Citrix ;;
         *)
             # Anything that is text goes to the editor.
@@ -82,5 +89,6 @@ sel=$(kb_dialog --title " Open with " --default-item "${kind:-Editor}" --ok-labe
     PDF         "PDF as text" \
     Print       "Print it" \
     Wine        "Windows program (Wine)" \
+    DOS         "DOS program (DOSBox)" \
     Files       "File manager, in its folder") || exit 0
 run "$sel"

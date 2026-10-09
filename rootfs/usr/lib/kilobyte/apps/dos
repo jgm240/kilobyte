@@ -1,0 +1,69 @@
+#!/bin/bash
+# DOS programs and games, in DOSBox: a whole emulated DOS PC with sound and
+# graphics. It runs on the graphics screen (kb-x), like Windows programs do.
+#
+#   dos                  menu: open a program, a DOS prompt, about
+#   dos FILE             run that .exe, .com or .bat (its folder is drive C:)
+#
+# The folder ~/DOS is drive C: at the DOS prompt: put programs and games there.
+. /usr/lib/kilobyte/lib.sh
+
+T="DOS Programs"
+DOSDIR="$HOME/DOS"
+
+have_dosbox() {
+    command -v dosbox >/dev/null && return 0
+    kb_yesno "$T" "DOS programs run in DOSBox, which is not installed yet.\n\nInstall it now (a few MB)?" 9 60 || return 1
+    kb_sudo || return 1
+    clear
+    printf '\n  Installing DOSBox ...\n\n'
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dosbox ||
+        { sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dosbox; }
+    command -v dosbox >/dev/null && return 0
+    kb_msg "$T" "DOSBox could not be installed (is the computer on-line?)." 8 60
+    return 1
+}
+
+# On the graphics screen, full screen; Ctrl+F9 or "exit" ends DOSBox.
+run_dosbox() {
+    kb_dialog --title " $T " --infobox "Starting DOSBox ...\n\nCtrl+F9 ends it; Ctrl+Alt+Backspace leaves at once." 7 60
+    "$KB_LIB/kb-x" dosbox -fullscreen "$@" ||
+        kb_msg "$T" "The graphics screen could not start.\n\nDetails are in ~/.cache/kilobyte-x.log." 9 60
+}
+
+run_file() { # run_file FILE: its folder becomes C:, and DOSBox ends with it
+    local f
+    f=$(readlink -f "$1")
+    [ -f "$f" ] || { kb_msg "$T" "\"$1\" is not a file." 7 60; return 1; }
+    run_dosbox -c "mount c \"$(dirname "$f")\"" -c "c:" -c "$(basename "$f")" -c "exit"
+}
+
+prompt() { # a DOS prompt with ~/DOS as drive C:
+    mkdir -p "$DOSDIR"
+    run_dosbox -c "mount c \"$DOSDIR\"" -c "c:"
+}
+
+if [ -n "${1:-}" ]; then
+    have_dosbox && run_file "$1"
+    exit 0
+fi
+
+sel=""
+while true; do
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "DOS programs and games run in DOSBox, an emulated DOS PC.\nThe folder DOS in your home folder is drive C:." 0 68 0 \
+        Open   "Run a program (.exe, .com or .bat)" \
+        Prompt "A DOS prompt (drive C: is ~/DOS)" \
+        About  "About DOS programs on Kilobyte") || exit 0
+    case $sel in
+        Open)
+            have_dosbox || continue
+            mkdir -p "$DOSDIR"
+            f=$(kb_dialog --title " $T - a program " --fselect "$DOSDIR/" 14 70) || continue
+            run_file "$f" ;;
+        Prompt)
+            have_dosbox && prompt ;;
+        About)
+            kb_msg "$T" "DOSBox emulates a PC from the DOS days: processor, VGA graphics, Sound Blaster sound, joystick. Most DOS games and programs run, from before Windows 95.\n\nKeys in DOSBox:\n  Ctrl+F9       end DOSBox\n  Alt+Enter     window / full screen\n  Ctrl+F11/F12  slower / faster\n\nWindows programs (.exe files made for Windows) need Wine instead: Accessories > Windows programs." 19 70 ;;
+    esac
+done
