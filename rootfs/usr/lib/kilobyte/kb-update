@@ -103,7 +103,7 @@ OWN_FILES="usr/bin/kilobyte usr/sbin/kilobyte-install usr/sbin/kilobyte-firstboo
     etc/systemd/system/kilobyte-wifi.service etc/systemd/system/kilobyte-post.service
     etc/systemd/system/kilobyte-resize.service etc/systemd/system/kilobyte-bootlogo.service
     etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service
-    etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage
+    etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage etc/initramfs-tools/hooks/zz-kilobyte-slim
     etc/initramfs-tools/scripts/init-top/kilobyte-logo etc/initramfs-tools/scripts/init-bottom/kilobyte-logo"
 PREV=/var/lib/kilobyte/previous
 
@@ -201,7 +201,7 @@ install_tree() {
     done
     # The start-up logo in the initramfs.
     local initramfs_changed=
-    for f in etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage \
+    for f in etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage etc/initramfs-tools/hooks/zz-kilobyte-slim \
              etc/initramfs-tools/scripts/init-top/kilobyte-logo \
              etc/initramfs-tools/scripts/init-bottom/kilobyte-logo; do
         [ -f "$src/$f" ] || continue

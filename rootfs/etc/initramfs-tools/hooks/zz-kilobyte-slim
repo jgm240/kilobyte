@@ -1,0 +1,52 @@
+#!/bin/sh
+# PCs: what the start-up image never needs, out of it. The kernel unpacks
+# the whole image into memory before anything else runs, and 75 MB of it did
+# not fit next to the kernel on a PC with 128 MB, which then stopped with
+# "No working init found". The system loads these drivers from the disk or CD
+# later, when the hardware is there: graphics (the kms hook), file systems
+# Kilobyte never starts from (it uses ext4, ISO 9660, SquashFS and FAT; the
+# live hook asks for btrfs, NFS, CIFS, HFS, NTFS, ...), server SCSI cards and
+# InfiniBand; and udev's 13 MB hardware database.
+# Drivers are copied in two rounds, before and after the hooks: this one,
+# which runs last (zz-), deletes what the first round copied and takes the
+# rest off the list for the second.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+case $(dpkg --print-architecture) in amd64 | i386) ;; *) exit 0 ;; esac
+
+DROP="drivers/gpu drivers/infiniband drivers/target net/sunrpc net/ceph"
+for fs in btrfs xfs nfs nfs_common nfsd smb ceph f2fs reiserfs jfs nilfs2 ocfs2 gfs2 dlm afs 9p \
+          orangefs ubifs jffs2 hfs hfsplus ntfs ntfs3 erofs bcachefs coda netfs cachefiles fscache; do
+    DROP="$DROP fs/$fs"
+done
+for d in lpfc qla2xxx qla4xxx bfa mpt3sas mpi3mr megaraid be2iscsi bnx2fc bnx2i fcoe libfc cxgbi \
+         csiostor pm8001 isci hpsa smartpqi aacraid arcmsr esas2r qedf qedi snic fnic mvsas aic94xx \
+         libsas elx; do
+    DROP="$DROP drivers/scsi/$d drivers/scsi/$d.ko drivers/scsi/$d.ko.xz drivers/scsi/$d.ko.zst"
+done
+
+# Their names, as the list for the second round has them.
+names=$(mktemp)
+for d in $DROP; do
+    find "${MODULESDIR}/kernel/$d" -name '*.ko*' 2>/dev/null
+done | sed 's|.*/||; s/\.ko.*$//' | tr - _ | sort -u > "$names"
+if [ -n "${__MODULES_TO_ADD:-}" ] && [ -f "$__MODULES_TO_ADD" ]; then
+    while read -r m; do
+        case $m in
+            =*) printf '%s\n' "$m" ;;
+            *) printf '%s\n' "$m" | tr - _ | grep -qxF -f "$names" || printf '%s\n' "$m" ;;
+        esac
+    done < "$__MODULES_TO_ADD" > "$__MODULES_TO_ADD.slim"
+    cat "$__MODULES_TO_ADD.slim" > "$__MODULES_TO_ADD"
+    rm -f "$__MODULES_TO_ADD.slim"
+fi
+rm -f "$names"
+
+# What the first round copied.
+for dir in "${DESTDIR}"/usr/lib/modules/*/kernel "${DESTDIR}"/lib/modules/*/kernel; do
+    [ -d "$dir" ] || continue
+    for d in $DROP; do rm -rf "${dir:?}/$d"; done
+done
+rm -f "${DESTDIR}/usr/lib/udev/hwdb.bin" "${DESTDIR}/lib/udev/hwdb.bin" "${DESTDIR}/etc/udev/hwdb.bin"
+exit 0
