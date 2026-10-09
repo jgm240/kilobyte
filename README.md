@@ -407,3 +407,19 @@ test/qemu.sh                 boot the ISO or the installed disk in QEMU
 On any Debian or Ubuntu machine, Kilobyte also runs without the image: install
 the packages from `image/packages.txt`, copy `rootfs/usr` into place and run
 `kilobyte`.
+
+## Licence
+
+Copyright (C) 2026 Kilobyte contributors.
+
+Kilobyte is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the details.
+
+This covers Kilobyte's own files (this repository). The images also contain
+Debian and other programs (Wine, box86, yt-dlp, Raspberry Pi's kernel and
+firmware, ...), each under its own licence; on a running system they are in
+`/usr/share/doc/*/copyright`.

@@ -511,7 +511,11 @@ about_panel() {
 \ZbDisk\Zn       $disk
 \ZbKernel\Zn     $(uname -r)
 \ZbComputer\Zn   $(hostname)
-\ZbRunning\Zn    $up" 20 74
+\ZbRunning\Zn    $up
+
+Kilobyte is free software under the GNU General Public License,
+version 3 or later: /usr/share/kilobyte/COPYING. The Debian
+programs it is built on keep their own licences." 24 74
 }
 
 # --- Kilobyte Update ------------------------------------------------------
