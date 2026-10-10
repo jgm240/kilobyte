@@ -5,6 +5,11 @@
 #   1   1 MiB   BIOS boot partition (GRUB core image for BIOS)
 #   2 512 MiB   EFI system partition (FAT32)
 #   3  rest     root file system (ext4)
+#
+# Next to Windows 95/98/Me (PCs that start with their BIOS): its FAT drive is
+# checked and made smaller with fatresize, files and all; Kilobyte goes into
+# the freed space as a new partition of the same (MBR) table, and GRUB in
+# the MBR offers both at start-up. Windows' drive appears as /media/windows.
 
 . /usr/lib/kilobyte/lib.sh
 
@@ -54,6 +59,102 @@ Press \ZbEnter\Zn to continue or \ZbEsc\Zn to cancel." 16 60 || abort
 
 live_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /run/live/medium 2>/dev/null)" 2>/dev/null | head -n 1)
 
+# --- Windows 95/98/Me, to install next to -------------------------------------
+
+GIB=$((1024 * 1024 * 1024))
+MIB=$((1024 * 1024))
+KB_MIN=$((3 * GIB))          # the least Kilobyte gets
+WIN_SPARE=$((500 * MIB))     # what Windows keeps free on its drive at least
+MODE=disk
+
+# The first FAT drive with Windows 9x on it: "PARTITION DISK".
+find_win9x() {
+    local path fstype pkname mnt found=""
+    while read -r path fstype pkname; do
+        [ "$fstype" = vfat ] && [ -n "$pkname" ] || continue
+        [ "$(basename "$pkname")" = "$live_disk" ] && continue
+        mnt=$(mktemp -d)
+        if mount -o ro "$path" "$mnt" 2>/dev/null; then
+            [ -n "$(find "$mnt" -maxdepth 1 -iname io.sys 2>/dev/null)" ] &&
+                [ -n "$(find "$mnt" -maxdepth 2 -ipath "$mnt/windows/win.com" 2>/dev/null)" ] && found="$path $pkname"
+            umount "$mnt"
+        fi
+        rmdir "$mnt"
+        [ -n "$found" ] && { echo "$found"; return 0; }
+    done < <(lsblk -lnpo PATH,FSTYPE,PKNAME 2>/dev/null)
+    return 1
+}
+
+# What there is to share: sets WIN_* and the most Kilobyte can get (KB_MAX).
+measure_win9x() {
+    local mnt start size p disk_bytes
+    local name; name=$(basename "$WIN_PART")
+    [ "$(blkid -o value -s PTTYPE "$WIN_DISK")" = dos ] || return 3
+    [ "$(sfdisk -l "$WIN_DISK" 2>/dev/null | grep -c "^$WIN_DISK")" -lt 4 ] || return 4
+    WIN_NUM=$(cat "/sys/class/block/$name/partition")
+    WIN_SIZE=$(blockdev --getsize64 "$WIN_PART")
+    WIN_UUID=$(blkid -s UUID -o value "$WIN_PART")
+    mnt=$(mktemp -d)
+    mount -o ro "$WIN_PART" "$mnt" 2>/dev/null || { rmdir "$mnt"; return 1; }
+    WIN_USED=$(df -B1 --output=used "$mnt" | tail -n 1 | tr -d ' ')
+    umount "$mnt"; rmdir "$mnt"
+    # Kilobyte goes after Windows: nothing else may be there.
+    start=$(cat "/sys/class/block/$name/start")
+    size=$(cat "/sys/class/block/$name/size")
+    for p in /sys/class/block/"$(basename "$WIN_DISK")"/*/start; do
+        [ "$(cat "$p")" -gt "$start" ] && return 2
+    done
+    disk_bytes=$(blockdev --getsize64 "$WIN_DISK")
+    WIN_AFTER=$((disk_bytes - (start + size) * 512 - MIB))    # free space after it
+    [ $WIN_AFTER -lt 0 ] && WIN_AFTER=0
+    WIN_MIN=$((WIN_USED + WIN_SPARE))
+    KB_MAX=$((WIN_SIZE - WIN_MIN + WIN_AFTER))
+    # Without fatresize Windows' drive cannot shrink: only space after it counts.
+    command -v fatresize >/dev/null || KB_MAX=$WIN_AFTER
+    return 0
+}
+
+gb() { awk -v b="$1" 'BEGIN { printf "%.1f GB", b / 1073741824 }'; }
+
+if [ ! -d /sys/firmware/efi ] && read -r WIN_PART WIN_DISK < <(find_win9x); then
+    why=""
+    measure_win9x
+    case $? in
+        1) why="The Windows drive could not be read." ;;
+        2) why="There is another partition after the Windows drive." ;;
+        3) why="The disk does not use the old (MBR) partition table." ;;
+        4) why="The disk already has four partitions." ;;
+    esac
+    [ -z "$why" ] && [ "$KB_MAX" -lt "$KB_MIN" ] &&
+        why="There is not enough room: Windows uses $(gb "$WIN_USED") of its $(gb "$WIN_SIZE") drive, and Kilobyte needs 3 GB."
+    if [ -z "$why" ]; then
+        how=$(kb_dialog --title " Windows Found " --ok-label "Next" --cancel-label "Cancel" --no-tags --menu "
+Windows 95/98/Me is on $WIN_PART ($(gb "$WIN_SIZE"), $(gb "$WIN_USED") used).
+How should Kilobyte be installed?" 13 72 2 \
+            Alongside "Next to Windows: choose one of them at every start" \
+            Erase     "On a whole disk: everything on it is erased") || abort
+        [ "$how" = Alongside ] && MODE=alongside
+    else
+        kb_msg "Windows Found" "Windows 95/98/Me is on $WIN_PART, but Kilobyte cannot be installed next to it:\n\n$why\n\nSetup can still install Kilobyte on a whole disk, erasing it." 13 66
+    fi
+fi
+
+if [ $MODE = alongside ]; then
+    sizes=()
+    for g in 3 4 6 8 12 16 24 32; do
+        [ $((g * GIB)) -le "$KB_MAX" ] &&
+            sizes+=("$g" "$g GB for Kilobyte, $(gb $((WIN_SIZE + WIN_AFTER - g * GIB))) stay for Windows")
+    done
+    sizes+=(max "$(gb "$KB_MAX") for Kilobyte (the most), $(gb $((WIN_SIZE + WIN_AFTER - KB_MAX))) for Windows")
+    KB_SIZE=$(kb_dialog --title " Space for Kilobyte " --ok-label "Next" --cancel-label "Cancel" --no-tags \
+        --default-item 4 --menu "Windows' drive is made smaller to make room; its files stay.
+Windows needs at least $(gb "$WIN_MIN") of it." 18 72 9 "${sizes[@]}") || abort
+    if [ "$KB_SIZE" = max ]; then KB_SIZE=$KB_MAX; else KB_SIZE=$((KB_SIZE * GIB)); fi
+    WIN_NEW=$((WIN_SIZE + WIN_AFTER - KB_SIZE))
+    [ $WIN_NEW -gt "$WIN_SIZE" ] && WIN_NEW=$WIN_SIZE
+    DISK=$WIN_DISK
+fi
+
 disks=()
 while read -r name size type tran model; do
     [ "$type" = disk ] || continue
@@ -63,13 +164,15 @@ while read -r name size type tran model; do
     disks+=("/dev/$name" "$(numfmt --to=iec --suffix=B "$size")  ${tran:-}  ${model:-disk}")
 done < <(lsblk -dnbo NAME,SIZE,TYPE,TRAN,MODEL)
 
-if [ ${#disks[@]} -eq 0 ]; then
+if [ $MODE = alongside ]; then
+    :
+elif [ ${#disks[@]} -eq 0 ]; then
     kb_msg "Setup" "\Z1No disk found to install on.\Zn\n\nKilobyte needs a disk of at least 4 GB that is not the stick it runs from." 10 60
     exit 1
+else
+    DISK=$(kb_dialog --title " Where to install " --ok-label "Next" --cancel-label "Cancel" \
+        --menu "Choose the disk for Kilobyte. \Z1Everything on it will be erased.\Zn" 16 70 6 "${disks[@]}") || abort
 fi
-
-DISK=$(kb_dialog --title " Where to install " --ok-label "Next" --cancel-label "Cancel" \
-    --menu "Choose the disk for Kilobyte. \Z1Everything on it will be erased.\Zn" 16 70 6 "${disks[@]}") || abort
 
 # --- 3. Keyboard, time zone, computer name, account -------------------------
 
@@ -84,7 +187,22 @@ ask_autologin
 
 # --- 5. Last chance --------------------------------------------------------
 
-kb_dialog --title " Ready to Install " --defaultno --yes-label "Install" --no-label "Cancel" --yesno "
+if [ $MODE = alongside ]; then
+    kb_dialog --title " Ready to Install " --defaultno --yes-label "Install" --no-label "Cancel" --yesno "
+  Windows       \Zb$WIN_PART\Zn: $(gb "$WIN_SIZE") now, $(gb "$WIN_NEW") afterwards
+  Kilobyte      $(gb "$KB_SIZE") after it, on $DISK
+  Keyboard      $KEYMAP
+  Time zone     $TZONE
+  Computer      $HOST
+  User          $NAME (administrator), automatic login: $AUTOLOGIN
+
+Windows' files stay, but resizing a drive is never without risk:
+\Z1\Zbcopy what you cannot lose to another disk first.\Zn
+At every start a menu offers Kilobyte and Windows 98.
+
+Choose Install to start." 19 70 || abort
+else
+    kb_dialog --title " Ready to Install " --defaultno --yes-label "Install" --no-label "Cancel" --yesno "
   Disk          \Zb$DISK\Zn ($(lsblk -dno SIZE,MODEL "$DISK" | xargs))
   Keyboard      $KEYMAP
   Time zone     $TZONE
@@ -94,6 +212,7 @@ kb_dialog --title " Ready to Install " --defaultno --yes-label "Install" --no-la
 \Z1\ZbALL DATA ON $DISK WILL BE ERASED.\Zn
 
 Choose Install to start." 17 64 || abort
+fi
 
 # --- 6. Install ------------------------------------------------------------
 
@@ -111,21 +230,55 @@ install_system() {
     set -e
     trap 'echo "failed at line $LINENO" > "$STATUS"' ERR
 
-    progress 2 "Erasing and partitioning $DISK..."
     swapoff -a 2>/dev/null || true
     for p in $(lsblk -lno PATH "$DISK" | tail -n +2); do umount "$p" 2>/dev/null || true; done
-    wipefs -af "$DISK" >> "$LOG" 2>&1
-    sfdisk --wipe always --wipe-partitions always "$DISK" >> "$LOG" 2>&1 <<EOF
+    if [ $MODE = alongside ]; then
+        progress 2 "Checking the Windows drive..."
+        if ! fsck.fat -n "$WIN_PART" >> "$LOG" 2>&1; then
+            echo "the Windows drive has errors: run ScanDisk in Windows, then Setup again" > "$STATUS"
+            exit 1
+        fi
+        if [ "$WIN_NEW" -lt "$WIN_SIZE" ]; then
+            progress 3 "Making the Windows drive smaller (this can take a while)..."
+            local win_type
+            win_type=$(sfdisk --part-type "$WIN_DISK" "$WIN_NUM")
+            fatresize -f -s "$((WIN_NEW / MIB))M" -n "$WIN_NUM" "$WIN_DISK" >> "$LOG" 2>&1
+            # fatresize writes type 0B (FAT32, CHS); a drive that had 0C (FAT32,
+            # LBA) keeps it, or Windows 98 may not reach past 8 GB properly.
+            sfdisk --part-type "$WIN_DISK" "$WIN_NUM" "$win_type" >> "$LOG" 2>&1 || true
+            partx -u "$DISK" >> "$LOG" 2>&1 || true
+            udevadm settle
+            if ! fsck.fat -n "$WIN_PART" >> "$LOG" 2>&1; then
+                echo "the Windows drive reports errors after resizing: see the log" > "$STATUS"
+                exit 1
+            fi
+        fi
+        progress 4 "Adding Kilobyte's partition..."
+        printf ',,83\n' | sfdisk --append --no-reread "$DISK" >> "$LOG" 2>&1
+        partx -a "$DISK" >> "$LOG" 2>&1 || partx -u "$DISK" >> "$LOG" 2>&1 || true
+        udevadm settle
+        sleep 1
+        ROOT_PART=$(lsblk -lnpo PATH,TYPE "$DISK" | awk '$2 == "part" { p = $1 } END { print p }')
+        log "Kilobyte goes on $ROOT_PART"
+        if [ -z "$ROOT_PART" ] || [ "$ROOT_PART" = "$WIN_PART" ]; then
+            echo "the new partition did not appear" > "$STATUS"
+            exit 1
+        fi
+        progress 5 "Creating the file system..."
+    else
+        progress 2 "Erasing and partitioning $DISK..."
+        wipefs -af "$DISK" >> "$LOG" 2>&1
+        sfdisk --wipe always --wipe-partitions always "$DISK" >> "$LOG" 2>&1 <<EOF
 label: gpt
 size=1MiB, type=21686148-6449-6E6F-744E-656564454649, name="bios"
 size=512MiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name="efi"
 type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="kilobyte"
 EOF
-    udevadm settle
-    sleep 1
-
-    progress 5 "Creating file systems..."
-    mkfs.vfat -F 32 -n EFI "$EFI_PART" >> "$LOG" 2>&1
+        udevadm settle
+        sleep 1
+        progress 5 "Creating file systems..."
+        mkfs.vfat -F 32 -n EFI "$EFI_PART" >> "$LOG" 2>&1
+    fi
     mkfs.ext4 -F -q -L kilobyte "$ROOT_PART" >> "$LOG" 2>&1
     mkdir -p "$TARGET"
     mount "$ROOT_PART" "$TARGET"
@@ -145,16 +298,18 @@ EOF
     wait "$cp_pid"
 
     progress 80 "Configuring the system..."
-    mkdir -p "$TARGET/boot/efi"
-    mount "$EFI_PART" "$TARGET/boot/efi"
+    if [ $MODE = disk ]; then
+        mkdir -p "$TARGET/boot/efi"
+        mount "$EFI_PART" "$TARGET/boot/efi"
+    fi
     for d in dev proc sys run; do mount --rbind "/$d" "$TARGET/$d"; mount --make-rslave "$TARGET/$d"; done
 
-    cat > "$TARGET/etc/fstab" <<EOF
-# <file system>  <mount point>  <type>  <options>  <dump>  <pass>
-UUID=$(blkid -s UUID -o value "$ROOT_PART")  /          ext4  errors=remount-ro  0  1
-UUID=$(blkid -s UUID -o value "$EFI_PART")  /boot/efi  vfat  umask=0077         0  2
-/dev/sr0  /media/cdrom  udf,iso9660  ro,user,noauto  0  0
-EOF
+    {
+        echo "# <file system>  <mount point>  <type>  <options>  <dump>  <pass>"
+        echo "UUID=$(blkid -s UUID -o value "$ROOT_PART")  /          ext4  errors=remount-ro  0  1"
+        [ $MODE = disk ] && echo "UUID=$(blkid -s UUID -o value "$EFI_PART")  /boot/efi  vfat  umask=0077         0  2"
+        echo "/dev/sr0  /media/cdrom  udf,iso9660  ro,user,noauto  0  0"
+    } > "$TARGET/etc/fstab"
     echo "$HOST" > "$TARGET/etc/hostname"
     sed -i "s/\bkilobyte\b/$HOST/g" "$TARGET/etc/hosts"
     ln -sf "/usr/share/zoneinfo/$TZONE" "$TARGET/etc/localtime"
@@ -178,6 +333,11 @@ EOF
     mkdir -p "$theme_dir"
     kb_theme_name > "$theme_dir/theme"
     in_target chown -R "$NAME:$NAME" "/home/$NAME"
+    if [ $MODE = alongside ]; then
+        # Windows' drive, readable and writable by the new user.
+        mkdir -p "$TARGET/media/windows"
+        echo "UUID=$WIN_UUID  /media/windows  vfat  nofail,uid=$(chroot "$TARGET" id -u "$NAME"),gid=$(chroot "$TARGET" id -g "$NAME"),umask=022,utf8  0  0" >> "$TARGET/etc/fstab"
+    fi
     [ "$AUTOLOGIN" = yes ] && write_autologin "$TARGET" "$NAME"
 
     in_target setupcon --save-only --force    # font and keyboard at boot
@@ -194,6 +354,23 @@ EOF
     [ "$(dpkg --print-architecture)" = i386 ] && efi=i386-efi
     [ $efi = x86_64-efi ] && [ -d "$TARGET/usr/lib/grub/i386-efi" ] && efi32=i386-efi
     in_target grub-install --target=i386-pc "$DISK"
+    if [ $MODE = alongside ]; then
+        # A menu with both at every start; Windows starts from its own drive.
+        printf '%s\n' '#!/bin/sh' "cat <<'MENU'" 'menuentry "Windows 98" {' '    insmod part_msdos' '    insmod fat' \
+            "    search --no-floppy --fs-uuid --set=root $WIN_UUID" '    chainloader +1' '}' 'MENU' \
+            > "$TARGET/etc/grub.d/35_windows9x"
+        chmod 755 "$TARGET/etc/grub.d/35_windows9x"
+        mkdir -p "$TARGET/etc/default/grub.d"
+        printf 'GRUB_TIMEOUT=10\nGRUB_TIMEOUT_STYLE=menu\n' > "$TARGET/etc/default/grub.d/kilobyte-windows.cfg"
+        in_target update-grub
+        progress 98 "Finishing..."
+        sync
+        cleanup
+        progress 100 "Done."
+        echo ok > "$STATUS"
+        sleep 1
+        return 0
+    fi
     in_target grub-install --target=$efi --efi-directory=/boot/efi --bootloader-id=kilobyte --removable --no-nvram
     [ -n "$efi32" ] && { in_target grub-install --target=$efi32 --efi-directory=/boot/efi \
         --bootloader-id=kilobyte --removable --no-nvram || true; }
@@ -229,7 +406,7 @@ fi
 if kb_dialog --title " Kilobyte is Installed " --yes-label "Restart" --no-label "Later" --yesno "
 \ZbKilobyte is now installed on $DISK.\Zn
 
-Remove the USB stick or CD, then restart the computer.
+Remove the USB stick or CD, then restart the computer.$([ $MODE = alongside ] && printf '\nA menu then chooses Kilobyte or Windows 98.')
 Log in as \Zb$NAME\Zn with the password you chose." 11 60; then
     clear
     systemctl reboot

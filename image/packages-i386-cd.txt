@@ -1,3 +1,4 @@
 # 32-bit PC, CD version (./build.sh --arch i386 --cd): DOSBox for DOS
-# programs instead of Wine, so the ISO fits on a 650 MB CD.
-dosbox
+# programs instead of Wine, so the ISO fits on a 650 MB CD; fatresize for
+# installing next to Windows 98 (kilobyte-install shrinks its drive).
+dosbox fatresize
