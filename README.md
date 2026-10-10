@@ -270,7 +270,7 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 | `kilobyte-1.4-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
 | `kilobyte-1.4-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
 | `kilobyte-1.4-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
-| `kilobyte-1.4-i386-cd.iso` | The same for a 650 MB CD (PCs and laptops that only start from CDs): DOSBox for DOS programs instead of Wine | `./build.sh --arch i386 --cd` |
+| `kilobyte-1.4-i386-cd.iso` | The same for a 650 MB CD (PCs and laptops that only start from CDs): DOSBox for DOS programs instead of Wine; starts without windows | `./build.sh --arch i386 --cd` |
 | `kilobyte-1.4-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400, 5, 500, Zero 2 W (with Raspberry Pi's own kernel) | `./build.sh --arch arm64` |
 | `kilobyte-1.4-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
 | `kilobyte-1.4-raspberrypi-armel.img.xz` | Raspberry Pi 1, Zero, Zero W (ARMv6); no Windows programs, and it starts without windows | `./build.sh --arch armel` |

@@ -540,12 +540,17 @@ command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; 
 kb_setup_home
 kb_export_editor
 
-# A Raspberry Pi 1 or Zero (one slow ARMv6 core) starts without windows: every
-# window is a terminal emulator of its own, which is too much for it. Once;
+# A Raspberry Pi 1 or Zero (one slow ARMv6 core) and the CD version (made for
+# PCs from the 1990s, often with 128 MB) start without windows: every window
+# is a terminal emulator of its own, which is too much for them. Once;
 # Settings > Login and startup switches them on all the same.
-if [ ! -e "$KB_CONF/windows-asked" ] && [ "$(uname -m)" = armv6l ]; then
-    : > "$KB_CONF/windows-asked"
-    : > "$KB_CONF/windows-off"
+if [ ! -e "$KB_CONF/windows-asked" ]; then
+    kb_variant=""
+    { read -r kb_variant < /etc/kilobyte/variant; } 2>/dev/null
+    if [ "$kb_variant" = cd ] || [ "$(uname -m)" = armv6l ]; then
+        : > "$KB_CONF/windows-asked"
+        : > "$KB_CONF/windows-off"
+    fi
 fi
 
 # Windows (movable windows, several programs at once) unless switched off in
