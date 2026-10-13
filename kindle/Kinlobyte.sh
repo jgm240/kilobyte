@@ -69,12 +69,14 @@ FONT_SIZE= ORIENTATION=U KEYBOARD=1 STOP_UI=1
 # Where it was unpacked differs: look in the usual places, then search.
 if [ -z "$KTERM" ] || [ ! -f "$KTERM/bin/kterm" ]; then
     KTERM=""
-    for d in /mnt/us/kterm /mnt/us/extensions/kterm /mnt/us/kterm-kindle-2.6/kterm /mnt/us/kterm-kindle-2.6; do
+    for d in /mnt/us/kmc/kpm/packages/kterm /mnt/us/kterm /mnt/us/extensions/kterm \
+             /mnt/us/kterm-kindle-2.6/kterm /mnt/us/kterm-kindle-2.6; do
         [ -f "$d/bin/kterm" ] && { KTERM=$d; break; }
     done
 fi
 if [ -z "$KTERM" ]; then
-    k=$(find /mnt/us -maxdepth 4 -type f -path "*/bin/kterm" 2>/dev/null | head -n 1)
+    # (Package managers such as KMC's kpm keep it several folders deep.)
+    k=$(find /mnt/us -maxdepth 7 -type f -path "*/bin/kterm" 2>/dev/null | head -n 1)
     [ -n "$k" ] && KTERM=${k%/bin/kterm}
 fi
 if [ -z "$KTERM" ]; then
@@ -119,10 +121,14 @@ fi
 # kterm, as its own launcher starts it: the keyboard layout for this screen.
 DPI=$(sed -n 's/.*DPI.*(\([0-9]\+\), [0-9]\+).*/\1/p' /var/log/Xorg.0.log 2>/dev/null | head -n 1)
 LAYOUT=""
-if [ "${DPI:-0}" -gt 290 ]; then LAYOUT="-l $KTERM/layouts/keyboard-300dpi.xml"
-elif [ "${DPI:-0}" -gt 200 ]; then LAYOUT="-l $KTERM/layouts/keyboard-200dpi.xml"
+if [ "${DPI:-0}" -gt 290 ] && [ -f "$KTERM/layouts/keyboard-300dpi.xml" ]; then
+    LAYOUT="-l $KTERM/layouts/keyboard-300dpi.xml"
+elif [ "${DPI:-0}" -gt 200 ] && [ -f "$KTERM/layouts/keyboard-200dpi.xml" ]; then
+    LAYOUT="-l $KTERM/layouts/keyboard-200dpi.xml"
 fi
-export TERM=xterm TERMINFO=$KTERM/vte/terminfo DISPLAY="${DISPLAY:-:0}"
+export TERM=xterm DISPLAY="${DISPLAY:-:0}"
+[ -d "$KTERM/vte/terminfo" ] && export TERMINFO="$KTERM/vte/terminfo"
+echo "kterm: $KTERM" >> "$LOG"
 # shellcheck disable=SC2086
 [ -x "$KTERM/bin/kterm" ] || chmod 755 "$KTERM/bin/kterm" 2>/dev/null
 "$KTERM/bin/kterm" $LAYOUT -c 0 -k "$KEYBOARD" -o "$ORIENTATION" ${FONT_SIZE:+-s "$FONT_SIZE"} \
