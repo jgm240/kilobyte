@@ -59,6 +59,22 @@ SETTINGS
                   is back about half a minute after you leave), 0 keeps it
 
 
+STARTING STRAIGHT INTO KINLOBYTE
+--------------------------------
+  Update_kinlobyte_boot_install.bin makes the Kindle open Kinlobyte instead
+  of its home screen, once each time it starts. Leaving Kinlobyte brings the
+  normal Kindle back until the next start. Nothing of the Kindle's own
+  system is replaced: the package adds one start-up job.
+
+  Installing: install Kinlobyte as above first. Then copy the .bin to the
+  Kindle's main folder (or to mrpackages, for MRPI) and choose Settings >
+  Menu > Update Your Kindle (or KUAL > Helper > Install MR packages).
+
+  Turning it off: put a file named DONT_START_KINLOBYTE (any content) in the
+  Kindle's main folder, next to documents. Removing it for good:
+  Update_kinlobyte_boot_uninstall.bin, installed the same way.
+
+
 IF IT DOES NOT START
 --------------------
   kinlobyte/kinlobyte.log says why. To remove Kinlobyte, delete
