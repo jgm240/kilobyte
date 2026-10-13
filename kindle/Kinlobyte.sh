@@ -46,7 +46,16 @@ say() {
     eips 2 $((i + 2)) "(Tap Home to go back.)" >/dev/null 2>&1
 }
 
-mounted() { grep -q " $1 " /proc/mounts; }
+# Is something mounted there? mountpoint compares devices, so it is not
+# fooled when /tmp is a link to another folder (then /proc/mounts lists the
+# mount under the other name); /proc/mounts is the fallback.
+mounted() {
+    if command -v mountpoint >/dev/null 2>&1; then
+        mountpoint -q "$1"
+    else
+        grep -q " $1 " /proc/mounts
+    fi
+}
 
 leave() {
     for d in mnt/us dev/pts dev sys proc; do
@@ -87,11 +96,19 @@ fi
 {
     echo "--- $(date)"
     mkdir -p "$MNT" "$KB/Documents"
-    if ! mounted "$MNT"; then
+    if mounted "$MNT"; then
+        echo "already mounted"
+    else
         mount -o loop,noatime -t ext3 "$IMG" "$MNT" || mount -o loop,noatime "$IMG" "$MNT"
+        echo "mount: exit $?"
     fi
 } >> "$LOG" 2>&1
 if ! mounted "$MNT"; then
+    {
+        echo "not mounted after all; /tmp is: $(ls -ld /tmp)"
+        grep -E "kinlobyte|loop" /proc/mounts
+        ls -l /dev/loop* 2>&1 | head -4
+    } >> "$LOG" 2>&1
     say "Kinlobyte could not open its system" "(kinlobyte.img). Details are in" "kinlobyte/kinlobyte.log."
     exit 1
 fi
