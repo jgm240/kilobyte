@@ -9,8 +9,9 @@
 # kterm's on-screen keyboard. Exit (Quit in the Program Manager) brings the
 # Kindle back.
 #
-# Needs: the Universal Hotfix (scriptlets), kterm in /mnt/us/extensions/kterm
-# and the folder /mnt/us/kinlobyte with kinlobyte.img. Settings (font size,
+# Needs: the Universal Hotfix (scriptlets), kterm anywhere on the Kindle's
+# storage (/mnt/us/kterm, /mnt/us/extensions/kterm, or set KTERM in
+# kinlobyte.conf) and the folder /mnt/us/kinlobyte with kinlobyte.img. Settings (font size,
 # screen orientation) are in /mnt/us/kinlobyte/kinlobyte.conf.
 #
 # Copyright (C) 2026 Kilobyte contributors. Free software: GNU GPL, version 3
@@ -31,7 +32,7 @@ fi
 KB=/mnt/us/kinlobyte
 IMG=$KB/kinlobyte.img
 MNT=/tmp/kinlobyte
-KTERM=/mnt/us/extensions/kterm
+KTERM=""
 LOG=$KB/kinlobyte.log
 
 # A message on the e-ink screen, for when there is no terminal to show it in.
@@ -58,15 +59,28 @@ if [ ! -f "$IMG" ]; then
     say "Kinlobyte is not installed." "Copy the folder kinlobyte (with" "kinlobyte.img) to the Kindle's main" "folder over USB."
     exit 1
 fi
-if [ ! -x "$KTERM/bin/kterm" ]; then
-    say "Kinlobyte needs kterm." "Unpack kterm (kterm-kindle-2.6.zip) into" "the Kindle's extensions folder."
-    exit 1
-fi
-
 # Settings: FONT_SIZE, ORIENTATION (U, R or L), KEYBOARD (1 on, 0 off),
-# STOP_UI (1: stop the Kindle's reading interface while Kinlobyte runs).
+# STOP_UI (1: stop the Kindle's reading interface while Kinlobyte runs),
+# KTERM (kterm's folder, if it is not found by itself).
 FONT_SIZE= ORIENTATION=U KEYBOARD=1 STOP_UI=1
 [ -f "$KB/kinlobyte.conf" ] && . "$KB/kinlobyte.conf"
+
+# kterm: its folder holds bin/kterm, its keyboard layouts and terminfo.
+# Where it was unpacked differs: look in the usual places, then search.
+if [ -z "$KTERM" ] || [ ! -f "$KTERM/bin/kterm" ]; then
+    KTERM=""
+    for d in /mnt/us/kterm /mnt/us/extensions/kterm /mnt/us/kterm-kindle-2.6/kterm /mnt/us/kterm-kindle-2.6; do
+        [ -f "$d/bin/kterm" ] && { KTERM=$d; break; }
+    done
+fi
+if [ -z "$KTERM" ]; then
+    k=$(find /mnt/us -maxdepth 4 -type f -path "*/bin/kterm" 2>/dev/null | head -n 1)
+    [ -n "$k" ] && KTERM=${k%/bin/kterm}
+fi
+if [ -z "$KTERM" ]; then
+    say "Kinlobyte needs kterm." "Unpack kterm-kindle-2.6.zip onto the" "Kindle, so that kterm/bin/kterm is" "in its main folder."
+    exit 1
+fi
 
 {
     echo "--- $(date)"
@@ -110,6 +124,7 @@ elif [ "${DPI:-0}" -gt 200 ]; then LAYOUT="-l $KTERM/layouts/keyboard-200dpi.xml
 fi
 export TERM=xterm TERMINFO=$KTERM/vte/terminfo DISPLAY="${DISPLAY:-:0}"
 # shellcheck disable=SC2086
+[ -x "$KTERM/bin/kterm" ] || chmod 755 "$KTERM/bin/kterm" 2>/dev/null
 "$KTERM/bin/kterm" $LAYOUT -c 0 -k "$KEYBOARD" -o "$ORIENTATION" ${FONT_SIZE:+-s "$FONT_SIZE"} \
     -e "/bin/sh $KB/enter.sh" >> "$LOG" 2>&1
 

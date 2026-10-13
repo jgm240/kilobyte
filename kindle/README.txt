@@ -10,7 +10,8 @@ WHAT YOU NEED
 -------------
   - A jailbroken Kindle with the Universal Hotfix (it shows .sh files in the
     documents folder as "scriptlets" in the Library).
-  - kterm 2.6 in the extensions folder:
+  - kterm 2.6, unpacked anywhere on the Kindle (for example /mnt/us/kterm,
+    so that kterm/bin/kterm is in the main folder):
       https://github.com/bfabiszewski/kterm/releases
       kterm-kindle-2.6.zip for firmware up to 5.16.3,
       kterm-kindle-2.6-armhf.zip for newer firmware.
@@ -67,8 +68,7 @@ STARTING STRAIGHT INTO KINLOBYTE
   system is replaced: the package adds one start-up job.
 
   Installing: install Kinlobyte as above first. Then copy the .bin to the
-  Kindle's main folder (or to mrpackages, for MRPI) and choose Settings >
-  Menu > Update Your Kindle (or KUAL > Helper > Install MR packages).
+  Kindle's main folder and choose Settings > Menu > Update Your Kindle.
 
   Turning it off: put a file named DONT_START_KINLOBYTE (any content) in the
   Kindle's main folder, next to documents. Removing it for good:
