@@ -194,10 +194,11 @@ apps_table() {
     fi
 }
 
-# On a Kindle (Kinlobyte) there is no sound, no video, no graphics screen and
-# nothing to turn off: those programs are left out, and so are animations,
-# which an e-ink screen cannot keep up with.
-KINDLE_LEAVE_OUT=" BBS YouTube Network Citrix Video Pictures Music Disc Sound Paint Print USB DOS Wine "
+# On a Kindle (Kinlobyte) there is no sound, no graphics screen and nothing to
+# turn off: those programs are left out, and so are animations, which an
+# e-ink screen cannot keep up with. YouTube and the Video Player stay: they
+# save videos and sound, and play as text blocks (silently) in the terminal.
+KINDLE_LEAVE_OUT=" BBS Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
 KINDLE_LEAVE_OUT+="Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
 apps_table_for_device() {
     if [ "$KB_VARIANT" = kindle ]; then

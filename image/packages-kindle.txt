@@ -4,3 +4,6 @@
 bash sudo less nano procps iproute2 iputils-ping ca-certificates curl file
 dialog mc elinks sc-im calcurse htop bc bsdgames alpine weechat telnet openssh-client
 python3 python3-pyte poppler-utils unzip zip
+# YouTube and the Video Player: yt-dlp (added by the build) with quickjs for
+# YouTube's challenges, ffmpeg to join and convert, mpv to play as text blocks.
+mpv ffmpeg quickjs

@@ -300,10 +300,8 @@ stage_rootfs() {
     rm -rf "$r" "$WORK/iso"
     cp -a "$WORK/base" "$r"
     tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$r" -xf -
-    if [ $KIND != kindle ]; then
-        curl -fsSL --retry 5 --retry-all-errors -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
-        chmod 755 "$r/usr/local/bin/yt-dlp"
-    fi
+    curl -fsSL --retry 5 --retry-all-errors -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+    chmod 755 "$r/usr/local/bin/yt-dlp"
     echo "${KB_COMMIT:-unknown}" > "$r/usr/share/kilobyte/commit"
     cp "$WORK/base.packages" "$r/usr/share/kilobyte/packages.txt"
     # Which version this is, for Kilobyte Update (it picks the package list).

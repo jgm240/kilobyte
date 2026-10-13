@@ -28,6 +28,8 @@ kindle)
     : > /root/.config/kilobyte/windows-off
     : > /root/.config/kilobyte/windows-asked
     : > /root/.config/kilobyte/tiles-off
+    # Videos as text blocks: the finer block modes need the PC text console.
+    echo text > /root/.config/kilobyte/player-mode
     # Documents live next to the image, where a computer sees them over USB.
     ln -sfn /mnt/us/kinlobyte/Documents /root/Documents
     # The package lists come back with Settings > Add or remove programs.
