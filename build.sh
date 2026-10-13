@@ -10,6 +10,8 @@
 #   ./build.sh --lite ...       leave the big Wi-Fi firmware out
 #   ./build.sh --cd ...         CD version: DOSBox instead of Wine, so the
 #                               32-bit PC ISO fits on a 650 MB CD
+#   ./build.sh --kindle         Kinlobyte: Kilobyte for jailbroken Kindles
+#                               (Paperwhite 2 and others), a ZIP with a scriptlet
 #   ./build.sh --fresh ...      build the Debian base system anew (it is
 #                               otherwise reused for two weeks, unless the
 #                               package lists change)
@@ -23,17 +25,19 @@ cd "$(dirname "$0")"
 ARCHES=amd64
 LITE=
 CD=
+KINDLE=
 FRESH=
 FAST=
 while [ $# -gt 0 ]; do
     case $1 in
         --lite) LITE=1 ;;
         --cd) CD=1 ;;
+        --kindle) KINDLE=1 ARCHES=armhf ;;
         --fresh) FRESH=1 ;;
         --fast) FAST=1 ;;
         --arch) shift; ARCHES=$1 ;;
         --arch=*) ARCHES=${1#--arch=} ;;
-        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--cd] [--fresh] [--fast]" >&2; exit 2 ;;
+        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--cd] [--kindle] [--fresh] [--fast]" >&2; exit 2 ;;
     esac
     shift
 done
@@ -61,7 +65,7 @@ for ARCH in $ARCHES; do
     echo "######## Kilobyte for $ARCH"
     # A variant has a work area of its own (its base system differs); the
     # first time, it starts with the downloads and packages of the usual one.
-    VOL="kilobyte-work-$ARCH${CD:+-cd}"
+    VOL="kilobyte-work-$ARCH${CD:+-cd}${KINDLE:+-kindle}"
     if ! docker volume inspect "$VOL" >/dev/null 2>&1; then
         docker volume create "$VOL" >/dev/null
         if [ "$VOL" != "kilobyte-work-$ARCH" ] && docker volume inspect "kilobyte-work-$ARCH" >/dev/null 2>&1; then
@@ -73,13 +77,20 @@ for ARCH in $ARCHES; do
     stage() { # stage NAME [docker options...]
         name=$1
         shift
-        docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e CD="$CD" -e KB_COMMIT="$KB_COMMIT" \
+        docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e CD="$CD" -e KINDLE="$KINDLE" -e KB_COMMIT="$KB_COMMIT" \
             -e FRESH="$FRESH" -e FAST="$FAST" \
             -v "$PWD:/src:ro" -v "$VOL:/work" -v "$PWD/out:/out" \
             "debian:$SUITE" bash /src/image/build-in-container.sh "$name"
     }
 
     stage debs --platform "$PLATFORM"
+    if [ -n "$KINDLE" ]; then
+        stage base --privileged --platform "$PLATFORM"
+        stage rootfs --privileged --platform "$PLATFORM"
+        stage kindlezip --platform "$NATIVE"
+        stage clean --platform "$NATIVE"
+        continue
+    fi
     [ "$ARCH" = armhf ] && stage box86 --platform "$NATIVE"
     stage base --privileged --platform "$PLATFORM"
     stage rootfs --privileged --platform "$PLATFORM"

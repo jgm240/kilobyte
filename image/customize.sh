@@ -14,6 +14,27 @@ mkdir -p /etc/kilobyte
 . /usr/lib/kilobyte/setup-questions.sh     # user_groups, write_autologin
 
 case $VARIANT in
+kindle)
+    # Kinlobyte: started in a chroot by documents/Kinlobyte.sh on a jailbroken
+    # Kindle, as root (the Kindle's kterm is a root shell). No services, no
+    # boot loader, no kernel: the Kindle runs those. Black on white, no
+    # windows: an e-ink screen cannot keep up with moving windows.
+    echo kindle > /etc/hostname
+    printf '127.0.0.1\tlocalhost\n127.0.1.1\tkindle\n' > /etc/hosts
+    cp -a /etc/skel/. /root/ 2>/dev/null || true
+    rm -rf /root/Desktop /root/Documents
+    mkdir -p /root/.config/kilobyte /mnt/us
+    echo eink > /root/.config/kilobyte/theme
+    : > /root/.config/kilobyte/windows-off
+    : > /root/.config/kilobyte/windows-asked
+    : > /root/.config/kilobyte/tiles-off
+    # Documents live next to the image, where a computer sees them over USB.
+    ln -sfn /mnt/us/kinlobyte/Documents /root/Documents
+    # The package lists come back with Settings > Add or remove programs.
+    apt-get clean
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin /var/log/*.log /tmp/* /root/.bash_history
+    exit 0
+    ;;
 live)
     # The live user: logs in automatically on tty1, sudo without password.
     # kilobyte-install removes all of this from an installed system.

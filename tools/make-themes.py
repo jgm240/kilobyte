@@ -35,7 +35,7 @@ def rc(t):
         "tab_len = 0",
         "visit_items = OFF",
         f"use_shadow = {c.get('shadow_on', 'ON')}",
-        "use_colors = ON",
+        f"use_colors = {c.get('colors_on', 'ON')}",
     ]
     roles = {
         "screen_color": c["screen"],
@@ -186,6 +186,22 @@ THEMES = {
         input="(BLACK,WHITE,OFF)", item="(BLACK,WHITE,OFF)", sel="(WHITE,BLACK,ON)",
         tag="(BLACK,WHITE,OFF)", sel_tag="(WHITE,BLACK,ON)", key="(BLACK,WHITE,OFF)",
         sel_key="(WHITE,BLACK,ON)", arrow="(BLACK,WHITE,OFF)", status="(BLACK,WHITE,OFF)",
+        gauge="(BLACK,WHITE,OFF)",
+    ),
+    # E-ink (Kinlobyte on a Kindle): no colours at all. dialog draws with the
+    # terminal's own black on white and shows the highlight in reverse video;
+    # colours would turn into muddy greys and grey backgrounds.
+    "eink": dict(
+        name="E-ink (black on white)", mc="default", shadow_on="OFF", colors_on="OFF",
+        palette="000000 000000 000000 000000 000000 000000 000000 ffffff "
+                "000000 000000 000000 000000 000000 000000 000000 ffffff",
+        screen="(BLACK,WHITE,OFF)", dialog="(BLACK,WHITE,OFF)", title="(BLACK,WHITE,OFF)",
+        border="(BLACK,WHITE,OFF)", border2="(BLACK,WHITE,OFF)",
+        btn_on="(WHITE,BLACK,OFF)", btn_off="(BLACK,WHITE,OFF)",
+        btn_key_on="(WHITE,BLACK,OFF)", btn_key_off="(BLACK,WHITE,OFF)",
+        input="(BLACK,WHITE,OFF)", item="(BLACK,WHITE,OFF)", sel="(WHITE,BLACK,OFF)",
+        tag="(BLACK,WHITE,OFF)", sel_tag="(WHITE,BLACK,OFF)", key="(BLACK,WHITE,OFF)",
+        sel_key="(WHITE,BLACK,OFF)", arrow="(BLACK,WHITE,OFF)", status="(WHITE,BLACK,OFF)",
         gauge="(BLACK,WHITE,OFF)",
     ),
     # Windows 3.1's most famous colour scheme.

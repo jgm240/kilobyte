@@ -184,12 +184,29 @@ apps_table() {
         printf '%s\n' "${lines[@]}"
         return 0
     fi
-    apps_table_now > "$cache.$$" 2>/dev/null && mv -f "$cache.$$" "$cache" 2>/dev/null
+    apps_table_for_device > "$cache.$$" 2>/dev/null && mv -f "$cache.$$" "$cache" 2>/dev/null
     if [ -s "$cache" ]; then
         mapfile -t lines < "$cache"
         printf '%s\n' "${lines[@]}"
     else
         rm -f "$cache.$$"
+        apps_table_for_device
+    fi
+}
+
+# On a Kindle (Kinlobyte) there is no sound, no video, no graphics screen and
+# nothing to turn off: those programs are left out, and so are animations,
+# which an e-ink screen cannot keep up with.
+KINDLE_LEAVE_OUT=" BBS YouTube Network Citrix Video Pictures Music Disc Sound Paint Print USB DOS Wine "
+KINDLE_LEAVE_OUT+="Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
+apps_table_for_device() {
+    if [ "$KB_VARIANT" = kindle ]; then
+        local line
+        apps_table_now | while IFS= read -r line; do
+            case $KINDLE_LEAVE_OUT in *" ${line%%|*} "*) continue ;; esac
+            printf '%s\n' "$line"
+        done
+    else
         apps_table_now
     fi
 }
@@ -427,6 +444,10 @@ tiles_args() {
 }
 
 shut_down() {
+    if [ "$KB_VARIANT" = kindle ]; then
+        kb_yesno "Exit" "Leave Kinlobyte and go back to the Kindle?" 7 50 && exit 0
+        return
+    fi
     kb_yesno "Shut Down" "Turn off the computer now?" || return
     clear
     kb_sound shutdown wait
@@ -438,6 +459,10 @@ shut_down() {
 # this window.
 quit_menu() {
     local sel items=()
+    if [ "$KB_VARIANT" = kindle ]; then
+        kb_yesno "Exit" "Leave Kinlobyte and go back to the Kindle?" 7 50 && return 10
+        return 0
+    fi
     [ -n "${KILOBYTE_DESK:-}" ] && items+=(Close "Close this window" "The other windows stay open")
     sel=$(submenu "Exit" "Leave Kilobyte." "${items[@]}" \
         Logout   "Log out"                "End this session" \
@@ -462,16 +487,17 @@ program_manager() {
     while true; do
         battery_warning
         items=()
+        local cats=" "
         while IFS='|' read -r id cat name help rest; do
             [ "$cat" = main ] && items+=("$id" "$name" "$help")
+            cats+="$cat "
         done < <(apps_table)
-        items+=(
-            Internet    "Internet  »"                "Chat, BBS dialer, YouTube, network drives, remote computers..."
-            Media       "Media  »"                   "Video player, music, pictures, discs"
-            Accessories "Accessories  »"             "Paint, calculator, agenda, trash, store, lock..."
-            Games       "Games  »"                   "Mines, Solitaire, Moon Buggy, Adventure..."
-        )
-        apps_table | grep -q '^[^|]*|more|' && items+=(More "More programs  »" "What you installed from the Store")
+        # Categories with nothing in them (on a Kindle: Media) are left out.
+        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "Chat, BBS dialer, YouTube, network drives, remote computers...")
+        [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, pictures, discs")
+        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Paint, calculator, agenda, trash, store, lock...")
+        [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Mines, Solitaire, Moon Buggy, Adventure...")
+        [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")
         items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
         kb_is_live && items+=(Install "Install Kilobyte to disk" "Copy this system to the computer's hard disk")
         items+=(Help "Help" "How to use Kilobyte" Quit "Exit  »" "Log out, restart or shut down")

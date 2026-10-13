@@ -44,9 +44,18 @@ case $ARCH in
     *) echo "unknown ARCH $ARCH" >&2; exit 2 ;;
 esac
 EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-} RPI_REPO=${RPI_REPO:-}
+# Kinlobyte (KINDLE=1, 32-bit ARM): Kilobyte in a chroot on a jailbroken
+# Kindle, which brings its own kernel, drivers and screen.
+KINDLE=${KINDLE:-}
+if [ -n "$KINDLE" ]; then
+    [ "$ARCH" = armhf ] || { echo "Kinlobyte is built for armhf" >&2; exit 2; }
+    KIND=kindle KERNEL= EFI=
+fi
 RPI_MIRROR=http://archive.raspberrypi.com/debian
 RPI_KEY=/usr/share/keyrings/raspberrypi-archive-keyring.pgp
-if [ $KIND = pc ]; then
+if [ $KIND = kindle ]; then
+    NAME="kinlobyte-$VERSION"
+elif [ $KIND = pc ]; then
     NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}${CD:+-cd}"
 else
     NAME="kilobyte-$VERSION-raspberrypi-$ARCH${LITE:+-lite}"
@@ -173,7 +182,7 @@ CONTROL
 # The key of a base system: everything that decides what is in it.
 base_key() {
     {
-        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}"
+        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}${KINDLE:+ kindle}"
         echo "$1"                                   # the package list
         cat "$WORK/debs/.recipes" 2>/dev/null
         ls "$WORK/debs" 2>/dev/null
@@ -184,14 +193,16 @@ base_key() {
 stage_base() {
     local packages key age
     local lists=(/src/image/packages.txt "/src/image/packages-$KIND.txt")
+    # Kinlobyte: its own list and nothing else (no kernel, firmware or Wine).
+    [ $KIND = kindle ] && lists=(/src/image/packages-kindle.txt)
     # The CD version (CD=1) has its own list for the architecture, if there is one.
     if [ -n "${CD:-}" ] && [ -f "/src/image/packages-$ARCH-cd.txt" ]; then
         lists+=("/src/image/packages-$ARCH-cd.txt")
     elif [ -f "/src/image/packages-$ARCH.txt" ]; then
         lists+=("/src/image/packages-$ARCH.txt")
     fi
-    packages="$(pkgs "${lists[@]}"),$KERNEL${EFI:+,$EFI}${EFI32:+,$EFI32}"
-    [ -n "${LITE:-}" ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
+    packages="$(pkgs "${lists[@]}")${KERNEL:+,$KERNEL}${EFI:+,$EFI}${EFI32:+,$EFI32}"
+    [ -n "${LITE:-}" ] || [ $KIND = kindle ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
 
     key=$(base_key "$packages")
     if [ -z "${FRESH:-}" ] && [ -d "$WORK/base" ] && [ "$(cat "$WORK/base.key" 2>/dev/null)" = "$key" ]; then
@@ -238,7 +249,7 @@ stage_base() {
     mkdir -p "$WORK/apt-cache"
 
     echo "==> Building the Debian $SUITE base system for $ARCH (kept for the next builds)"
-    export KERNEL_SUITE RPI_REPO RPI_KEY
+    export KERNEL_SUITE RPI_REPO RPI_KEY KINDLE
     # Downloaded packages are kept in apt-cache/ and offered to apt again.
     mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
         --components="main non-free-firmware" \
@@ -260,8 +271,8 @@ stage_base() {
         --setup-hook='mkdir -p "$1/var/cache/apt/archives" && { cp -n /work/apt-cache/*.deb "$1/var/cache/apt/archives/" 2>/dev/null || true; }' \
         --essential-hook='echo "debconf debconf/frontend select Noninteractive" | chroot "$1" debconf-set-selections' \
         --customize-hook='cp -n "$1"/var/cache/apt/archives/*.deb /work/apt-cache/ 2>/dev/null || true' \
-        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && cp /work/debs/*.deb "$1/tmp/kb-debs/" && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
-        --customize-hook='mkdir -p "$1/usr/local/bin" && bash /src/image/wine-x86.sh "$1"' \
+        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && for d in /work/debs/*.deb; do case $d in *box86*) [ -n "$KINDLE" ] && continue ;; esac; cp "$d" "$1/tmp/kb-debs/"; done && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
+        --customize-hook='mkdir -p "$1/usr/local/bin" && { [ -n "$KINDLE" ] || bash /src/image/wine-x86.sh "$1"; }' \
         --customize-hook='rm -f "$1"/var/cache/apt/archives/*.deb' \
         "$SUITE" "$WORK/base" \
         "deb $MIRROR $SUITE main non-free-firmware" \
@@ -289,13 +300,17 @@ stage_rootfs() {
     rm -rf "$r" "$WORK/iso"
     cp -a "$WORK/base" "$r"
     tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$r" -xf -
-    curl -fsSL --retry 5 --retry-all-errors -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
-    chmod 755 "$r/usr/local/bin/yt-dlp"
+    if [ $KIND != kindle ]; then
+        curl -fsSL --retry 5 --retry-all-errors -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+        chmod 755 "$r/usr/local/bin/yt-dlp"
+    fi
     echo "${KB_COMMIT:-unknown}" > "$r/usr/share/kilobyte/commit"
     cp "$WORK/base.packages" "$r/usr/share/kilobyte/packages.txt"
     # Which version this is, for Kilobyte Update (it picks the package list).
     mkdir -p "$r/etc/kilobyte"
-    if [ -n "${CD:-}" ]; then echo cd > "$r/etc/kilobyte/variant"; else rm -f "$r/etc/kilobyte/variant"; fi
+    if [ -n "${CD:-}" ]; then echo cd > "$r/etc/kilobyte/variant"
+    elif [ $KIND = kindle ]; then echo kindle > "$r/etc/kilobyte/variant"
+    else rm -f "$r/etc/kilobyte/variant"; fi
     cp /src/image/customize.sh "$r/tmp/customize.sh"
     # customize.sh runs in the system: it needs /proc, /sys and /dev there,
     # and no service may be started by a package script.
@@ -303,7 +318,7 @@ stage_rootfs() {
     chmod 755 "$r/usr/sbin/policy-rc.d"
     for m in proc sys dev; do mount --bind "/$m" "$r/$m"; done
     trap 'for m in dev sys proc; do umount -l "'"$r"'/$m" 2>/dev/null; done' EXIT
-    chroot "$r" bash /tmp/customize.sh "$([ $KIND = pc ] && echo live || echo pi)"
+    chroot "$r" bash /tmp/customize.sh "$(case $KIND in pc) echo live ;; kindle) echo kindle ;; *) echo pi ;; esac)"
     for m in dev sys proc; do umount -l "$r/$m"; done
     trap - EXIT
     rm -f "$r/usr/sbin/policy-rc.d" "$r/tmp/customize.sh"
@@ -425,6 +440,31 @@ EOF
 
 # The image is in /out: what is left in the work volume is only worth keeping
 # if it saves time next time, and that is the base system and the caches.
+# Kinlobyte: the system as an ext3 image file (the Kindle's 3.0 kernel reads
+# ext3; its own USB storage is FAT32, which cannot hold a Linux system), and
+# the scriptlet that starts it, as a ZIP to unpack onto the Kindle.
+stage_kindlezip() {
+    local r="$WORK/rootfs" z="$WORK/kindlezip" used size
+    [ -d "$r" ] || { echo "no root file system: run the rootfs stage first" >&2; exit 1; }
+    echo "==> Writing /out/$NAME.zip (Kindle Paperwhite 2 and other jailbroken Kindles)"
+    tools e2fsprogs zip
+    rm -rf "$z" && mkdir -p "$z/kinlobyte" "$z/documents"
+    # Room for documents, settings and a few programs from the Store.
+    used=$(du -sm "$r" | cut -f1)
+    size=$(( used * 13 / 10 + 256 ))
+    mke2fs -q -t ext3 -L kinlobyte -m 0 -d "$r" "$z/kinlobyte/kinlobyte.img" "${size}M"
+    install -m 755 /src/kindle/Kinlobyte.sh "$z/documents/Kinlobyte.sh"
+    install -m 755 /src/kindle/enter.sh "$z/kinlobyte/enter.sh"
+    install -m 644 /src/kindle/kinlobyte.conf /src/kindle/README.txt "$z/kinlobyte/"
+    install -m 644 /src/LICENSE "$z/kinlobyte/COPYING"
+    mkdir -p /out
+    rm -f "/out/$NAME.zip.tmp"
+    (cd "$z" && zip -q -r -6 "/out/$NAME.zip.tmp" documents kinlobyte)
+    mv "/out/$NAME.zip.tmp" "/out/$NAME.zip"
+    rm -rf "$z"
+    ls -lh "/out/$NAME.zip"
+}
+
 stage_clean() {
     rm -rf "$WORK/rootfs" "$WORK/iso" "$WORK/usb-grub" "$WORK"/*.img
     du -sh "$WORK" 2>/dev/null || true
@@ -440,5 +480,6 @@ case "${1:-}" in
     piimage) stage_piimage ;;
     usbimg)  stage_usbimg ;;
     clean)   stage_clean ;;
-    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage|clean" >&2; exit 2 ;;
+    kindlezip) stage_kindlezip ;;
+    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage|kindlezip|clean" >&2; exit 2 ;;
 esac

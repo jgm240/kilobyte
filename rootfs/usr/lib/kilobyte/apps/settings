@@ -1089,9 +1089,8 @@ page=${1:-}
 sel=Update
 while true; do
     if [ -z "$page" ]; then
-        sel=$(kb_dialog --title " Settings " --item-help --default-item "$sel" \
-            --ok-label "Open" --cancel-label "Close" \
-            --menu "Settings for this computer." 0 64 0 \
+        items=(
+
             Update     "Kilobyte Update"               "Get the newest Kilobyte from GitHub" \
             Wi-Fi      "Wireless networks"             "Turn Wi-Fi on or off and connect to a network" \
             Windows    "Windows and multitasking: $([ -e "$KB_CONF/windows-off" ] && echo OFF || echo ON)" "Several programs at once in movable windows" \
@@ -1118,7 +1117,20 @@ while true; do
             Remote     "Remote login"                  "Let other computers use this one (SSH)" \
             Password   "Change your password"          "Change the password of $USER" \
             Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
-            About      "About this computer"           "Processor, memory, disk and version") || exit 0
+            About      "About this computer"           "Processor, memory, disk and version"
+        )
+        if [ "$KB_VARIANT" = kindle ]; then
+            # Kinlobyte on a Kindle: the Kindle looks after Wi-Fi, the clock,
+            # the screen, sound and power; only Kinlobyte's own settings here.
+            keep=" Appearance Defaults Network Battery Email Software Tasks About " k=()
+            for ((n = 0; n < ${#items[@]}; n += 3)); do
+                [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
+            done
+            items=("${k[@]}")
+        fi
+        sel=$(kb_dialog --title " Settings " --item-help --default-item "$sel" \
+            --ok-label "Open" --cancel-label "Close" \
+            --menu "Settings for this computer." 0 64 0 "${items[@]}") || exit 0
     else
         sel=$page
     fi
