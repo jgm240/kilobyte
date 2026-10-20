@@ -250,6 +250,11 @@ stage_base() {
 
     echo "==> Building the Debian $SUITE base system for $ARCH (kept for the next builds)"
     export KERNEL_SUITE RPI_REPO RPI_KEY KINDLE
+    # mmdebstrap gives apt hooks such as "cat >&13", which apt runs with
+    # /bin/sh; dash only knows file descriptors up to 9, and under Rosetta
+    # (amd64 on a Mac) the numbers are higher. Bash knows them all. (This
+    # container only lives for the build.)
+    ln -sf bash /bin/sh
     # Downloaded packages are kept in apt-cache/ and offered to apt again.
     mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
         --components="main non-free-firmware" \
