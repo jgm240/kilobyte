@@ -1,6 +1,6 @@
 #!/bin/bash
-# YouTube Downloader: search, watch, and save videos or their sound with
-# yt-dlp. Videos go to ~/Videos, audio to ~/Music.
+# YouTube Downloader: search, watch, read (the transcript) and save videos or
+# their sound with yt-dlp. Videos go to ~/Videos, audio to ~/Music.
 . /usr/lib/kilobyte/lib.sh
 
 VIDEOS="$HOME/Videos"
@@ -62,18 +62,50 @@ download() {
     fi
 }
 
+# The language transcripts are wanted in: Settings' language, else English.
+text_lang() {
+    local l=${LANG%%[_.]*}
+    [ -s "$KB_CONF/transcript-lang" ] && read -r l < "$KB_CONF/transcript-lang"
+    case $l in [a-z][a-z] | [a-z][a-z][a-z]) printf '%s' "$l" ;; *) printf en ;; esac
+}
+
+# read_text URL: what is said in the video, as text (its subtitles or
+# YouTube's automatic captions). Can be saved in Documents/Transcripts.
+read_text() {
+    local url=$1 txt="$TMP/transcript.txt" log="$TMP/transcript.log" title name
+    online || return
+    kb_info "Getting the text of the video..."
+    if ! yt-dlp -J --no-playlist --no-warnings --skip-download "$url" > "$TMP/info.json" 2>"$log" ||
+       ! python3 "$KB_LIB/py/transcript.py" "$TMP/info.json" "$(text_lang)" \
+            $(( $(tput cols 2>/dev/null || echo 80) - 8 )) > "$txt" 2>>"$log"; then
+        kb_msg "Read the Video" "\Z1\Zb$(tail -n 1 "$log" | cut -c1-200)\Zn" 9 72
+        return
+    fi
+    title=$(head -n 1 "$txt")
+    while kb_dialog --title " ${title:0:60} " --exit-label "Close" --ok-label "Close" --extra-button --extra-label "Save" \
+            --textbox "$txt" 0 0; [ $? -eq "$DIALOG_EXTRA" ]; do
+        mkdir -p "$KB_DOCS/Transcripts"
+        name=$(printf '%s' "$title" | tr -d '\000-\037/\\:*?"<>|' | cut -c1-80)
+        cp "$txt" "$KB_DOCS/Transcripts/${name:-Transcript}.txt" &&
+            kb_msg "Saved" "Saved as Documents/Transcripts/${name:-Transcript}.txt" 7 76
+        break
+    done
+}
+
 # item_menu URL TITLE: what to do with one video.
 item_menu() {
     local url=$1 title=$2 sel q
     while true; do
         sel=$(kb_dialog --title " $title " --ok-label "Select" --cancel-label "Back" --menu \
-            "What do you want to do?" 14 72 5 \
+            "What do you want to do?" 15 72 6 \
             Watch "Watch now: $("$KB_LIB/apps/player" --mode-name)" \
+            Read "Read it: what is said in the video, as text" \
             WatchAs "Watch now with another picture..." \
             Video "Download the video (MP4)" \
             Audio "Download the sound only (MP3)") || return
         case $sel in
             Watch) "$KB_LIB/apps/player" "$url" ;;
+            Read)  read_text "$url" ;;
             WatchAs)
                 q=$(kb_dialog --title " Watch As " --ok-label "Watch" --cancel-label "Back" --menu \
                     "How to show this video:" 14 64 5 \
@@ -130,6 +162,16 @@ update() {
     online || return
     kb_run_pause sudo -n "$KB_LIB/kb-root" ytdlp update
 }
+
+# youtube URL: straight to that video (links from News Feeds open here).
+if [ -n "${1:-}" ]; then
+    online || exit 0
+    kb_info "Looking up the video..."
+    title=$(yt-dlp --no-playlist --no-warnings --skip-download --print '%(title)s' "$1" 2>"$TMP/link.log" | head -n 1)
+    [ -n "$title" ] || { show_error "That address does not lead to a video." "$TMP/link.log"; exit 0; }
+    item_menu "$1" "${title:0:60}"
+    exit 0
+fi
 
 sel=Search
 while sel=$(kb_dialog --title " YouTube Downloader " --default-item "$sel" --ok-label "Select" --cancel-label "Close" \

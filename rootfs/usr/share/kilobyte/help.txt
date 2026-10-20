@@ -161,6 +161,40 @@
    under "More programs".
 
 
+ EVERY DAY
+ ─────────
+   Today          Accessories > Today: the date, the weather, the Agenda's
+                  appointments and to-dos, headlines and unread news feeds
+                  on one screen. Options: show it when Kilobyte starts, the
+                  town for the weather.
+   Notes          Accessories > Notes: quick notes, newest first. The first
+                  line is the title; a word with # in front (#shopping) is a
+                  tag, and Tags lists the notes of each. Search finds any
+                  word. They are text files in Documents/Notes.
+   News feeds     Internet > News feeds: news sites, blogs and YouTube
+                  channels in one list. Add takes a site's address (the
+                  feed is found by itself) or a channel's (youtube.com/@NAME).
+                  Inside: Enter opens, q goes back, o opens the page,
+                  n next unread, r reloads, ? all keys, Q leaves.
+                  Videos open in the YouTube program.
+   Dictionary     Accessories > Dictionary: English words with WordNet, also
+                  without the Internet; translates words and sentences into
+                  and from many languages (on-line, by MyMemory).
+   Wikipedia      Accessories > Wikipedia: download a Wikipedia once (from
+                  130 MB for the most-read articles in short to 50 GB for
+                  all of English), then read it without the Internet. Search
+                  looks up an article; in the browser q comes back. A .zim
+                  file copied into ~/Wikipedia works too.
+   Reading videos YouTube > a video > Read it: what is said, as text with
+                  the times, from the video's subtitles or YouTube's own
+                  captions. Save keeps it in Documents/Transcripts.
+   Sync           Accessories > Sync: keeps Documents the same on your
+                  computers. Over the network, the other one needs Settings
+                  > Remote login; or sync with a USB stick and carry it over.
+                  Changes and deletions go both ways; if a file changed on
+                  both, the newer one wins.
+
+
  MORE PROGRAMS
  ─────────────
    Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem
@@ -170,13 +204,19 @@
                   Print, USB sticks, Backup, Screen saver and more.
    Games          Mines, Solitaire, Reversi, Moon Buggy, Snake and others.
                   Each shows its keys on the bottom line.
+                  Chess: pick a piece with Space and put it down with Space,
+                  or type the move (e2e4); U takes back, 1/2/3 strength.
+                  Sudoku: arrows and numbers, ? for help.
+                  Text adventures: stories you play by typing what to do
+                  (look, take lamp, go north); free ones download with Enter.
    Settings       Also: Wi-Fi hotspot, Bluetooth, printers, screen saver,
                   weather and news tiles, sounds, automatic login.
 
 
  WHERE THINGS ARE
  ────────────────
-   Your documents are kept in ~/Documents, index cards in ~/Cardfile,
+   Your documents are kept in ~/Documents (notes in Documents/Notes,
+   stories and their saved games in Documents/Stories), index cards in ~/Cardfile,
    videos in ~/Videos, music in ~/Music, the desktop's files in ~/Desktop
    and network drives in ~/Network.
 

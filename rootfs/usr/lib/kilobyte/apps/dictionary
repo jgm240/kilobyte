@@ -1,0 +1,90 @@
+#!/bin/bash
+# Dictionary: meanings of English words (WordNet, also without the Internet)
+# and translations of words and sentences (on-line, by MyMemory).
+. /usr/lib/kilobyte/lib.sh
+
+T="Dictionary"
+TMP=$(mktemp -d /tmp/kb-dict.XXXXXX)
+trap 'rm -rf "$TMP"' EXIT
+
+LANGS=(auto "Find out by itself" en English de German fr French es Spanish it Italian
+       nl Dutch pt Portuguese pl Polish cs Czech sv Swedish da Danish no Norwegian fi Finnish
+       el Greek tr Turkish ru Russian uk Ukrainian ar Arabic he Hebrew hi Hindi
+       zh Chinese ja Japanese ko Korean)
+
+lang_name() { local i; for ((i = 0; i < ${#LANGS[@]}; i += 2)); do [ "${LANGS[i]}" = "$1" ] && { echo "${LANGS[i+1]}"; return; }; done; echo "$1"; }
+setting() { local v; v=$(cat "$KB_CONF/$1" 2>/dev/null); echo "${v:-$2}"; }
+
+have_offline() { ls /usr/share/dictd/*.index >/dev/null 2>&1; }
+width() { echo $(( $(tput cols 2>/dev/null || echo 80) - 10 )); }
+
+look_up() { # look_up [WORD]
+    local w=${1:-} out rc items=() a
+    [ -n "$w" ] || w=$(kb_input "Look Up" "English word:") || return
+    w=$(printf '%s' "$w" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    [ -n "$w" ] || return
+    kb_info "Looking up \"$w\"..."
+    python3 "$KB_LIB/py/dict.py" define "$w" "$(width)" > "$TMP/out" 2>"$TMP/err"
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        kb_textfile "$w" "$TMP/out"
+    elif [ $rc -eq 2 ] && [ -s "$TMP/out" ]; then
+        while IFS= read -r a; do items+=("$a" ""); done < "$TMP/out"
+        a=$(kb_dialog --title " $T " --ok-label "Look up" --cancel-label "Back" --menu \
+            "\"$w\" is not in the dictionary. Did you mean:" 0 50 0 "${items[@]}") && look_up "$a"
+    elif [ $rc -eq 2 ]; then
+        kb_msg "$T" "\"$w\" is not in the dictionary." 7 50
+    else
+        kb_msg "$T" "\Z1$(tail -n 1 "$TMP/err")\Zn" 8 66
+    fi
+}
+
+translate() {
+    local from to text out
+    from=$(setting translate-from auto) to=$(setting translate-to de)
+    text=$(kb_dialog --title " Translate: $(lang_name "$from") → $(lang_name "$to") " --ok-label "Translate" --cancel-label "Back" \
+        --inputbox "A word or a few sentences (translated on-line by MyMemory, mymemory.translated.net):" 10 76 "") || return
+    [ -n "$text" ] || return
+    getent hosts api.mymemory.translated.net >/dev/null 2>&1 || {
+        kb_msg "$T" "\Z1\ZbNot connected to the Internet.\Zn\n\nTranslating needs it; looking up English words does not." 9 60; return; }
+    kb_info "Translating..."
+    if out=$(python3 "$KB_LIB/py/dict.py" translate "$from" "$to" "$text" 2>&1); then
+        printf '%s\n\n%s:\n\n%s\n' "$text" "$(lang_name "$to")" "$out" | fold -s -w "$(width)" > "$TMP/out"
+        kb_textfile "Translation" "$TMP/out"
+    else
+        kb_msg "$T" "\Z1$(tail -n 1 <<< "$out")\Zn" 8 66
+    fi
+}
+
+choose_lang() { # choose_lang SETTING TITLE
+    local l items=("${LANGS[@]}")
+    [ "$1" = translate-to ] && items=("${LANGS[@]:2}")
+    l=$(kb_dialog --title " $2 " --default-item "$(setting "$1" "$( [ "$1" = translate-to ] && echo de || echo auto)")" \
+        --ok-label "Use" --cancel-label "Back" --menu "" 0 40 0 "${items[@]}") && echo "$l" > "$KB_CONF/$1"
+}
+
+get_offline() {
+    kb_yesno "$T" "Download WordNet, an English dictionary, so words can be looked up without the Internet?\n\nIt takes 13 MB." 10 60 || return
+    kb_sudo || return
+    clear
+    sudo apt-get install -y --no-install-recommends dict-wn ||
+        { sudo apt-get update && sudo apt-get install -y --no-install-recommends dict-wn; } ||
+        { read -r -n 1 -s -p "That did not work (is the computer on-line?). Press any key." || true; }
+}
+
+sel=Lookup
+while true; do
+    items=(Lookup "Look up an English word" Translate "Translate words or sentences (on-line)"
+           From "Translate from: $(lang_name "$(setting translate-from auto)")"
+           To   "Translate into: $(lang_name "$(setting translate-to de)")")
+    have_offline || items+=(Offline "Download the dictionary, to look up words without the Internet")
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "$(have_offline && echo "English words are looked up on this computer." || echo "English words are looked up on-line (dict.org).")" 0 72 0 "${items[@]}") || exit 0
+    case $sel in
+        Lookup)    look_up ;;
+        Translate) translate ;;
+        From)      choose_lang translate-from "Translate From" ;;
+        To)        choose_lang translate-to "Translate Into" ;;
+        Offline)   get_offline ;;
+    esac
+done

@@ -1,0 +1,110 @@
+#!/bin/bash
+# Text adventures: interactive stories you play by typing what to do, run by
+# Frotz. Free stories come from the IF Archive (ifarchive.org) with a
+# keypress; any story file (.z3 to .z8, .zblorb) put in ~/Documents/Stories
+# shows up too. Saved games are kept in that folder.
+. /usr/lib/kilobyte/lib.sh
+
+T="Text Adventures"
+DIR="$KB_DOCS/Stories"
+ARCHIVE=https://ifarchive.org/if-archive/games/zcode
+mkdir -p "$DIR"
+
+# file|title|author|what it is
+CATALOG="905.z5|9:05|Adam Cadre|An ordinary morning, or is it? Very short: a good first story
+dreamhold.z8|The Dreamhold|Andrew Plotkin|A wizard's house, made for people new to text adventures
+LostPig.z8|Lost Pig|Admiral Jota|Grunk the orc lost a pig. Funny, and kind to beginners
+Bronze.zblorb|Bronze|Emily Short|Beauty and the Beast: explore the castle; has a novice mode
+Galatea.zblorb|Galatea|Emily Short|Talk with a statue that has come to life: no puzzles, only talk
+photopia.z5|Photopia|Adam Cadre|A story told in pieces; almost no puzzles
+Tangle.z5|Spider and Web|Andrew Plotkin|A spy is caught and questioned: tell your story
+shade.z5|Shade|Andrew Plotkin|Your flat, the night before you leave for the desert
+Balances.z5|Balances|Graham Nelson|A small world of magic spells
+metamorp.z5|Metamorphoses|Emily Short|Change things into other things to escape
+theatre.z5|Theatre|Brendon Wyber|Locked in an old theatre at night
+curses.z5|Curses|Graham Nelson|Looking for a map in the attic, a very long puzzle hunt
+anchor.z8|Anchorhead|Michael Gentry|A long horror story in a gloomy New England town"
+
+title_of() { # title_of FILE: its name in the catalogue, or the file name
+    local line
+    line=$(grep "^$(basename "$1")|" <<< "$CATALOG" | head -n 1)
+    [ -n "$line" ] && cut -d'|' -f2 <<< "$line" || basename "${1%.*}"
+}
+
+play() { # play FILE
+    local frotz
+    frotz=$(command -v frotz)
+    kb_title "$(title_of "$1")"
+    clear
+    tput cnorm 2>/dev/null
+    if [ "$(id -u)" -ne 0 ]; then
+        # Saved games go next to the story. Ctrl-C ends the story at once.
+        (cd "$DIR" && kb_guarded '' "$frotz" "$1")
+    else
+        # Frotz will not run as root (Kinlobyte on a Kindle is root): it plays
+        # as "nobody", in a folder of its own that keeps the saved games.
+        local play=/var/lib/kilobyte/stories
+        mkdir -p "$play" && chown 65534:65534 "$play"
+        cp -f "$1" "$play/" && chmod 644 "$play/$(basename "$1")"
+        (cd "$play" && HOME=$play kb_guarded '' setpriv --reuid=65534 --regid=65534 --clear-groups \
+            "$frotz" "$play/$(basename "$1")")
+    fi
+}
+
+get() { # get FILE TITLE
+    getent hosts ifarchive.org >/dev/null 2>&1 || {
+        kb_msg "$T" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
+        return 1
+    }
+    kb_info "Downloading \"$2\" from the IF Archive..."
+    if curl -fsSL --max-time 120 -o "$DIR/.$1.part" "$ARCHIVE/$1" && [ -s "$DIR/.$1.part" ]; then
+        mv -f "$DIR/.$1.part" "$DIR/$1"
+        return 0
+    fi
+    rm -f "$DIR/.$1.part"
+    kb_msg "$T" "\Z1\"$2\" could not be downloaded.\Zn\n\nTry again later." 8 60
+    return 1
+}
+
+how_to() {
+    kb_msg "How to Play" "You read what happens and type what to do, then Enter:\n\n  \Zblook\Zn (or \Zbl\Zn)     what is around you\n  \Zbn s e w\Zn, \Zbup\Zn     go north, south, east, west, up\n  \Zbtake lamp\Zn     \Zbopen door\Zn     \Zbtalk to girl\Zn\n  \Zbx thing\Zn       examine something closely\n  \Zbi\Zn             what you are carrying\n  \Zbsave\Zn  \Zbrestore\Zn  \Zbundo\Zn     \Zbhelp\Zn or \Zbhint\Zn in many stories\n\nCtrl+C ends the story at once (save first)." 20 66
+}
+
+command -v frotz >/dev/null || {
+    if [ "$KB_VARIANT" = kindle ] || kb_yesno "$T" "Frotz, the program that plays these stories, is not installed.\n\nInstall it now? (Less than 1 MB; needs the Internet.)" 10 60; then
+        kb_sudo && { clear; sudo apt-get install -y --no-install-recommends frotz || { sudo apt-get update && sudo apt-get install -y --no-install-recommends frotz; }; }
+    fi
+    command -v frotz >/dev/null || exit 0
+}
+
+sel=""
+while true; do
+    items=() have=" "
+    while IFS= read -r f; do
+        b=$(basename "$f")
+        have+="$b "
+        items+=("$b" "■ $(title_of "$f")")
+    done < <(find "$DIR" -maxdepth 1 -type f \( -iname '*.z[1-8]' -o -iname '*.zblorb' -o -iname '*.zlb' \) | sort)
+    while IFS='|' read -r file title author what; do
+        case $have in *" $file "*) continue ;; esac
+        items+=("$file" "  $title - $author (download)")
+    done <<< "$CATALOG"
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Play" --cancel-label "Close" \
+        --extra-button --extra-label "How to play" \
+        --menu "Stories you play by typing what to do. ■ is on this computer;\nown story files go in Documents/Stories." 0 76 0 \
+        "${items[@]}")
+    rc=$?
+    case $rc in
+        "$DIALOG_EXTRA") how_to; continue ;;
+        "$DIALOG_OK") ;;
+        *) exit 0 ;;
+    esac
+    if [ ! -e "$DIR/$sel" ]; then
+        line=$(grep "^$sel|" <<< "$CATALOG")
+        IFS='|' read -r _ title author what <<< "$line"
+        kb_yesno "$title" "\Zb$title\Zn by $author\n\n$what.\n\nDownload it from the IF Archive and play?" 11 66 || continue
+        get "$sel" "$title" || continue
+        [ -e "$KB_CONF/stories-helped" ] || { : > "$KB_CONF/stories-helped"; how_to; }
+    fi
+    play "$DIR/$sel"
+done

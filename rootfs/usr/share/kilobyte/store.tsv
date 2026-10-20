@@ -14,7 +14,6 @@ nload|nload|nload|Tools|Network load (nload)|How much is going in and out right 
 tig|tig|tig|Tools|tig|Browse the history of a Git project|
 lynx|lynx|lynx https://lite.duckduckgo.com/lite|Internet|Lynx|The classic text web browser|
 w3m|w3m|w3m https://lite.duckduckgo.com/lite|Internet|w3m|A text web browser that lays out tables|
-newsboat|newsboat|newsboat|Internet|Newsboat|Read news feeds (RSS): add them with its help|
 irssi|irssi|irssi|Internet|Irssi|The classic IRC chat program|
 neomutt|neomutt|neomutt|Internet|NeoMutt|Email for people who like the keyboard|
 rtorrent|rtorrent|rtorrent|Internet|rTorrent|Download torrents|
@@ -29,8 +28,6 @@ crawl|crawl|crawl|Games|Dungeon Crawl|Stone Soup: explore dungeons, find the Orb
 cataclysm|cataclysm-dda-curses|cataclysm|Games|Cataclysm|Dark Days Ahead: survive after the end of the world|
 ninvaders|ninvaders|ninvaders|Games|nInvaders|Shoot the invaders from space|
 greed|greed|greed|Games|Greed|Eat as many numbers as you can|
-nudoku|nudoku|nudoku|Games|Sudoku (nudoku)|Number puzzles|
-gnuchess|gnuchess|gnuchess|Games|GNU Chess|Chess against the computer (type moves such as e2e4)|
 cmatrix|cmatrix|cmatrix|Fun|Digital rain (cmatrix)|Green letters falling down the screen; q stops|
 sl|sl|sl|Fun|Steam locomotive (sl)|A train crosses the screen|pause
 cowsay|fortune-mod cowsay|cowsay "$(fortune)"|Fun|Fortune cow|A cow tells you a saying|pause

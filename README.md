@@ -47,7 +47,8 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 | Email | `alpine` | Pine's successor; a setup wizard knows Gmail, Outlook, iCloud, Yahoo, GMX, WEB.DE, Posteo, mailbox.org |
 | Internet › Chat | `weechat` | IRC: pick a network and a room |
 | Internet › BBS Dialer | `telnet`, `ssh`, `luit` | bulletin boards that still run today, with modem sounds and CP437 ANSI art |
-| Internet › YouTube Downloader | `yt-dlp` + QuickJS | search, watch, save video (MP4) or sound (MP3) |
+| Internet › News feeds | `newsboat` | news sites, blogs and YouTube channels in one list; finds a site's feed by itself; videos open in the YouTube program |
+| Internet › YouTube Downloader | `yt-dlp` + QuickJS | search, watch, read (the subtitles or automatic captions as text, with times), save video (MP4) or sound (MP3) |
 | Files | `mc` | Midnight Commander, a Norton Commander clone |
 | Terminal | `bash` | fullscreen shell, `exit` returns |
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
@@ -57,12 +58,20 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 | Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
 | Internet › Citrix Workspace | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
 | Media › Music Player | Kilobyte (`ffmpeg`, `aplay`) | songs and playlists with spectrum bars |
+| Accessories › Today | Kilobyte, `calcurse`, wttr.in | the date, weather, appointments, to-dos, headlines and unread feeds on one screen; can open at start-up |
+| Accessories › Notes | Kilobyte | quick notes as text files in `~/Documents/Notes`, with search and `#tags`; opens them in the chosen editor |
+| Accessories › Dictionary | WordNet (`dict-wn`), dict.org, MyMemory | English words without the Internet (WordNet), translation of words and sentences on-line |
+| Accessories › Wikipedia | `kiwix-tools` | downloads a Wikipedia from Kiwix (130 MB to 50 GB, many languages) and reads it in the web browser without the Internet |
+| Accessories › Sync | `unison` | keeps `~/Documents` the same on several Kilobyte computers and a Kindle, over SSH or through a USB stick; deletions sync too, the newer change wins |
 | Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
 | Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |
 | Accessories › Lock the screen | Kilobyte | hides everything until the user's password is typed |
 | Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
 | Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
 | Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure, Trek |
+| Games › Chess | Kilobyte, `gnuchess` | chess against GNU Chess (three strengths): arrows and Space, the mouse, or typed moves; the game is kept |
+| Games › Sudoku | `nudoku` | Sudoku in three difficulties |
+| Games › Text adventures | `frotz` | interactive fiction: free classics (9:05, Lost Pig, Bronze, Spider and Web, Anchorhead...) download from the IF Archive with a keypress; own story files in `~/Documents/Stories` |
 | Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme, wallpaper, default programs, font, swap, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
 | Install | `kilobyte-install` | installs the live system to disk (PC live medium only) |
 

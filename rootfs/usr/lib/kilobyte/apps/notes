@@ -1,0 +1,137 @@
+#!/bin/bash
+# Notes: quick notes as plain text files in ~/Documents/Notes. The first line
+# is the title; words like #shopping anywhere in a note are its tags.
+# Notes open in the text editor chosen in Settings > Defaults.
+. /usr/lib/kilobyte/lib.sh
+
+T="Notes"
+DIR="$KB_DOCS/Notes"
+mkdir -p "$DIR"
+
+edit() { # edit FILE: in the chosen editor (kilobyte --app Editor knows which)
+    /usr/bin/kilobyte --app Editor "$1"
+}
+
+# A file name from a title: what is left after taking out / and odd
+# characters, at most 60 characters; a number is added if it is taken.
+file_for() { # file_for TITLE [OLD-FILE]
+    local base name n=1
+    base=$(printf '%s' "$1" | tr -d '\000-\037/\\:*?"<>|' | sed 's/^[ .]*//; s/[ .]*$//' | cut -c1-60)
+    [ -n "$base" ] || base="Note $(date '+%Y-%m-%d %H%M')"
+    name="$DIR/$base.txt"
+    while [ -e "$name" ] && [ "$name" != "${2:-}" ]; do
+        n=$((n + 1))
+        name="$DIR/$base ($n).txt"
+    done
+    printf '%s' "$name"
+}
+
+title_of() { # title_of FILE: its first line that is not empty
+    local line
+    while IFS= read -r line; do
+        line=${line#"${line%%[![:space:]]*}"}
+        [ -n "$line" ] && { printf '%s' "${line:0:56}"; return; }
+    done < "$1"
+    basename "$1" .txt
+}
+
+# After editing: an empty note goes, a note whose title changed gets the
+# matching file name.
+tidy() { # tidy FILE
+    local f=$1 new
+    [ -e "$f" ] || return
+    if ! grep -q '[^[:space:]]' "$f"; then
+        rm -f "$f"
+        return
+    fi
+    new=$(file_for "$(title_of "$f")" "$f")
+    [ "$new" = "$f" ] || mv -n "$f" "$new"
+}
+
+new_note() {
+    local f
+    f="$DIR/.new-$$.txt"
+    : > "$f"
+    kb_info "The first line is the title. Words like #idea become tags."
+    sleep 1
+    edit "$f"
+    tidy "$f"
+}
+
+# list_menu TITLE TEXT FILE...: pick one note of these; prints its path.
+list_menu() {
+    local title=$1 text=$2 items=() f
+    shift 2
+    for f in "$@"; do
+        items+=("$(basename "$f")" "$(date -r "$f" '+%d %b %Y')  $(title_of "$f")")
+    done
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "No notes found." 7 40; return 1; }
+    f=$(kb_dialog --title " $title " --no-tags --ok-label "Open" --cancel-label "Back" \
+        --menu "$text" 0 76 0 "${items[@]}") || return 1
+    printf '%s' "$DIR/$f"
+}
+
+# Notes, newest first.
+all_notes() {
+    find "$DIR" -maxdepth 1 -type f -name '*.txt' ! -name '.*' -printf '%T@\t%p\n' 2>/dev/null |
+        sort -rn | cut -f2-
+}
+
+search() {
+    local q files=() f
+    q=$(kb_input "Search Notes" "Find notes that contain:") || return
+    [ -n "$q" ] || return
+    while IFS= read -r f; do
+        grep -qiF -- "$q" "$f" && files+=("$f")
+    done < <(all_notes)
+    f=$(list_menu "Notes with \"$q\"" "${#files[@]} found, newest first:" "${files[@]}") || return
+    open_note "$f"
+}
+
+tags() {
+    local items=() tag n f files=()
+    while read -r n tag; do
+        items+=("$tag" "$n note$([ "$n" = 1 ] || echo s)")
+    done < <(all_notes | while IFS= read -r f; do grep -oE '(^|[[:space:](])#[[:alnum:]_-]+' "$f" |
+                 sed 's/^[[:space:](]*//' | tr '[:upper:]' '[:lower:]' | sort -u; done | sort | uniq -c | sort -k2)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "Tags" "No tags yet.\n\nWrite a word with # in front of it in a note, for example #shopping or #ideas, and it shows up here." 10 60; return; }
+    tag=$(kb_dialog --title " Tags " --ok-label "Show" --cancel-label "Back" --menu "Notes by tag:" 0 50 0 "${items[@]}") || return
+    while IFS= read -r f; do
+        grep -qiE "(^|[[:space:](])$tag([^[:alnum:]_-]|\$)" "$f" && files+=("$f")
+    done < <(all_notes)
+    f=$(list_menu "Tag $tag" "Notes tagged $tag, newest first:" "${files[@]}") || return
+    open_note "$f"
+}
+
+open_note() { # open_note FILE
+    local act
+    act=$(kb_dialog --title " $(title_of "$1") " --ok-label "Select" --cancel-label "Back" --menu \
+        "$(head -c 400 "$1" | head -n 6 | cut -c1-70 | sed 's/\\/\\\\/g')" 0 76 0 \
+        Edit   "Open it in the editor" \
+        Read   "Read it" \
+        Trash  "Throw it away (the Trash can bring it back)") || return
+    case $act in
+        Edit)  edit "$1"; tidy "$1" ;;
+        Read)  kb_textfile "$(title_of "$1")" "$1" ;;
+        Trash) kb_yesno "$T" "Throw away \"$(title_of "$1")\"?" 7 60 && "$KB_LIB/kb-trash" put "$1" ;;
+    esac
+}
+
+sel=""
+while true; do
+    items=(New "Write a new note" Search "Find notes by a word in them" Tags "Notes by #tag")
+    n=0
+    while IFS= read -r f; do
+        n=$((n + 1))
+        [ $n -le 200 ] || break
+        items+=("$(basename "$f")" "$(date -r "$f" '+%d %b')  $(title_of "$f")")
+    done < <(all_notes)
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --no-tags --ok-label "Open" --cancel-label "Close" \
+        --menu "Your notes, newest first. They are text files in Documents/Notes." 0 76 0 "${items[@]}") || exit 0
+    case $sel in
+        New)    new_note ;;
+        Search) search ;;
+        Tags)   tags ;;
+        *)      open_note "$DIR/$sel" ;;
+    esac
+done

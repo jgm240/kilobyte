@@ -222,19 +222,24 @@ Files|main|File manager|Two-panel file manager (mc, F10 quits); F2 has Open with
 Terminal|main|Terminal|Command line, type exit to come back|>_|M
 Web|internet|Web browser|Web pages with CSS and JavaScript (ELinks)|@ |L
 Mail|internet|Email|Read and write email (Alpine)|M@|L
+Feeds|internet|News feeds|News sites, blogs and YouTube channels in one list (RSS)|≡»|L
 Chat|internet|Chat|Talk in chat rooms (IRC with WeeChat)|☺☺|L
 BBS|internet|BBS Dialer|Call bulletin board systems that still run today|BB|M
-YouTube|internet|YouTube Downloader|Search, watch and save videos or their sound|Yt|M
+YouTube|internet|YouTube Downloader|Search, watch, read (as text) and save videos or their sound|Yt|M
 Network|internet|Network drives|Shared folders of Windows PCs and servers (SMB, SFTP)|⌂⌂|M
 Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡→|L
 Citrix|internet|Citrix Workspace|Remote desktops and apps of a company (needs Citrix's program)|Cx|M
 Video|media|Video Player|Videos and music as coloured blocks or the real picture|Tv|M
 Pictures|media|Pictures|Photos and drawings, shown with coloured blocks|▒▓|M
 Music|media|Music Player|Songs and playlists with dancing bars|♫ |M
-YouTube|media|YouTube Downloader|Search, watch and save videos or their sound|Yt|M
+YouTube|media|YouTube Downloader|Search, watch, read (as text) and save videos or their sound|Yt|M
 Disc|media|Disc Player|DVD films, audio CDs and data discs|◘ |M
 Sound|media|Sound volume|alsamixer: arrows change, M mutes, Esc closes|♪ |M
 Paint|accessories|Paint|Paint pictures with blocks; mouse or keyboard; saves PNG and ANSI art|▀▄|L
+Today|accessories|Today|Date, weather, appointments, to-dos and news on one screen|Td|M
+Notes|accessories|Notes|Quick notes with search and #tags, kept in Documents/Notes|Nt|M
+Dictionary|accessories|Dictionary|Look up English words; translate words and sentences|Aa|M
+Wikipedia|accessories|Wikipedia|Wikipedia on this computer: download it once, read it without the Internet|W?|L
 Calculator|accessories|Calculator|Type an expression, get the answer (bc)|+-|S
 Agenda|accessories|Agenda|Calendar, appointments and to-do list (calcurse; ? inside for help)|31|M
 Clock|accessories|Clock|Big block-letter clock; any key closes it|☼ |S
@@ -245,6 +250,7 @@ Charmap|accessories|Character Map|Box drawing and block characters for your own 
 Print|accessories|Print|Send a file to the printer|Pr|M
 USB|accessories|USB sticks|Open, safely remove or format a USB stick|↔ |M
 Backup|accessories|Backup|Copy documents and settings to a USB stick|»»|M
+Sync|accessories|Sync|Keep Documents the same on your computers and Kindle (network or USB stick)|«»|M
 Trash|accessories|Trash|Files you threw away: put them back or delete them for good|▄▄|M
 DOS|accessories|DOS programs|Run DOS programs and games in DOSBox, an emulated DOS PC|C:|M
 Wine|accessories|Windows programs|Run .exe and .msi programs with Wine (box64/box86 on a Raspberry Pi)|W |M
@@ -254,6 +260,9 @@ Lock|accessories|Lock the screen|Hide everything until your password is typed|�
 Mines|games|Mines|Clear the minefield: Space uncovers, F flags; 1/2/3 choose the size|* |M
 Solitaire|games|Solitaire|Klondike patience: Space takes and puts cards, D draws|♠♥|M
 Reversi|games|Reversi|Reversi against the computer|○◙|M
+Chess|games|Chess|Chess against GNU Chess: arrows and Space, or type moves like e2e4|Kq|M
+Sudoku|games|Sudoku|Fill the grid so every row, column and box has 1 to 9 (? for help)|#9|M
+Stories|games|Text adventures|Interactive stories you play by typing; free ones download with a key|>?|M
 MoonBuggy|games|Moon Buggy|Drive across the moon: Space jumps, a fires, q quits|o=|M
 Snake|games|Snake|Eat the numbers, grow longer: h j k l steer, q quits|~~|M
 Robots|games|Robots|Outwit the killer robots: hjkl yubn move, t teleports, q quits|R |M
@@ -289,6 +298,7 @@ run_app() {
         Mail)        run_mail ;;
         Files)       run_files "$@" ;;
         Terminal)    run_terminal ;;
+        Feeds)       "$APPS/feeds" ;;
         Chat)        "$APPS/chat" ;;
         BBS)         "$APPS/bbs" ;;
         YouTube)     "$APPS/youtube" ;;
@@ -301,6 +311,10 @@ run_app() {
         Disc)        "$APPS/disc" ;;
         Sound)       kb_guarded '\e' alsamixer ;;
         Paint)       kb_run "$APPS/paint" "$@" ;;
+        Today)       "$APPS/today" ;;
+        Notes)       "$APPS/notes" ;;
+        Dictionary)  "$APPS/dictionary" ;;
+        Wikipedia)   "$APPS/wikipedia" ;;
         Calculator)  "$APPS/calculator" ;;
         Agenda)      kb_guarded q calcurse ;;
         Clock)       "$APPS/clock" ;;
@@ -311,6 +325,7 @@ run_app() {
         Print)       "$APPS/print" "$@" ;;
         USB)         "$APPS/usb" ;;
         Backup)      "$APPS/backup" ;;
+        Sync)        "$APPS/sync" ;;
         Trash)       "$APPS/trash" ;;
         Wine)        "$APPS/wine" "$@" ;;
         DOS)         "$APPS/dos" "$@" ;;
@@ -320,6 +335,9 @@ run_app() {
         Mines)       kb_run "$APPS/mines" ;;
         Solitaire)   kb_run "$APPS/solitaire" ;;
         Reversi)     kb_run "$APPS/reversi" ;;
+        Chess)       kb_run "$APPS/chess" ;;
+        Sudoku)      kb_guarded Q nudoku ;;
+        Stories)     "$APPS/stories" ;;
         MoonBuggy)   kb_guarded '' /usr/games/moon-buggy ;;
         Snake)       kb_run /usr/games/worm ;;
         Robots)      kb_run /usr/games/robots ;;
@@ -494,10 +512,10 @@ program_manager() {
             cats+="$cat "
         done < <(apps_table)
         # Categories with nothing in them (on a Kindle: Media) are left out.
-        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "Chat, BBS dialer, YouTube, network drives, remote computers...")
+        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "News feeds, chat, BBS dialer, YouTube, network drives, remote computers...")
         [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, pictures, discs")
-        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Paint, calculator, agenda, trash, store, lock...")
-        [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Mines, Solitaire, Moon Buggy, Adventure...")
+        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, Wikipedia, sync, paint, calculator, agenda...")
+        [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Chess, Sudoku, text adventures, Mines, Solitaire...")
         [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")
         items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
         kb_is_live && items+=(Install "Install Kilobyte to disk" "Copy this system to the computer's hard disk")
@@ -599,6 +617,8 @@ KB_STTY=$(stty -g 2>/dev/null)
 stty susp undef 2>/dev/null
 kb_update_check_later
 [ -n "${KILOBYTE_DESK:-}" ] || kb_sound startup
+# Today first, if chosen in its Options.
+[ -e "$KB_CONF/today-at-start" ] && "$APPS/today"
 program_manager
 rc=$?
 [ -n "$KB_STTY" ] && stty "$KB_STTY" 2>/dev/null

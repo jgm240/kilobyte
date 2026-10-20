@@ -1,0 +1,86 @@
+#!/bin/bash
+# Today: the date, the weather, appointments and to-dos (from the Agenda),
+# headlines and unread news feeds on one screen. Settings > Desktop tiles
+# sets the weather's place and the news feed; Options here can show this
+# screen each time Kilobyte starts.
+. /usr/lib/kilobyte/lib.sh
+
+T="Today"
+TMP=$(mktemp -d /tmp/kb-today.XXXXXX)
+trap 'rm -rf "$TMP"' EXIT
+TILES="$KB_CONF/tiles"
+
+section() { printf '\n %s\n %s\n' "$1" "$(printf '%*s' ${#1} '' | tr ' ' '─')"; }
+indent() { sed 's/^/   /'; }
+
+compose() {
+    local f="$TMP/today" w unread
+    {
+        printf ' %s' "$(date '+%A, %-d %B %Y')"
+        printf '%*s\n' 12 "week $(date +%V)"
+        section "Weather"
+        if [ -s "$TILES/weather" ]; then
+            indent < "$TILES/weather"
+        else
+            echo "   No weather yet (it needs the Internet)."
+        fi
+        section "Appointments"
+        w=$(calcurse -d 3 2>/dev/null | sed '/^$/d')
+        if [ -n "$w" ]; then indent <<< "$w"; else echo "   Nothing in the Agenda for the next three days."; fi
+        w=$(calcurse -t 2>/dev/null | sed '1{/^to do/Id}; /^$/d')
+        if [ -n "$w" ]; then
+            section "To do"
+            indent <<< "$w"
+        fi
+        if [ -s "$TILES/news" ]; then
+            section "News"
+            sed -n '1d; 2,6p' "$TILES/news" | cut -c1-76 | indent
+        fi
+        if command -v newsboat >/dev/null && [ -s "${XDG_CONFIG_HOME:-$HOME/.config}/newsboat/urls" ]; then
+            unread=$(timeout 10 newsboat -x print-unread 2>/dev/null | grep -o '^[0-9]*')
+            [ -n "$unread" ] && [ "$unread" != 0 ] && { section "News Feeds"; echo "   $unread unread article$([ "$unread" = 1 ] || echo s)"; }
+        fi
+    } > "$f"
+    printf '%s' "$f"
+}
+
+# New weather and news when the saved ones are older than half an hour.
+refresh() { # refresh [force]
+    if [ "${1:-}" = force ]; then
+        rm -f "$TILES/attempt" "$TILES/weather" "$TILES/news" 2>/dev/null
+    elif [ -n "$(find "$TILES/weather" -mmin -30 2>/dev/null)" ]; then
+        return
+    fi
+    getent hosts wttr.in >/dev/null 2>&1 || return
+    kb_info "Getting the weather and the news..."
+    timeout 40 "$KB_LIB/kb-tiles" refresh </dev/null >/dev/null 2>&1
+}
+
+options() {
+    local sel on city
+    while true; do
+        on=$([ -e "$KB_CONF/today-at-start" ] && echo ON || echo OFF)
+        city=$(cat "$KB_CONF/tiles-city" 2>/dev/null)
+        sel=$(kb_dialog --title " Today: Options " --ok-label "Select" --cancel-label "Back" --menu "" 12 70 4 \
+            Start   "Show Today when Kilobyte starts: $on" \
+            Place   "Weather for: ${city:-where the Internet connection is}" \
+            Refresh "Get new weather and news now") || return
+        case $sel in
+            Start)   if [ "$on" = ON ]; then rm -f "$KB_CONF/today-at-start"; else : > "$KB_CONF/today-at-start"; fi ;;
+            Place)   city=$(kb_input "Weather" "Town or city (empty: guess from the Internet connection):" "$city") &&
+                         { printf '%s\n' "$city" > "$KB_CONF/tiles-city"; refresh force; } ;;
+            Refresh) refresh force ;;
+        esac
+    done
+}
+
+refresh
+while true; do
+    kb_dialog --title " $T " --exit-label "Close" --ok-label "Close" --extra-button --extra-label "Agenda" \
+        --help-button --help-label "Options" --textbox "$(compose)" 0 0
+    case $? in
+        "$DIALOG_EXTRA") kb_guarded q calcurse ;;
+        "$DIALOG_HELP")  options ;;
+        *) exit 0 ;;
+    esac
+done

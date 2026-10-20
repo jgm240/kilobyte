@@ -1,0 +1,133 @@
+#!/bin/bash
+# News Feeds: news sites, blogs and YouTube channels in one list, read with
+# Newsboat. Links open in Kilobyte's web browser; YouTube videos in the
+# YouTube program (watch, read the transcript, save).
+. /usr/lib/kilobyte/lib.sh
+
+T="News Feeds"
+NB="${XDG_CONFIG_HOME:-$HOME/.config}/newsboat"
+URLS="$NB/urls"
+mkdir -p "$NB" "${XDG_DATA_HOME:-$HOME/.local/share}/newsboat"
+
+# Kilobyte's settings for Newsboat, unless the owner made their own.
+if [ ! -e "$NB/config" ] || head -n 1 "$NB/config" | grep -q '^# Kilobyte'; then
+    cat > "$NB/config" <<'CONF'
+# Kilobyte's settings for Newsboat. Delete this first line to keep your own.
+browser "/usr/lib/kilobyte/kb-link %u"
+auto-reload yes
+reload-time 60
+reload-threads 3
+show-read-feeds yes
+text-width 80
+max-items 200
+confirm-exit no
+download-timeout 30
+feedlist-format "%4i %n %11u  %t"
+articlelist-format "%4i %f %D  %?T?|%-17T|  ?%t"
+CONF
+fi
+if [ ! -e "$URLS" ]; then
+    feed=$(cat "$KB_CONF/tiles-feed" 2>/dev/null)
+    {
+        echo "# One feed per line: its address, then a name after ~ (Kilobyte's News Feeds)"
+        echo "${feed:-https://feeds.bbci.co.uk/news/world/rss.xml} \"~World news (BBC)\""
+        echo "https://github.com/jgm240/kilobyte/releases.atom \"~Kilobyte releases\""
+    } > "$URLS"
+fi
+
+online() {
+    getent hosts example.com >/dev/null 2>&1 || getent hosts debian.org >/dev/null 2>&1 && return 0
+    kb_msg "$T" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
+    return 1
+}
+
+add_line() { # add_line URL NAME
+    if grep -qF -- "$1" "$URLS"; then
+        kb_msg "$T" "\"$2\" is in your feeds already." 7 64
+        return
+    fi
+    printf '%s "~%s"\n' "$1" "${2//\"/\'}" >> "$URLS"
+    kb_msg "$T" "Added:\n\n  \Zb$2\Zn\n\nIt shows up the next time you read your feeds." 10 70
+}
+
+# A YouTube channel's address: its feed has the channel's id in it.
+add_youtube() { # add_youtube URL
+    local id name
+    command -v yt-dlp >/dev/null || { kb_msg "$T" "The YouTube downloader is not installed." 7 50; return; }
+    kb_info "Looking up the channel..."
+    IFS=$'\t' read -r id name < <(yt-dlp --flat-playlist -I 1 --no-warnings \
+        --print $'playlist:%(channel_id)s\t%(channel)s' "$1" 2>/dev/null | head -n 1)
+    if [[ ! $id =~ ^UC ]]; then
+        IFS=$'\t' read -r id name < <(yt-dlp --flat-playlist -I 1 --no-warnings \
+            --print $'%(channel_id)s\t%(channel)s' "$1" 2>/dev/null | head -n 1)
+    fi
+    [[ $id =~ ^UC ]] || { kb_msg "$T" "\Z1No YouTube channel found at that address.\Zn" 7 60; return; }
+    add_line "https://www.youtube.com/feeds/videos.xml?channel_id=$id" "${name:-YouTube channel} (YouTube)"
+}
+
+add() {
+    local url feed title out
+    url=$(kb_input "Add a Feed" "Address of a news site, blog, feed or YouTube channel\n(for example theguardian.com or youtube.com/@NASA):" "") || return
+    url=$(printf '%s' "$url" | tr -d '[:space:]')
+    [ -n "$url" ] && online || return
+    case $url in
+        *youtube.com/@* | *youtube.com/channel/* | *youtube.com/c/* | *youtube.com/user/* | @*)
+            [[ $url == @* ]] && url="https://www.youtube.com/$url"
+            [[ $url == *://* ]] || url="https://$url"
+            add_youtube "$url"; return ;;
+    esac
+    kb_info "Looking for the feed..."
+    if out=$(python3 "$KB_LIB/py/feeds.py" find "$url" 2>&1); then
+        IFS=$'\t' read -r feed title <<< "$out"
+        add_line "$feed" "$title"
+    else
+        kb_msg "$T" "\Z1$(tail -n 1 <<< "$out")\Zn\n\nSome sites have no feed. Try the address of the site's front page, or search the web for its name and \"RSS\"." 11 66
+    fi
+}
+
+remove() {
+    local items=() url rest name chosen line
+    while IFS= read -r line; do
+        case $line in '' | '#'*) continue ;; esac
+        url=${line%% *}
+        name=$(sed -n 's/.*"~\([^"]*\)".*/\1/p' <<< "$line")
+        items+=("$url" "${name:-$url}" off)
+    done < "$URLS"
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "You have no feeds." 7 40; return; }
+    chosen=$(kb_dialog --title " Remove Feeds " --no-tags --separate-output --ok-label "Remove" --cancel-label "Back" \
+        --checklist "Tick the feeds to remove (Space ticks):" 0 70 0 "${items[@]}") || return
+    [ -n "$chosen" ] || return
+    while IFS= read -r url; do
+        grep -vF -- "$url" "$URLS" > "$URLS.new" && mv "$URLS.new" "$URLS"
+    done <<< "$chosen"
+}
+
+read_feeds() {
+    command -v newsboat >/dev/null || { kb_msg "$T" "Newsboat is not installed (Settings > Add or remove programs: newsboat)." 8 60; return; }
+    # Q leaves Newsboat from anywhere in it.
+    kb_guarded 'Q' newsboat -r
+}
+
+how_to() {
+    kb_msg "Reading Feeds" "\ZbEnter\Zn opens a feed or an article, \Zbq\Zn goes back.\n\n  \Zbo\Zn            open the article's page (videos: watch or read)\n  \Zbn\Zn            next unread article\n  \ZbA\Zn            mark the whole feed as read\n  \Zbr\Zn  \ZbR\Zn         reload this feed / all feeds\n  \Zb/\Zn            search\n  \Zb?\Zn            all the keys\n  \ZbQ\Zn            back to Kilobyte" 17 66
+}
+
+[ "${1:-}" = --read ] && { read_feeds; exit 0; }
+
+sel=Read
+while true; do
+    n=$(grep -cv '^[[:space:]]*\(#\|$\)' "$URLS")
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "News sites, blogs and YouTube channels in one list.\nYou follow $n feed$([ "$n" = 1 ] || echo s)." 15 66 5 \
+        Read    "Read your feeds" \
+        Add     "Add a site, blog or YouTube channel" \
+        Remove  "Remove feeds" \
+        Keys    "How to read: the keys") || exit 0
+    case $sel in
+        Read)   [ -e "$KB_CONF/feeds-helped" ] || { : > "$KB_CONF/feeds-helped"; how_to; }
+                read_feeds ;;
+        Add)    add ;;
+        Remove) remove ;;
+        Keys)   how_to ;;
+    esac
+done

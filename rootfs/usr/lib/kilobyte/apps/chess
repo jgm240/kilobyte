@@ -1,0 +1,3 @@
+#!/bin/sh
+# Kilobyte chess against GNU Chess (a Python program; see /usr/lib/kilobyte/py/chess.py)
+exec python3 /usr/lib/kilobyte/py/chess.py "$@"

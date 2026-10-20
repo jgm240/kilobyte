@@ -1,0 +1,171 @@
+#!/bin/bash
+# Wikipedia without the Internet: a copy of Wikipedia (a ZIM file from
+# Kiwix, download.kiwix.org) is read through kiwix-serve, on this computer
+# only, in Kilobyte's web browser. ZIM files copied into the Wikipedia folder
+# by hand work too (also other Kiwix libraries: Wiktionary, Gutenberg...).
+. /usr/lib/kilobyte/lib.sh
+
+T="Wikipedia"
+if [ "$KB_VARIANT" = kindle ]; then
+    DIR=/mnt/us/kinlobyte/Wikipedia        # the Kindle's storage, where USB sees it
+else
+    DIR="$HOME/Wikipedia"
+fi
+MIRROR=https://download.kiwix.org/zim/wikipedia
+TMP=$(mktemp -d /tmp/kb-wiki.XXXXXX)
+SERVER=""
+trap '[ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null; rm -rf "$TMP"' EXIT
+mkdir -p "$DIR"
+
+need_kiwix() {
+    command -v kiwix-serve >/dev/null && return 0
+    kb_yesno "$T" "Kiwix, the program that reads Wikipedia files, is not installed.\n\nInstall it now? (About 50 MB; needs the Internet.)" 9 64 || return 1
+    kb_sudo || return 1
+    clear
+    sudo apt-get install -y --no-install-recommends kiwix-tools ||
+        { sudo apt-get update && sudo apt-get install -y --no-install-recommends kiwix-tools; }
+    command -v kiwix-serve >/dev/null
+}
+
+zims() { find "$DIR" -maxdepth 1 -type f -iname '*.zim' | sort; }
+
+human() { # human BYTES
+    awk -v b="$1" 'BEGIN { split("B KB MB GB TB", u); i = 1; while (b >= 1000 && i < 5) { b /= 1000; i++ } printf (i > 3 ? "%.1f %s" : "%d %s"), b, u[i] }'
+}
+
+wiki_lang() {
+    local l=${LANG%%[_.]*}
+    [ -s "$KB_CONF/wikipedia-lang" ] && read -r l < "$KB_CONF/wikipedia-lang"
+    case $l in [a-z][a-z] | [a-z][a-z][a-z]) printf '%s' "$l" ;; *) printf en ;; esac
+}
+
+download() {
+    local lang items=() name size kind sel free page
+    getent hosts download.kiwix.org >/dev/null 2>&1 || {
+        kb_msg "$T" "\Z1\ZbNot connected to the Internet.\Zn\n\nOr copy a .zim file from another computer into the folder $DIR." 10 66; return; }
+    lang=$(kb_input "$T" "Language of the Wikipedia (two letters: en English, de German, fr French, es Spanish...):" "$(wiki_lang)") || return
+    lang=$(printf '%s' "$lang" | tr -cd 'a-z-')
+    [ -n "$lang" ] || return
+    echo "$lang" > "$KB_CONF/wikipedia-lang"
+    kb_info "Looking at what Kiwix offers..."
+    page=$(curl -fsSL --max-time 30 "$MIRROR/" 2>/dev/null) || { kb_msg "$T" "download.kiwix.org did not answer." 7 50; return; }
+    # The newest file of each kind: name and size.
+    while read -r name size; do
+        case $name in
+            *_top_mini_*)  kind="The most-read articles, beginnings only" ;;
+            *_top_nopic_*) kind="The most-read articles, whole, no pictures" ;;
+            *_all_mini_*)  kind="Every article, beginnings only" ;;
+            *_all_nopic_*) kind="Every article, whole, no pictures" ;;
+            *) continue ;;
+        esac
+        items+=("$name" "$(printf '%-44s %8s' "$kind" "$size")")
+    done < <(sed 's/<[^>]*>//g' <<< "$page" |
+             awk -v l="wikipedia_${lang}_" 'index($1, l) == 1 && $1 ~ /_(top|all)_(mini|nopic)_[0-9-]+\.zim$/ {
+                 k = $1; sub(/_[0-9-]+\.zim$/, "", k); last[k] = $1 " " $4 }
+                 END { for (k in last) print last[k] }' | sort)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "There is no Wikipedia in \"$lang\" at Kiwix." 7 50; return; }
+    free=$(df -B1 --output=avail "$DIR" | tail -n 1)
+    sel=$(kb_dialog --title " Download Wikipedia " --ok-label "Download" --cancel-label "Back" --menu \
+        "Free space here: $(human "$free"). \"Beginnings only\" has the first part of\neach article; smaller files are quicker to search." 0 78 0 "${items[@]}") || return
+    size=$(curl -fsSIL --max-time 30 "$MIRROR/$sel" | tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }')
+    if [ "$size" -gt 0 ] && [ "$size" -gt "$free" ]; then
+        kb_msg "$T" "\Z1That file ($(human "$size")) does not fit: $(human "$free") are free.\Zn" 8 66; return
+    fi
+    if [ "$(stat -f -c %T "$DIR" 2>/dev/null)" = msdos ] && [ "$size" -ge 4294967295 ]; then
+        kb_msg "$T" "\Z1Files bigger than 4 GB do not fit on this storage (FAT).\Zn Choose a smaller one." 8 66; return
+    fi
+    kb_yesno "$T" "Download \Zb$sel\Zn ($(human "$size"))?\n\nThis can take a long time. If it is interrupted, choosing it again carries on where it stopped." 11 72 || return
+    clear
+    printf '\n  Downloading %s (%s) ...\n  Ctrl+C stops; choosing it again carries on.\n\n' "$sel" "$(human "$size")"
+    trap 'true' INT
+    if curl -fL -C - --retry 5 --progress-bar -o "$DIR/$sel.part" "$MIRROR/$sel"; then
+        mv -f "$DIR/$sel.part" "$DIR/$sel"
+        "$KB_LIB/kb-notify" "$T" "Wikipedia is downloaded."
+    else
+        printf '\n  The download stopped. Press Enter.'
+        read -r _
+    fi
+    trap : INT
+    kb_load_theme
+}
+
+# start ZIM: kiwix-serve for that file, on this computer only. Prints its
+# address (http://127.0.0.1:PORT/content/NAME).
+start() {
+    local port path i
+    [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null
+    port=$(( 20000 + RANDOM % 20000 ))
+    kiwix-serve --address=127.0.0.1 --port="$port" "$1" >"$TMP/server.log" 2>&1 &
+    SERVER=$!
+    for i in $(seq 1 60); do
+        path=$(curl -fs --max-time 2 "http://127.0.0.1:$port/catalog/v2/entries" 2>/dev/null |
+               grep -o 'href="/content/[^"]*"' | head -n 1 | cut -d'"' -f2)
+        [ -n "$path" ] && { printf 'http://127.0.0.1:%s%s' "$port" "$path"; return 0; }
+        kill -0 "$SERVER" 2>/dev/null || break
+        sleep 0.5
+    done
+    return 1
+}
+
+# search WORDS: the article with that title, else a choice of titles that
+# start alike, else (or when chosen) every article that has the words.
+search() {
+    local q=$1 server=${base%/content/*} book=${base##*/} items=() path title enc
+    enc=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$q")
+    while IFS=$'\t' read -r path title; do
+        [ -n "$path" ] || continue
+        if [ "${title,,}" = "${q,,}" ]; then browse "$base/$path"; return; fi
+        items+=("$path" "$title")
+    done < <(curl -fs --max-time 10 "$server/suggest?content=$book&count=15&term=$enc" | python3 -c '
+import html, json, sys
+for s in json.load(sys.stdin):
+    if s.get("kind") == "path":
+        print(s["path"] + "\t" + html.unescape(s["value"]))' 2>/dev/null)
+    if [ ${#items[@]} -gt 0 ]; then
+        path=$(kb_dialog --title " $T: $q " --no-tags --ok-label "Open" --cancel-label "Back" --menu \
+            "Articles:" 0 72 0 "${items[@]}" "*" "Every article with \"$q\" in it...") || return
+        [ "$path" != "*" ] && { browse "$base/$path"; return; }
+    fi
+    browse "$server/search?books.name=$book&pattern=$enc"
+}
+
+browse() { # browse URL
+    /usr/bin/kilobyte --app Web "$1"
+}
+
+need_kiwix || exit 0
+zim="" base="" sel=Search
+while true; do
+    mapfile -t files < <(zims)
+    if [ ${#files[@]} -eq 0 ]; then
+        kb_dialog --title " $T " --yes-label "Download" --no-label "Close" --yesno \
+            "There is no Wikipedia on this computer yet.\n\nDownload one from Kiwix (from 130 MB), or copy a .zim file into the folder\n$DIR" 11 72 || exit 0
+        download
+        continue
+    fi
+    # The file used last, if it is still there; else the first.
+    if [ -z "$zim" ] || [ ! -e "$zim" ]; then
+        zim=${files[0]}
+        last=$(cat "$KB_CONF/wikipedia-file" 2>/dev/null)
+        for f in "${files[@]}"; do [ "$f" = "$last" ] && zim=$f; done
+        kb_info "Opening $(basename "$zim")..."
+        base=$(start "$zim") || { kb_msg "$T" "\Z1$(basename "$zim") could not be opened.\Zn\n\n$(tail -n 2 "$TMP/server.log")" 10 70; zim=""; download; continue; }
+        echo "$zim" > "$KB_CONF/wikipedia-file"
+    fi
+    items=(Search "Look up an article" Main "The main page" Random "A random article")
+    [ ${#files[@]} -gt 1 ] && items+=(Other "Use another file ($(( ${#files[@]} - 1 )) more)")
+    items+=(Download "Download another Wikipedia")
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Open" --cancel-label "Close" --menu \
+        "$(basename "$zim") - no Internet needed.\nIn the browser: arrows and Enter follow links, q comes back here." 0 72 0 "${items[@]}") || exit 0
+    case $sel in
+        Search)   q=$(kb_input "$T" "Look up:") && [ -n "$q" ] && search "$q" ;;
+        Main)     browse "$base/" ;;
+        Random)   browse "${base%/content/*}/random?content=${base##*/}" ;;
+        Other)
+            its=()
+            for f in "${files[@]}"; do its+=("$(basename "$f")" "$(human "$(stat -c %s "$f")")"); done
+            f=$(kb_dialog --title " $T " --ok-label "Use" --cancel-label "Back" --menu "" 0 72 0 "${its[@]}") &&
+                { echo "$DIR/$f" > "$KB_CONF/wikipedia-file"; zim=""; } ;;
+        Download) download ;;
+    esac
+done

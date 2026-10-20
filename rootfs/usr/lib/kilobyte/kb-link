@@ -1,0 +1,11 @@
+#!/bin/bash
+# kb-link URL: open a link from another program (News Feeds' articles): a
+# YouTube video in the YouTube program (watch, read or save it), anything
+# else in the web browser chosen in Settings > Defaults.
+url=${1:-}
+[ -n "$url" ] || { echo "usage: kb-link URL" >&2; exit 2; }
+case $url in
+    http*://*youtube.com/watch* | http*://youtu.be/* | http*://*youtube.com/shorts/* | http*://*youtube.com/live/*)
+        exec /usr/lib/kilobyte/apps/youtube "$url" ;;
+    *)  exec /usr/bin/kilobyte --app Web "$url" ;;
+esac

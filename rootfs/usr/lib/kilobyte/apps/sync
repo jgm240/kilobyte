@@ -1,0 +1,138 @@
+#!/bin/bash
+# Sync: keeps the Documents folder the same on several Kilobyte computers
+# (a PC, a Raspberry Pi, a Kindle) with Unison: over the network (SSH) or
+# through a USB stick carried from one to the other. What changed on either
+# side is copied to the other; a file deleted on one side is deleted on the
+# other; when a file changed on both, the newer one wins.
+. /usr/lib/kilobyte/lib.sh
+
+T="Sync"
+LIST="$KB_CONF/sync-partners"      # ssh USER@HOST  or  usb LABEL, one per line
+touch "$LIST"
+
+docs() { readlink -f "$KB_DOCS"; }  # (on a Kindle Documents is a link to the Kindle's storage)
+
+# The common options: no file permissions (USB sticks and the Kindle's
+# storage have none), the newer file wins, nothing is asked.
+UNISON_OPTS=(-batch -auto -prefer newer -times -perms 0 -dontchmod -confirmbigdel=false
+             -ignore 'Name .~lock.*' -ignore 'Name *~' -ignore 'Name .*.swp' -ignore 'Name .Trash-*')
+
+need_unison() {
+    command -v unison >/dev/null && return 0
+    kb_yesno "$T" "Unison, the program that syncs, is not installed.\n\nInstall it now? (2 to 5 MB; needs the Internet.)" 9 60 || return 1
+    kb_sudo || return 1
+    clear
+    sudo apt-get install -y --no-install-recommends unison ||
+        { sudo apt-get update && sudo apt-get install -y --no-install-recommends unison; }
+    command -v unison >/dev/null
+}
+
+run_unison() { # run_unison TITLE ROOT1 ROOT2 [OPTIONS]
+    local title=$1 rc
+    shift
+    mkdir -p "$KB_DOCS"
+    kb_title "$T"
+    clear
+    printf '\n  \033[1m%s\033[0m\n\n' "$title"
+    unison "$@" "${UNISON_OPTS[@]}" -ui text -terse -logfile "$KB_CONF/sync.log"
+    rc=$?
+    echo
+    case $rc in
+        0) printf '  \033[1mDone: both sides are the same.\033[0m\n' ;;
+        1) printf '  \033[1mDone.\033[0m Some files were left as they were (see above).\n' ;;
+        2) printf '  \033[1mSome files could not be copied\033[0m (see above).\n' ;;
+        *) printf '  \033[1mThe sync did not work.\033[0m See the lines above.\n' ;;
+    esac
+    printf '\n\033[7m Press Enter to return to Kilobyte \033[0m'
+    read -r _
+    kb_load_theme
+    return $rc
+}
+
+sync_ssh() { # sync_ssh USER@HOST
+    run_unison "Syncing Documents with $1 ..." "$(docs)" "ssh://$1/Documents" \
+        -sshargs "-o ServerAliveInterval=30 -o ConnectTimeout=15" -servercmd unison
+    if [ $? -ge 3 ]; then
+        kb_msg "$T" "On \Zb$1\Zn:\n\n - Remote login must be on (Kilobyte: Settings > Remote login)\n - Unison must be installed (Kilobyte has it)\n - its Documents folder is synced with this one\n\nA Kindle cannot be reached this way: start the sync on the Kindle." 14 70
+    fi
+}
+
+sync_usb() { # sync_usb LABEL
+    local dev="" mnt line
+    while IFS='|' read -r d rest; do
+        [ "$(lsblk -no LABEL "$d" 2>/dev/null)" = "$1" ] && { dev=$d; break; }
+    done < <(kb_usb_list)
+    [ -n "$dev" ] || { kb_msg "$T" "The USB stick \Zb$1\Zn is not plugged in." 7 60; return; }
+    mnt=$(kb_usb_mount "$dev") || { kb_msg "$T" "The USB stick could not be opened." 7 50; return; }
+    mkdir -p "$mnt/Kilobyte Sync/Documents" || { kb_msg "$T" "The USB stick is read-only." 7 50; return; }
+    run_unison "Syncing Documents with the USB stick $1 ..." "$(docs)" "$mnt/Kilobyte Sync/Documents" -fastcheck true
+}
+
+add_ssh() {
+    local host user
+    host=$(kb_input "$T" "Name or address of the other computer\n(for example 192.168.1.20 or pi.local):" "") || return
+    host=$(printf '%s' "$host" | tr -d '[:space:]')
+    [ -n "$host" ] || return
+    user=$(kb_input "$T" "Your user name on that computer:" "$USER") || return
+    [ -n "$user" ] || return
+    grep -qxF "ssh $user@$host" "$LIST" || echo "ssh $user@$host" >> "$LIST"
+    if kb_yesno "$T" "Sync without typing the password each time?\n\nThis makes a key for this computer and puts it on $host (you type the password there once)." 10 66; then
+        clear
+        [ -e "$HOME/.ssh/id_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -f "$HOME/.ssh/id_ed25519"
+        ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" "$user@$host"
+        printf '\n\033[7m Press Enter \033[0m'
+        read -r _
+    fi
+    kb_yesno "$T" "Sync with $user@$host now?" 7 60 && sync_ssh "$user@$host"
+}
+
+add_usb() {
+    local items=() dev label
+    while IFS='|' read -r d desc; do items+=("$d" "$desc"); done < <(kb_usb_list)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "Plug in a USB stick first." 7 40; return; }
+    dev=$(kb_dialog --title " $T " --ok-label "Use" --cancel-label "Back" --menu \
+        "Which USB stick carries the documents between your computers?\nThey go into its folder \"Kilobyte Sync\"." 0 70 0 "${items[@]}") || return
+    label=$(lsblk -no LABEL "$dev" 2>/dev/null)
+    [ -n "$label" ] || { kb_msg "$T" "That stick has no name; give it one by formatting it in Accessories > USB sticks." 8 66; return; }
+    grep -qxF "usb $label" "$LIST" || echo "usb $label" >> "$LIST"
+    kb_yesno "$T" "Sync with the USB stick $label now?" 7 60 && sync_usb "$label"
+}
+
+how_it_works() {
+    kb_msg "How Sync Works" "Sync makes the Documents folder the same here and on another computer (or a USB stick):\n\n - new and changed files are copied both ways\n - a file deleted on one side is deleted on the other\n - a file changed on both sides: the newer one wins\n\nOver the network, the other computer needs Remote login switched on (Settings > Remote login). With a USB stick, sync on one computer, carry the stick over and sync on the other.\n\nOn a Kindle, start the sync on the Kindle: it can reach your computers, they cannot reach it." 20 72
+}
+
+need_unison || exit 0
+[ -e "$KB_CONF/sync-helped" ] || { : > "$KB_CONF/sync-helped"; how_it_works; }
+sel=""
+while true; do
+    items=()
+    while read -r kind who; do
+        case $kind in
+            ssh) items+=("ssh $who" "Sync with $who (network)") ;;
+            usb) items+=("usb $who" "Sync with the USB stick $who") ;;
+        esac
+    done < "$LIST"
+    items+=(AddSSH "Add a computer on the network")
+    [ "$KB_VARIANT" = kindle ] || items+=(AddUSB "Add a USB stick")
+    items+=(Help "How sync works")
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --no-tags --ok-label "Sync" --cancel-label "Close" \
+        --extra-button --extra-label "Forget" \
+        --menu "Keep Documents the same on your computers." 0 70 0 "${items[@]}")
+    rc=$?
+    case $rc in
+        "$DIALOG_EXTRA")
+            case $sel in ssh* | usb*) kb_yesno "$T" "Forget \"${sel#* }\"? (No files are deleted.)" 7 60 &&
+                { grep -vxF "$sel" "$LIST" > "$LIST.new"; mv "$LIST.new" "$LIST"; } ;; esac
+            continue ;;
+        "$DIALOG_OK") ;;
+        *) exit 0 ;;
+    esac
+    case $sel in
+        AddSSH) add_ssh ;;
+        AddUSB) add_usb ;;
+        Help)   how_it_works ;;
+        ssh\ *) sync_ssh "${sel#ssh }" ;;
+        usb\ *) sync_usb "${sel#usb }" ;;
+    esac
+done
