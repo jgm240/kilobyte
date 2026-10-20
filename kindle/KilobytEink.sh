@@ -1,26 +1,26 @@
 #!/bin/sh
-# Name: Kinlobyte
+# Name: KilobytEink
 # Author: Kilobyte contributors
 # Icon: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAACgCAAAAADiYvdMAAABqElEQVR42u3bvUvDQBzG8SdFal20o4jOoiCOvoH4hg7i5uAmgqCTggji3+EiuLiouLlqlV5rpIulQycHB8HuB0JE8W2osQqirV4phe8z5cjBJ/kd5MeFxHtVbRIRMDAwMDAwMDAwMDBw3cANnwdelbFX1hgYGBgYGPjXfvxT//wu3i/zPUoNDAwMDAz8735caf+l1MDAwMDAwO77scv+S6mBgYGBgYHdvK9mfwwMDAwMDFz7/XGl5yk1MDAwMDBwWfH4NxUYGLjuYEIIqWas1JFrtdJ9sjiykqSFbCY7LwUmlZvpzkeky1VjnoyZDYwxa27gmN8vK9nzkRI85ccV9ydkpd4bHcxp+rB4We/X5QTeXSyCY6kSfDogaTAhK3nX6spH/G7n8Mp2WOLU6AdciEmKFWSl8Rlpb2dfruHg6iiER9Jf4aZbBSbzdCJ1PneGcGCMGXAB3zUnlsMSJ8dCODEoaehYVuop3afjNW4vdL3Dw+chPOm3KO6Py0pt2T/AZX2Jert+0Fc8Sj82SlFfuthoTz5Et84UNS9a+jI7aqTMJo8hQkjV8gaOm4f5pENSUAAAAABJRU5ErkJggg==
 # DontUseFBInk
 #
-# Kinlobyte: Kilobyte, the desktop that is not really one, on a jailbroken
+# KilobytEink: Kilobyte, the desktop that is not really one, on a jailbroken
 # Kindle. Tap it in the Library: the Program Manager opens in kterm, with
 # kterm's on-screen keyboard. Exit (Quit in the Program Manager) brings the
 # Kindle back.
 #
 # Needs: the Universal Hotfix (scriptlets), kterm anywhere on the Kindle's
 # storage (/mnt/us/kterm, /mnt/us/extensions/kterm, or set KTERM in
-# kinlobyte.conf) and the folder /mnt/us/kinlobyte with kinlobyte.img. Settings (font size,
-# screen orientation) are in /mnt/us/kinlobyte/kinlobyte.conf.
+# kilobyteink.conf) and the folder /mnt/us/kilobyteink with kilobyteink.img. Settings (font size,
+# screen orientation) are in /mnt/us/kilobyteink/kilobyteink.conf.
 #
 # Copyright (C) 2026 Kilobyte contributors. Free software: GNU GPL, version 3
-# or later (/mnt/us/kinlobyte/COPYING).
+# or later (/mnt/us/kilobyteink/COPYING).
 
 # Stopping the Kindle's reading interface (below) may end whatever it
 # started, this script included: carry on in a session of our own.
-if [ -z "$KINLOBYTE_DETACHED" ]; then
-    export KINLOBYTE_DETACHED=1
+if [ -z "$KILOBYTEINK_DETACHED" ]; then
+    export KILOBYTEINK_DETACHED=1
     if command -v setsid >/dev/null 2>&1; then
         setsid sh "$0" "$@" </dev/null >/dev/null 2>&1 &
     else
@@ -29,11 +29,23 @@ if [ -z "$KINLOBYTE_DETACHED" ]; then
     exit 0
 fi
 
-KB=/mnt/us/kinlobyte
-IMG=$KB/kinlobyte.img
-MNT=/tmp/kinlobyte
+KB=/mnt/us/kilobyteink
+OLD=/mnt/us/kinlobyte
+# Installed before the name changed (it was called Kinlobyte): its folder
+# and files get the new names, settings and documents included.
+if [ ! -d "$KB" ] && [ -d "$OLD" ] && ! grep -q " /tmp/kinlobyte " /proc/mounts; then
+    mv "$OLD" "$KB" &&
+    for f in img conf log; do
+        [ -f "$KB/kinlobyte.$f" ] && mv "$KB/kinlobyte.$f" "$KB/kilobyteink.$f"
+    done
+    [ -f "$KB/enter.sh" ] && sed -i 's|/tmp/kinlobyte|/tmp/kilobyteink|g' "$KB/enter.sh"
+    rm -f /mnt/us/documents/Kinlobyte.sh
+    [ -e /mnt/us/DONT_START_KINLOBYTE ] && mv /mnt/us/DONT_START_KINLOBYTE /mnt/us/DONT_START_KILOBYTEINK
+fi
+IMG=$KB/kilobyteink.img
+MNT=/tmp/kilobyteink
 KTERM=""
-LOG=$KB/kinlobyte.log
+LOG=$KB/kilobyteink.log
 
 # A message on the e-ink screen, for when there is no terminal to show it in.
 say() {
@@ -65,14 +77,14 @@ leave() {
 }
 
 if [ ! -f "$IMG" ]; then
-    say "Kinlobyte is not installed." "Copy the folder kinlobyte (with" "kinlobyte.img) to the Kindle's main" "folder over USB."
+    say "KilobytEink is not installed." "Copy the folder kilobyteink (with" "kilobyteink.img) to the Kindle's main" "folder over USB."
     exit 1
 fi
 # Settings: FONT_SIZE, ORIENTATION (U, R or L), KEYBOARD (1 on, 0 off),
-# STOP_UI (1: stop the Kindle's reading interface while Kinlobyte runs),
+# STOP_UI (1: stop the Kindle's reading interface while KilobytEink runs),
 # KTERM (kterm's folder, if it is not found by itself).
 FONT_SIZE= ORIENTATION=U KEYBOARD=1 STOP_UI=1
-[ -f "$KB/kinlobyte.conf" ] && . "$KB/kinlobyte.conf"
+[ -f "$KB/kilobyteink.conf" ] && . "$KB/kilobyteink.conf"
 
 # kterm: its folder holds bin/kterm, its keyboard layouts and terminfo.
 # Where it was unpacked differs: look in the usual places, then search.
@@ -89,7 +101,7 @@ if [ -z "$KTERM" ]; then
     [ -n "$k" ] && KTERM=${k%/bin/kterm}
 fi
 if [ -z "$KTERM" ]; then
-    say "Kinlobyte needs kterm." "Unpack kterm-kindle-2.6.zip onto the" "Kindle, so that kterm/bin/kterm is" "in its main folder."
+    say "KilobytEink needs kterm." "Unpack kterm-kindle-2.6.zip onto the" "Kindle, so that kterm/bin/kterm is" "in its main folder."
     exit 1
 fi
 
@@ -106,10 +118,10 @@ fi
 if ! mounted "$MNT"; then
     {
         echo "not mounted after all; /tmp is: $(ls -ld /tmp)"
-        grep -E "kinlobyte|loop" /proc/mounts
+        grep -E "kilobyteink|loop" /proc/mounts
         ls -l /dev/loop* 2>&1 | head -4
     } >> "$LOG" 2>&1
-    say "Kinlobyte could not open its system" "(kinlobyte.img). Details are in" "kinlobyte/kinlobyte.log."
+    say "KilobytEink could not open its system" "(kilobyteink.img). Details are in" "kilobyteink/kilobyteink.log."
     exit 1
 fi
 {
@@ -119,12 +131,17 @@ fi
     done
     mkdir -p "$MNT/mnt/us"
     mounted "$MNT/mnt/us" || mount -o bind /mnt/us "$MNT/mnt/us"
+    # Documents live next to the image (an image made before the name
+    # changed still points at the old folder).
+    case $(readlink "$MNT/root/Documents" 2>/dev/null) in
+        /mnt/us/kinlobyte/*) ln -sfn /mnt/us/kilobyteink/Documents "$MNT/root/Documents" ;;
+    esac
     # The Kindle's own name server, for the Internet programs.
     cat /etc/resolv.conf > "$MNT/etc/resolv.conf" 2>/dev/null
 } >> "$LOG" 2>&1
 
 # The Kindle's reading interface (the Java "framework", about 100 MB of the
-# 256 MB) is stopped while Kinlobyte runs; kterm only needs the X server,
+# 256 MB) is stopped while KilobytEink runs; kterm only needs the X server,
 # which stays. The screen saver stays off meanwhile: without the reading
 # interface the Kindle would not come back from it properly.
 UI_STOPPED=""

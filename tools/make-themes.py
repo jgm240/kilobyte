@@ -188,7 +188,7 @@ THEMES = {
         sel_key="(WHITE,BLACK,ON)", arrow="(BLACK,WHITE,OFF)", status="(BLACK,WHITE,OFF)",
         gauge="(BLACK,WHITE,OFF)",
     ),
-    # E-ink (Kinlobyte on a Kindle): no colours at all. dialog draws with the
+    # E-ink (KilobytEink on a Kindle): no colours at all. dialog draws with the
     # terminal's own black on white and shows the highlight in reverse video;
     # colours would turn into muddy greys and grey backgrounds.
     "eink": dict(

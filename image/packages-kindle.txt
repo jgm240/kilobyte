@@ -1,4 +1,4 @@
-# Kinlobyte: Kilobyte in a chroot on a jailbroken Kindle (./build.sh --kindle).
+# KilobytEink: Kilobyte in a chroot on a jailbroken Kindle (./build.sh --kindle).
 # Only this list: the Kindle brings its own kernel, drivers, Wi-Fi and screen.
 # No sound, video, X, Wine or firmware; installed without "Recommends".
 bash sudo less nano procps iproute2 iputils-ping ca-certificates curl file

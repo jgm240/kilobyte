@@ -41,7 +41,7 @@ play() { # play FILE
         # Saved games go next to the story. Ctrl-C ends the story at once.
         (cd "$DIR" && kb_guarded '' "$frotz" "$1")
     else
-        # Frotz will not run as root (Kinlobyte on a Kindle is root): it plays
+        # Frotz will not run as root (KilobytEink on a Kindle is root): it plays
         # as "nobody", in a folder of its own that keeps the saved games.
         local play=/var/lib/kilobyte/stories
         mkdir -p "$play" && chown 65534:65534 "$play"

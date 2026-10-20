@@ -44,17 +44,17 @@ case $ARCH in
     *) echo "unknown ARCH $ARCH" >&2; exit 2 ;;
 esac
 EFI32=${EFI32:-} FOREIGN=${FOREIGN:-} KERNEL_SUITE=${KERNEL_SUITE:-} RPI_REPO=${RPI_REPO:-}
-# Kinlobyte (KINDLE=1, 32-bit ARM): Kilobyte in a chroot on a jailbroken
+# KilobytEink (KINDLE=1, 32-bit ARM): Kilobyte in a chroot on a jailbroken
 # Kindle, which brings its own kernel, drivers and screen.
 KINDLE=${KINDLE:-}
 if [ -n "$KINDLE" ]; then
-    [ "$ARCH" = armhf ] || { echo "Kinlobyte is built for armhf" >&2; exit 2; }
+    [ "$ARCH" = armhf ] || { echo "KilobytEink is built for armhf" >&2; exit 2; }
     KIND=kindle KERNEL= EFI=
 fi
 RPI_MIRROR=http://archive.raspberrypi.com/debian
 RPI_KEY=/usr/share/keyrings/raspberrypi-archive-keyring.pgp
 if [ $KIND = kindle ]; then
-    NAME="kinlobyte-$VERSION"
+    NAME="kilobyteink-$VERSION"
 elif [ $KIND = pc ]; then
     NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}${CD:+-cd}"
 else
@@ -197,7 +197,7 @@ base_key() {
 stage_base() {
     local packages key age
     local lists=(/src/image/packages.txt "/src/image/packages-$KIND.txt")
-    # Kinlobyte: its own list and nothing else (no kernel, firmware or Wine).
+    # KilobytEink: its own list and nothing else (no kernel, firmware or Wine).
     [ $KIND = kindle ] && lists=(/src/image/packages-kindle.txt)
     # The CD version (CD=1) has its own list for the architecture, if there is one.
     if [ -n "${CD:-}" ] && [ -f "/src/image/packages-$ARCH-cd.txt" ]; then
@@ -449,7 +449,7 @@ EOF
 
 # The image is in /out: what is left in the work volume is only worth keeping
 # if it saves time next time, and that is the base system and the caches.
-# Kinlobyte: the system as an ext3 image file (the Kindle's 3.0 kernel reads
+# KilobytEink: the system as an ext3 image file (the Kindle's 3.0 kernel reads
 # ext3; its own USB storage is FAT32, which cannot hold a Linux system), and
 # the scriptlet that starts it, as a ZIP to unpack onto the Kindle.
 stage_kindlezip() {
@@ -457,18 +457,18 @@ stage_kindlezip() {
     [ -d "$r" ] || { echo "no root file system: run the rootfs stage first" >&2; exit 1; }
     echo "==> Writing /out/$NAME.zip (Kindle Paperwhite 2 and other jailbroken Kindles)"
     tools e2fsprogs zip
-    rm -rf "$z" && mkdir -p "$z/kinlobyte" "$z/documents"
+    rm -rf "$z" && mkdir -p "$z/kilobyteink" "$z/documents"
     # Room for documents, settings and a few programs from the Store.
     used=$(du -sm "$r" | cut -f1)
     size=$(( used * 13 / 10 + 256 ))
-    mke2fs -q -t ext3 -L kinlobyte -m 0 -d "$r" "$z/kinlobyte/kinlobyte.img" "${size}M"
-    install -m 755 /src/kindle/Kinlobyte.sh "$z/documents/Kinlobyte.sh"
-    install -m 755 /src/kindle/enter.sh "$z/kinlobyte/enter.sh"
-    install -m 644 /src/kindle/kinlobyte.conf /src/kindle/README.txt "$z/kinlobyte/"
-    install -m 644 /src/LICENSE "$z/kinlobyte/COPYING"
+    mke2fs -q -t ext3 -L kilobyteink -m 0 -d "$r" "$z/kilobyteink/kilobyteink.img" "${size}M"
+    install -m 755 /src/kindle/KilobytEink.sh "$z/documents/KilobytEink.sh"
+    install -m 755 /src/kindle/enter.sh "$z/kilobyteink/enter.sh"
+    install -m 644 /src/kindle/kilobyteink.conf /src/kindle/README.txt "$z/kilobyteink/"
+    install -m 644 /src/LICENSE "$z/kilobyteink/COPYING"
     mkdir -p /out
     rm -f "/out/$NAME.zip.tmp"
-    (cd "$z" && zip -q -r -6 "/out/$NAME.zip.tmp" documents kinlobyte)
+    (cd "$z" && zip -q -r -6 "/out/$NAME.zip.tmp" documents kilobyteink)
     mv "/out/$NAME.zip.tmp" "/out/$NAME.zip"
     rm -rf "$z"
     ls -lh "/out/$NAME.zip"

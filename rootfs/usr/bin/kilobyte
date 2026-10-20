@@ -194,7 +194,7 @@ apps_table() {
     fi
 }
 
-# On a Kindle (Kinlobyte) there is no sound, no graphics screen and nothing to
+# On a Kindle (KilobytEink) there is no sound, no graphics screen and nothing to
 # turn off: those programs are left out, and so are animations, which an
 # e-ink screen cannot keep up with. YouTube and the Video Player stay: they
 # save videos and sound, and play as text blocks (silently) in the terminal.
@@ -462,7 +462,7 @@ tiles_args() {
 
 shut_down() {
     if [ "$KB_VARIANT" = kindle ]; then
-        kb_yesno "Exit" "Leave Kinlobyte and go back to the Kindle?" 7 50 && exit 0
+        kb_yesno "Exit" "Leave KilobytEink and go back to the Kindle?" 7 50 && exit 0
         return
     fi
     kb_yesno "Shut Down" "Turn off the computer now?" || return
@@ -477,7 +477,7 @@ shut_down() {
 quit_menu() {
     local sel items=()
     if [ "$KB_VARIANT" = kindle ]; then
-        kb_yesno "Exit" "Leave Kinlobyte and go back to the Kindle?" 7 50 && return 10
+        kb_yesno "Exit" "Leave KilobytEink and go back to the Kindle?" 7 50 && return 10
         return 0
     fi
     [ -n "${KILOBYTE_DESK:-}" ] && items+=(Close "Close this window" "The other windows stay open")

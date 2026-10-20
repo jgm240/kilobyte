@@ -19,7 +19,7 @@ dpkg-query -W -f '${source:Package} ${source:Version}\n' | sort -u > /usr/share/
 
 case $VARIANT in
 kindle)
-    # Kinlobyte: started in a chroot by documents/Kinlobyte.sh on a jailbroken
+    # KilobytEink: started in a chroot by documents/KilobytEink.sh on a jailbroken
     # Kindle, as root (the Kindle's kterm is a root shell). No services, no
     # boot loader, no kernel: the Kindle runs those. Black on white, no
     # windows: an e-ink screen cannot keep up with moving windows.
@@ -35,7 +35,7 @@ kindle)
     # Videos as text blocks: the finer block modes need the PC text console.
     echo text > /root/.config/kilobyte/player-mode
     # Documents live next to the image, where a computer sees them over USB.
-    ln -sfn /mnt/us/kinlobyte/Documents /root/Documents
+    ln -sfn /mnt/us/kilobyteink/Documents /root/Documents
     # The package lists come back with Settings > Add or remove programs.
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin /var/log/*.log /tmp/* /root/.bash_history

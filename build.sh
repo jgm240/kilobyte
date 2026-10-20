@@ -10,7 +10,7 @@
 #   ./build.sh --lite ...       leave the big Wi-Fi firmware out
 #   ./build.sh --cd ...         CD version: DOSBox instead of Wine, so the
 #                               32-bit PC ISO fits on a 650 MB CD
-#   ./build.sh --kindle         Kinlobyte: Kilobyte for jailbroken Kindles
+#   ./build.sh --kindle         KilobytEink: Kilobyte for jailbroken Kindles
 #                               (Paperwhite 2 and others), a ZIP with a scriptlet
 #   ./build.sh --fresh ...      build the Debian base system anew (it is
 #                               otherwise reused for two weeks, unless the

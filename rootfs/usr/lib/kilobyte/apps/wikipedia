@@ -7,7 +7,7 @@
 
 T="Encyclopedia"
 if [ "$KB_VARIANT" = kindle ]; then
-    DIR=/mnt/us/kinlobyte/Wikipedia        # the Kindle's storage, where USB sees it
+    DIR=/mnt/us/kilobyteink/Wikipedia        # the Kindle's storage, where USB sees it
 else
     DIR="$HOME/Wikipedia"
 fi
