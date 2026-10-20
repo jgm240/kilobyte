@@ -13,7 +13,7 @@ text-mode programs, plus a few small Python programs for the real-time parts
 It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
 ```
- ■ Kilobyte 1.3  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
+ ■ Kilobyte 1.5  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
  ─────────────────────────────────────────────────────────────────────────
 
          ┌──────────── Program Manager ────────────┐   ┌─── Weather ───────
@@ -276,13 +276,13 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 
 | Image | For | Build |
 |---|---|---|
-| `kilobyte-1.4-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
-| `kilobyte-1.4-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
-| `kilobyte-1.4-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
-| `kilobyte-1.4-i386-cd.iso` | The same for a 650 MB CD (PCs and laptops that only start from CDs): DOSBox for DOS programs instead of Wine; starts without windows | `./build.sh --arch i386 --cd` |
-| `kilobyte-1.4-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400, 5, 500, Zero 2 W (with Raspberry Pi's own kernel) | `./build.sh --arch arm64` |
-| `kilobyte-1.4-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
-| `kilobyte-1.4-raspberrypi-armel.img.xz` | Raspberry Pi 1, Zero, Zero W (ARMv6); no Windows programs, and it starts without windows | `./build.sh --arch armel` |
+| `kilobyte-1.5-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
+| `kilobyte-1.5-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
+| `kilobyte-1.5-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
+| `kilobyte-1.5-i386-cd.iso` | The same for a 650 MB CD (PCs and laptops that only start from CDs): DOSBox for DOS programs instead of Wine; starts without windows | `./build.sh --arch i386 --cd` |
+| `kilobyte-1.5-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400, 5, 500, Zero 2 W (with Raspberry Pi's own kernel) | `./build.sh --arch arm64` |
+| `kilobyte-1.5-raspberrypi-armhf.img.xz` | Raspberry Pi 2, 3 (32-bit) | `./build.sh --arch armhf` |
+| `kilobyte-1.5-raspberrypi-armel.img.xz` | Raspberry Pi 1, Zero, Zero W (ARMv6); no Windows programs, and it starts without windows | `./build.sh --arch armel` |
 
 `./build.sh --arch all` builds all five (the PC builds also write a
 `-usb.img`).
@@ -308,7 +308,7 @@ is 64-bit (old EFI 1.x PCs, the first Intel Macs); Setup installs both, at
 the removable-media paths that every firmware looks at.
 
 **Intel Macs** (and UEFI PCs that don't list the ISO stick in their boot
-menu): write `kilobyte-1.4-amd64-usb.img` to the stick instead (`dd`, Etcher),
+menu): write `kilobyte-1.5-amd64-usb.img` to the stick instead (`dd`, Etcher),
 hold ⌥ Option at the chime and choose **EFI Boot**. It is a plain stick: one
 FAT32 EFI partition with GRUB, the kernel and the live system, listed in both
 a GPT and a hybrid MBR, which is what Apple's firmware looks for. The hybrid
