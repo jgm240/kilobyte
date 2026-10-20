@@ -15,7 +15,7 @@ WHAT YOU NEED
       https://github.com/bfabiszewski/kterm/releases
       kterm-kindle-2.6.zip for firmware up to 5.16.3,
       kterm-kindle-2.6-armhf.zip for newer firmware.
-  - About 1 GB free.
+  - About 1.2 GB free.
 
 
 INSTALLING

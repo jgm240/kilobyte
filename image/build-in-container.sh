@@ -468,7 +468,9 @@ stage_kindlezip() {
     install -m 644 /src/LICENSE "$z/kilobyteink/COPYING"
     mkdir -p /out
     rm -f "/out/$NAME.zip.tmp"
-    (cd "$z" && zip -q -r -6 "/out/$NAME.zip.tmp" documents kilobyteink)
+    # The start-up packages (tools/make-kindle-boot.sh), when they are built.
+    cp /out/Update_kilobyteink_boot_install.bin /out/Update_kilobyteink_boot_uninstall.bin "$z/" 2>/dev/null || true
+    (cd "$z" && zip -q -r -6 "/out/$NAME.zip.tmp" documents kilobyteink $(cd "$z" && ls Update_*.bin 2>/dev/null))
     mv "/out/$NAME.zip.tmp" "/out/$NAME.zip"
     rm -rf "$z"
     ls -lh "/out/$NAME.zip"
