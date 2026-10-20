@@ -16,6 +16,8 @@
 # was built (packages the owner removed stay removed). It never touches the
 # owner's settings: keyboard, font, host name, Wi-Fi, users.
 set -euo pipefail
+# Anything unexpected stops the update: say so, instead of stopping silently.
+trap 'echo "kb-update: the update stopped unexpectedly (line $LINENO: $BASH_COMMAND)" >&2' ERR
 
 SHARE=/usr/share/kilobyte
 REPO=jgm240/kilobyte
@@ -55,7 +57,7 @@ for c in json.load(sys.stdin):
 }
 
 TMP=""
-cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+cleanup() { [ -z "$TMP" ] || rm -rf "$TMP"; return 0; }
 
 # Package names in the given package list files, one per line.
 package_list() { sed 's/#.*//' "$@" 2>/dev/null | xargs -n 1 | sort -u; }
@@ -160,7 +162,8 @@ install_tree() {
     esac
     # The CD version of the 32-bit PC image has DOSBox instead of Wine.
     local variant="" arch_list
-    { read -r variant < /etc/kilobyte/variant; } 2>/dev/null
+    # (Only the CD version and Kinlobyte have this file.)
+    { read -r variant < /etc/kilobyte/variant; } 2>/dev/null || variant=""
     arch_list="$src/../image/packages-$(dpkg --print-architecture).txt"
     [ -n "$variant" ] && [ -f "$src/../image/packages-$(dpkg --print-architecture)-$variant.txt" ] &&
         arch_list="$src/../image/packages-$(dpkg --print-architecture)-$variant.txt"

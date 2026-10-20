@@ -564,6 +564,7 @@ Your files and settings are kept." $(( 14 + n )) 72 || return
         kb_msg "Kilobyte Update" "\ZbKilobyte was updated.\Zn\n\nThe Program Manager restarts now." 9 50
         exit 42   # tells the Program Manager to restart itself
     fi
+    kb_msg "Kilobyte Update" "\Z1\ZbThe update did not finish.\Zn\n\nThe lines on the screen before said why. Kilobyte stays at ${old:0:7}; try again later." 10 66
 }
 
 # --- Login and startup ----------------------------------------------------
