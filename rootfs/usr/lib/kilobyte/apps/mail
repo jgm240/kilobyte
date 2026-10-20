@@ -90,7 +90,7 @@ postponed-folder=${box}$drafts
 feature-list=enable-arrow-navigation,
 	quell-user-lookup-in-passwd-file,
 	enable-dot-folders
-# Kilobyte colours: white on blue like EDIT.COM, grey title, cyan key bar.
+# Kilobyte colours: white on blue like the classic theme, grey title, cyan key bar.
 color-style=force-ansi-16color
 normal-foreground-color=white
 normal-background-color=blue

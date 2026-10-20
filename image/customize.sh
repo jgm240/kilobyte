@@ -13,6 +13,10 @@ groupadd -f netdev
 mkdir -p /etc/kilobyte
 . /usr/lib/kilobyte/setup-questions.sh     # user_groups, write_autologin
 
+# Where the source code of every package is (see /usr/share/doc/kilobyte/SOURCES).
+mkdir -p /usr/share/doc/kilobyte
+dpkg-query -W -f '${source:Package} ${source:Version}\n' | sort -u > /usr/share/doc/kilobyte/source-packages.txt
+
 case $VARIANT in
 kindle)
     # Kinlobyte: started in a chroot by documents/Kinlobyte.sh on a jailbroken

@@ -167,7 +167,7 @@ run_terminal() {
 
 # --- the programs ------------------------------------------------------------
 # One table for the Program Manager's menus, the Programs menu and the icons
-# of Kilobyte Windows (kilobyte --list-apps), and kb-open:
+# of Kilobyte Desktop (kilobyte --list-apps), and kb-open:
 #
 #   ID|category|name|help line|two characters for an icon|window size
 #
@@ -225,21 +225,21 @@ Mail|internet|Email|Read and write email (Alpine)|M@|L
 Feeds|internet|News feeds|News sites, blogs and YouTube channels in one list (RSS)|≡»|L
 Chat|internet|Chat|Talk in chat rooms (IRC with WeeChat)|☺☺|L
 BBS|internet|BBS Dialer|Call bulletin board systems that still run today|BB|M
-YouTube|internet|YouTube Downloader|Search, watch, read (as text) and save videos or their sound|Yt|M
+YouTube|internet|Online videos|Search YouTube and other video sites; watch, read (as text) or save|Vd|M
 Network|internet|Network drives|Shared folders of Windows PCs and servers (SMB, SFTP)|⌂⌂|M
 Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡→|L
-Citrix|internet|Citrix Workspace|Remote desktops and apps of a company (needs Citrix's program)|Cx|M
+Citrix|internet|Company desktops|Remote desktops and apps of a company or school (with Citrix's own program)|Cx|M
 Video|media|Video Player|Videos and music as coloured blocks or the real picture|Tv|M
 Pictures|media|Pictures|Photos and drawings, shown with coloured blocks|▒▓|M
 Music|media|Music Player|Songs and playlists with dancing bars|♫ |M
-YouTube|media|YouTube Downloader|Search, watch, read (as text) and save videos or their sound|Yt|M
+YouTube|media|Online videos|Search YouTube and other video sites; watch, read (as text) or save|Vd|M
 Disc|media|Disc Player|DVD films, audio CDs and data discs|◘ |M
 Sound|media|Sound volume|alsamixer: arrows change, M mutes, Esc closes|♪ |M
 Paint|accessories|Paint|Paint pictures with blocks; mouse or keyboard; saves PNG and ANSI art|▀▄|L
 Today|accessories|Today|Date, weather, appointments, to-dos and news on one screen|Td|M
 Notes|accessories|Notes|Quick notes with search and #tags, kept in Documents/Notes|Nt|M
 Dictionary|accessories|Dictionary|Look up English words; translate words and sentences|Aa|M
-Wikipedia|accessories|Wikipedia|Wikipedia on this computer: download it once, read it without the Internet|W?|L
+Encyclopedia|accessories|Encyclopedia|Wikipedia on this computer (Kiwix): download it once, read it offline|W?|L
 Calculator|accessories|Calculator|Type an expression, get the answer (bc)|+-|S
 Agenda|accessories|Agenda|Calendar, appointments and to-do list (calcurse; ? inside for help)|31|M
 Clock|accessories|Clock|Big block-letter clock; any key closes it|☼ |S
@@ -268,7 +268,6 @@ Snake|games|Snake|Eat the numbers, grow longer: h j k l steer, q quits|~~|M
 Robots|games|Robots|Outwit the killer robots: hjkl yubn move, t teleports, q quits|R |M
 Hangman|games|Hangman|Guess the word: type letters|_a|M
 Adventure|games|Adventure|Colossal Cave Adventure: type commands such as GO NORTH; QUIT ends|N↑|M
-Trek|games|Trek|Star Trek: type help inside the game|-=|M
 Rain|games|Rain|Rain on the screen; Ctrl+C stops it|' |M
 Worms|games|Worms|Worms on the screen; Ctrl+C stops it|~ |M
 Settings|system|Settings|Wi-Fi, theme, wallpaper, keyboard, date, software, users...|≡≡|M
@@ -314,7 +313,7 @@ run_app() {
         Today)       "$APPS/today" ;;
         Notes)       "$APPS/notes" ;;
         Dictionary)  "$APPS/dictionary" ;;
-        Wikipedia)   "$APPS/wikipedia" ;;
+        Encyclopedia) "$APPS/wikipedia" ;;
         Calculator)  "$APPS/calculator" ;;
         Agenda)      kb_guarded q calcurse ;;
         Clock)       "$APPS/clock" ;;
@@ -343,7 +342,6 @@ run_app() {
         Robots)      kb_run /usr/games/robots ;;
         Hangman)     kb_run /usr/games/hangman ;;
         Adventure)   kb_guarded '' /usr/games/adventure ;;
-        Trek)        kb_guarded '' /usr/games/trek ;;
         Rain)        kb_run /usr/games/rain ;;
         Worms)       kb_run /usr/games/worms ;;
         Settings)
@@ -368,7 +366,7 @@ run_app() {
     esac
 }
 
-# launch ID [ARGUMENTS]: start a program. In Kilobyte Windows it gets a
+# launch ID [ARGUMENTS]: start a program. In Kilobyte Desktop it gets a
 # window of its own and the Program Manager stays where it is; without
 # windows (or inside a program's window) it runs right here.
 launch() {
@@ -429,7 +427,7 @@ saver_minutes() {
 tiles_args() {
     local cols rows weather news wl nl x
     [ -e "$KB_CONF/tiles-off" ] && return
-    [ -n "${KILOBYTE_DESK:-}" ] && return      # Kilobyte Windows shows them on the desktop
+    [ -n "${KILOBYTE_DESK:-}" ] && return      # Kilobyte Desktop shows them on the desktop
     cols=$(tput cols) rows=$(tput lines)
     [ "$cols" -ge 132 ] && [ "$rows" -ge 30 ] || return
     # New weather and news are fetched in the background, at most every five
@@ -512,9 +510,9 @@ program_manager() {
             cats+="$cat "
         done < <(apps_table)
         # Categories with nothing in them (on a Kindle: Media) are left out.
-        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "News feeds, chat, BBS dialer, YouTube, network drives, remote computers...")
+        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "News feeds, chat, BBS dialer, online videos, network drives, remote computers...")
         [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, pictures, discs")
-        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, Wikipedia, sync, paint, calculator, agenda...")
+        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, encyclopedia, sync, paint, calculator, agenda...")
         [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Chess, Sudoku, text adventures, Mines, Solitaire...")
         [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")
         items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
@@ -541,7 +539,7 @@ program_manager() {
         # Idle: the timeout counts toward the screen saver.
         if [ $rc -eq "$DIALOG_TIMEOUT" ]; then
             idle=$(( idle + 30 ))
-            # (In Kilobyte Windows the desktop starts the screen saver, over all windows.)
+            # (In Kilobyte Desktop the desktop starts the screen saver, over all windows.)
             if [ -z "${KILOBYTE_DESK:-}" ] && [ "$(saver_minutes)" -gt 0 ] && [ $idle -ge $(( $(saver_minutes) * 60 )) ] &&
                [ "$(cat "$KB_CONF/saver-mode" 2>/dev/null)" != off ]; then
                 run_saver
@@ -572,7 +570,7 @@ case "${1:-}" in
     --help)      echo "usage: kilobyte [--version | --list-apps | --app ID [ARGUMENTS]]"; exit 0 ;;
     --list-apps) apps_table; exit 0 ;;
     --app)
-        # One program, here (Kilobyte Windows gives it a window of its own).
+        # One program, here (Kilobyte Desktop gives it a window of its own).
         shift
         [ $# -gt 0 ] || { echo "usage: kilobyte --app ID [ARGUMENTS]" >&2; exit 2; }
         export KILOBYTE=1 KB_APP_WINDOW=1
@@ -607,7 +605,7 @@ if [ -z "${KILOBYTE_DESK:-}" ] && [ ! -e "$KB_CONF/windows-off" ] && [ -t 0 ] &&
         # All windows closed: log out, unless windows were just switched off.
         [ -e "$KB_CONF/windows-off" ] || { clear; kb_palette ""; exit 0; }
     else
-        echo "Kilobyte Windows stopped unexpectedly; starting without windows." >&2
+        echo "Kilobyte Desktop stopped unexpectedly; starting without windows." >&2
         sleep 2
     fi
 fi

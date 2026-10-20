@@ -1,7 +1,7 @@
 #!/bin/bash
 # Store: text-mode programs from Debian that fit Kilobyte, to install with a
 # keypress. What is installed shows up in the Program Manager under
-# "More programs" and in the Programs menu of Kilobyte Windows.
+# "More programs" and in the Programs menu of Kilobyte Desktop.
 #
 #   store                 the store
 #   store --table         installed programs, as lines of the Program Manager's

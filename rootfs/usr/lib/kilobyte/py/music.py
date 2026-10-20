@@ -314,7 +314,7 @@ def main(s, args):
                 else:
                     s.put(1 + row, 0, " " * (w - 1), LIGHTGREY, BLACK)
             if not songs:
-                s.put(2, 2, "No music yet. Put songs into ~/Music (the YouTube Downloader saves", LIGHTGREY, BLACK)
+                s.put(2, 2, "No music yet. Put songs into ~/Music (Online videos saves", LIGHTGREY, BLACK)
                 s.put(3, 2, "sound there), or open a song from the file manager.", LIGHTGREY, BLACK)
             y = 1 + list_h
             s.put(y, 0, "─" * (w - 1), DARKGREY, BLACK)

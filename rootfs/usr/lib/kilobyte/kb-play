@@ -19,8 +19,8 @@ mode=${1:-medium}
 src=${2:?usage: kb-play MODE SOURCE [MPV-OPTIONS...]}
 shift 2
 
-# In Kilobyte Windows a window cannot switch the console to a tiny pixel font
-# or show the real picture: for those modes Kilobyte Windows lends the whole
+# In Kilobyte Desktop a window cannot switch the console to a tiny pixel font
+# or show the real picture: for those modes Kilobyte Desktop lends the whole
 # screen while the video plays (KB_FULL_SCREEN is set there). "text" and
 # "audio" play inside the window.
 if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
@@ -32,7 +32,7 @@ if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
             rc=$?
             clear
             [ $rc -ne 125 ] && exit $rc
-            mode=text                  # Kilobyte Windows did not answer: in the window
+            mode=text                  # Kilobyte Desktop did not answer: in the window
             ;;
     esac
 fi

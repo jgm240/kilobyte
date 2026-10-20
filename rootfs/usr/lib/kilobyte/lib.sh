@@ -1,14 +1,14 @@
 # Kilobyte shared helpers. Sourced by every Kilobyte program; never run directly.
 #
 # Everything on screen is drawn by dialog(1): coloured character cells, line
-# drawing and block glyphs, the same way EDIT.COM or raspi-config look.
+# drawing and block glyphs, the way classic text-mode programs and raspi-config look.
 
 KB_VERSION="1.5"
 KB_SHARE=/usr/share/kilobyte
 KB_LIB=/usr/lib/kilobyte
 KB_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/kilobyte"
 KB_DOCS="$HOME/Documents"
-KB_DESKTOP="$HOME/Desktop"      # its files are the icons on the desktop of Kilobyte Windows
+KB_DESKTOP="$HOME/Desktop"      # its files are the icons on the desktop of Kilobyte Desktop
 
 export LANG="${LANG:-C.UTF-8}"
 export ESCDELAY=25   # make Esc react at once instead of after a second
@@ -28,9 +28,19 @@ kb_is_live() { [ -d /run/live/medium ]; }
 
 # --- theme ----------------------------------------------------------------
 
+# Themes that were renamed in Kilobyte 1.5: the old name in, the new one out.
+kb_theme_alias() {
+    case $1 in
+        norton) KB_T=panels ;;   windows) KB_T=cyan ;;  c64) KB_T=lightblue ;;
+        amiga)  KB_T=orange ;;   mac)     KB_T=mono ;;  hotdog) KB_T=mustard ;;
+        *)      KB_T=$1 ;;
+    esac
+}
+
 kb_theme_name() {
     local t="${KB_THEME:-}"
     [ -n "$t" ] || { read -r t < "$KB_CONF/theme"; } 2>/dev/null
+    kb_theme_alias "$t"; t=$KB_T
     [ -n "$t" ] && [ -d "$KB_SHARE/themes/$t" ] || t=classic
     echo "$t"
 }
@@ -57,6 +67,7 @@ kb_load_theme() {
     # (Every Kilobyte script loads this file and so runs this: no programs.)
     local t="${KB_THEME:-}"
     [ -n "$t" ] || { read -r t < "$KB_CONF/theme"; } 2>/dev/null
+    kb_theme_alias "$t"; t=$KB_T
     [ -n "$t" ] && [ -d "$KB_SHARE/themes/$t" ] || t=classic
     local dir="$KB_SHARE/themes/$t"
     export DIALOGRC="$dir/dialogrc"
@@ -124,7 +135,7 @@ kb_volume() {
     esac
 }
 
-# For the menu bar of Kilobyte Windows, five lines: network, battery,
+# For the menu bar of Kilobyte Desktop, five lines: network, battery,
 # "update" when a newer Kilobyte is known, volume, USB sticks (a;b;c).
 kb_status() {
     local net bat vol usb
@@ -139,7 +150,7 @@ kb_backtitle() {
     # (Every dialog shows this line: only shell built-ins here, no programs.)
     local where="${USER:-$(id -un)}@${HOSTNAME:-$(hostname 2>/dev/null)}" note="" bat now
     kb_is_live && where="$where (live)"
-    # In Kilobyte Windows the menu bar above already shows the rest.
+    # In Kilobyte Desktop the menu bar above already shows the rest.
     if [ -n "${KILOBYTE_DESK:-}" ]; then
         printf ' ■ Kilobyte %s  │  %s' "$KB_VERSION" "$where"
         return
@@ -308,7 +319,7 @@ kb_textfile() { # kb_textfile TITLE FILE
     kb_dialog --title " $1 " --exit-label "Close" --textbox "$2" 0 0
 }
 
-# kb_title TEXT: name the window this runs in (Kilobyte Windows' title bar
+# kb_title TEXT: name the window this runs in (Kilobyte Desktop' title bar
 # and taskbar). Does nothing outside a window.
 kb_title() {
     # (A program in a window of its own keeps the name the window was given.)

@@ -42,7 +42,7 @@
                   g types an address, arrow keys move between links,
                   Enter follows one, ← goes back, q quits. Big web apps
                   (web mail, video sites) are too much for it: use the
-                  Email and YouTube programs instead.
+                  Email and Online videos programs instead.
 
    File manager   mc (Midnight Commander). Tab switches panel, F3 views,
                   F4 edits, F5 copies, F6 moves, F7 makes a folder,
@@ -63,7 +63,7 @@
                     pauses, N and P next and previous, + and - volume,
                     S shuffle, R repeat, W saves the list as a playlist,
                     L opens one.
-     YouTube        Search YouTube or paste a link, then watch, save the
+     Online videos  Search YouTube or paste a link, then watch, save the
                     video (MP4) or save only the sound (MP3). If YouTube
                     stops working, choose "Update the downloader".
      Disc Player    DVD films, audio CDs and data discs. DVD menus are not
@@ -148,7 +148,7 @@
    Remote Kilobyte  Internet > Remote Kilobyte uses another Kilobyte computer
                     in a window. On that computer switch on Settings > Remote
                     login first.
-   Citrix           Internet > Citrix Workspace opens the desktops and programs
+   Company desktops Internet > Company desktops opens the desktops and programs
                     of a company or school. Citrix's program is not part of
                     Kilobyte: download its Debian package from citrix.com and
                     choose the file there; it then opens on the graphics screen.
@@ -176,16 +176,16 @@
                   feed is found by itself) or a channel's (youtube.com/@NAME).
                   Inside: Enter opens, q goes back, o opens the page,
                   n next unread, r reloads, ? all keys, Q leaves.
-                  Videos open in the YouTube program.
+                  Videos open in the Online videos program.
    Dictionary     Accessories > Dictionary: English words with WordNet, also
                   without the Internet; translates words and sentences into
                   and from many languages (on-line, by MyMemory).
-   Wikipedia      Accessories > Wikipedia: download a Wikipedia once (from
+   Encyclopedia   Accessories > Encyclopedia: download a Wikipedia once (from
                   130 MB for the most-read articles in short to 50 GB for
                   all of English), then read it without the Internet. Search
                   looks up an article; in the browser q comes back. A .zim
                   file copied into ~/Wikipedia works too.
-   Reading videos YouTube > a video > Read it: what is said, as text with
+   Reading videos Online videos > a video > Read it: what is said, as text with
                   the times, from the video's subtitles or YouTube's own
                   captions. Save keeps it in Documents/Transcripts.
    Sync           Accessories > Sync: keeps Documents the same on your
@@ -198,7 +198,7 @@
  MORE PROGRAMS
  ─────────────
    Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem
-                  sounds), YouTube Downloader.
+                  sounds), Online videos.
    Accessories    Paint: arrows move, Space draws, , and . change colour,
                   P L B X C O F E K choose the tool, S saves, U undoes.
                   Print, USB sticks, Backup, Screen saver and more.

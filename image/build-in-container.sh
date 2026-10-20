@@ -138,11 +138,14 @@ stage_debs() {
 BOX86_VERSION=v0.3.8
 stage_box86() {
     local b="$WORK/box86" v=${BOX86_VERSION#v}
+    # (kilobyte2: the package carries box86's licence, as the MIT licence asks)
+    local deb="box86_$v-1+kilobyte2_armhf.deb"
     mkdir -p "$WORK/debs"
-    if ls "$WORK/debs/box86_$v-"*.deb >/dev/null 2>&1; then
+    if [ -f "$WORK/debs/$deb" ]; then
         echo "(box86 $v already built)"
         return 0
     fi
+    rm -f "$WORK/debs/box86_"*.deb
     echo "==> Building box86 $v for armhf"
     tools ca-certificates curl cmake make python3 gcc-arm-linux-gnueabihf libc6-dev-armhf-cross dpkg-dev
     rm -rf "$b" && mkdir -p "$b/src" && cd "$b/src"
@@ -160,9 +163,10 @@ stage_box86() {
     # Registered for i386 programs at boot by systemd-binfmt.
     [ -f "$b/pkg/etc/binfmt.d/box86.conf" ] && mv "$b/pkg/etc/binfmt.d/box86.conf" "$b/pkg/usr/lib/binfmt.d/"
     rmdir "$b/pkg/etc/binfmt.d" 2>/dev/null || true
+    install -D -m 644 "$b/src/LICENSE" "$b/pkg/usr/share/doc/box86/copyright"
     cat > "$b/pkg/DEBIAN/control" <<CONTROL
 Package: box86
-Version: $v-1+kilobyte1
+Version: $v-1+kilobyte2
 Architecture: armhf
 Maintainer: Kilobyte <kilobyte@users.noreply.github.com>
 Depends: libc6
@@ -175,7 +179,7 @@ Description: Linux userspace x86 emulator with a twist
  Built for Kilobyte from box86 $v (MIT licence).
 CONTROL
     [ -f "$b/pkg/etc/box86.box86rc" ] && echo /etc/box86.box86rc > "$b/pkg/DEBIAN/conffiles"
-    dpkg-deb --root-owner-group -b "$b/pkg" "$WORK/debs/box86_$v-1+kilobyte1_armhf.deb"
+    dpkg-deb --root-owner-group -b "$b/pkg" "$WORK/debs/$deb"
     ls -l "$WORK/debs/"
 }
 
@@ -325,6 +329,8 @@ stage_rootfs() {
     for m in dev sys proc; do umount -l "$r/$m"; done
     trap - EXIT
     rm -f "$r/usr/sbin/policy-rc.d" "$r/tmp/customize.sh"
+    # The source packages of this image, published next to it.
+    cp "$r/usr/share/doc/kilobyte/source-packages.txt" "/out/$NAME-source-packages.txt"
     du -sh "$r"
 }
 

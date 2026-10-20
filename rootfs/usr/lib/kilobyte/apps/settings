@@ -180,8 +180,8 @@ appearance_panel() {
 
 # --- Display --------------------------------------------------------------
 
-# --- Wallpaper: the desktop behind the windows of Kilobyte Windows -------------
-# Kept in $KB_CONF/wallpaper (see py/deskbg.py), which Kilobyte Windows reads
+# --- Wallpaper: the desktop behind the windows of Kilobyte Desktop -------------
+# Kept in $KB_CONF/wallpaper (see py/deskbg.py), which Kilobyte Desktop reads
 # again whenever it changes.
 
 wp_get() { sed -n "s/^$1=//p" "$KB_CONF/wallpaper" 2>/dev/null | tail -n 1; }
@@ -217,7 +217,7 @@ wallpaper_panel() {
             *)       what="Pattern: ${pattern:-classic}" ;;
         esac
         sel=$(kb_dialog --title " Wallpaper " --ok-label "Select" --cancel-label "Back" --menu \
-"The desktop behind the windows of Kilobyte Windows.
+"The desktop behind the windows of Kilobyte Desktop.
 Now: $what" 0 66 0 \
             Pattern    "A pattern of blocks, lines or symbols" \
             Characters "Your own characters, repeated" \
@@ -619,7 +619,7 @@ Kilobyte restarts in windows." 11 60 || return
 Switch them off? All windows close (save your work first) and
 Kilobyte continues with one program at a time." 12 66 || return
         : > "$KB_CONF/windows-off"
-        # Closing every window ends Kilobyte Windows; Kilobyte then carries on without.
+        # Closing every window ends Kilobyte Desktop; Kilobyte then carries on without.
         if [ -n "${KB_DESK_PID:-}" ]; then
             kill -USR1 "$KB_DESK_PID" 2>/dev/null
         fi
@@ -669,7 +669,7 @@ saver_panel() {
         --menu "Start after how many minutes?" 14 40 6 1 "minute" 2 "minutes" 5 "minutes" 10 "minutes" 15 "minutes" 30 "minutes") || return
     echo "$min" > "$KB_CONF/saver-minutes"
     if kb_dialog --title " Screen Saver " $([ -e "$KB_CONF/saver-lock" ] || echo --defaultno) --yesno \
-        "Ask for your password when the screen saver ends?\n\n(Kilobyte Windows; Accessories > Lock the screen locks at once.)" 9 64; then
+        "Ask for your password when the screen saver ends?\n\n(Kilobyte Desktop; Accessories > Lock the screen locks at once.)" 9 64; then
         : > "$KB_CONF/saver-lock"
     else
         rm -f "$KB_CONF/saver-lock"
@@ -685,7 +685,7 @@ tiles_panel() {
         city=$(cat "$KB_CONF/tiles-city" 2>/dev/null)
         unit=$([ -e "$KB_CONF/tiles-fahrenheit" ] && echo "°F" || echo "°C")
         sel=$(kb_dialog --title " Desktop Tiles " --ok-label "Select" --cancel-label "Back" --menu \
-            "Weather and news beside the Program Manager (on screens at\nleast 132 characters wide), in Kilobyte Windows on the desktop." 14 68 4 \
+            "Weather and news beside the Program Manager (on screens at\nleast 132 characters wide), in Kilobyte Desktop on the desktop." 14 68 4 \
             Show  "Show the tiles: $on" \
             City  "Weather for: ${city:-where I am (guessed)}" \
             Units "Temperatures in $unit" \
@@ -985,7 +985,7 @@ $(kb_is_live && printf '\n\\Z1On the live system the password of \"user\" is \"l
     fi
 }
 
-# --- Desktop: which programs have an icon (Kilobyte Windows) --------------------------
+# --- Desktop: which programs have an icon (Kilobyte Desktop) --------------------------
 
 desktop_panel() {
     local cur items=() id cat name rest seen=" " sel
@@ -997,7 +997,7 @@ desktop_panel() {
         items+=("$id" "$name" "$(case $cur in *" $id "*) echo on ;; *) echo off ;; esac)")
     done < <(/usr/bin/kilobyte --list-apps)
     sel=$(kb_dialog --title " Desktop Icons " --ok-label "Save" --cancel-label "Back" --no-tags --separate-output --checklist \
-"Programs with an icon on the desktop of Kilobyte Windows (Space ticks).
+"Programs with an icon on the desktop of Kilobyte Desktop (Space ticks).
 Files and folders you put into ~/Desktop appear there too." 22 70 13 "${items[@]}") || return
     printf '%s\n' "$sel" > "$KB_CONF/desktop-apps"
 }
@@ -1098,7 +1098,7 @@ while true; do
             Hotspot    "Wi-Fi hotspot"                 "Share this computer's Internet connection over Wi-Fi" \
             Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
-            Appearance "Colour theme"                  "EDIT, Norton, Windows 1.0, C64, Amiga, Mac, CRT..." \
+            Appearance "Colour theme"                  "Classic blue, panels, 8-bit, 16-bit, 1984, green and amber screens..." \
             Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
             Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
             Defaults   "Default programs"              "Text editor, web browser, file manager, email, music..." \

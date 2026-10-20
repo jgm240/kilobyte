@@ -1,6 +1,6 @@
 #!/bin/bash
-# YouTube Downloader: search, watch, read (the transcript) and save videos or
-# their sound with yt-dlp. Videos go to ~/Videos, audio to ~/Music.
+# Online videos: search YouTube (or open a link from any site yt-dlp knows),
+# watch, read (the transcript) and save videos or their sound with yt-dlp. Videos go to ~/Videos, audio to ~/Music.
 . /usr/lib/kilobyte/lib.sh
 
 VIDEOS="$HOME/Videos"
@@ -11,14 +11,14 @@ mkdir -p "$VIDEOS" "$MUSIC"
 
 online() {
     getent hosts www.youtube.com >/dev/null 2>&1 && return 0
-    kb_msg "YouTube Downloader" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
+    kb_msg "Online Videos" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
     return 1
 }
 
 show_error() { # show_error TEXT LOGFILE
     local detail
     detail=$(grep -E 'ERROR|error' "$2" 2>/dev/null | tail -n 3 | cut -c1-200)
-    kb_msg "YouTube Downloader" "\Z1\Zb$1\Zn\n\n${detail:-No details.}\n\nIf this keeps happening, choose \"Update the downloader\"." 14 72
+    kb_msg "Online Videos" "\Z1\Zb$1\Zn\n\n${detail:-No details.}\n\nIf this keeps happening, choose \"Update the downloader\"." 14 72
 }
 
 # download URL video|audio [HEIGHT]
@@ -174,7 +174,7 @@ if [ -n "${1:-}" ]; then
 fi
 
 sel=Search
-while sel=$(kb_dialog --title " YouTube Downloader " --default-item "$sel" --ok-label "Select" --cancel-label "Close" \
+while sel=$(kb_dialog --title " Online Videos " --default-item "$sel" --ok-label "Select" --cancel-label "Close" \
     --menu "Watch and save videos. Videos are saved in ~/Videos, sound in ~/Music." 17 72 7 \
     Search  "Search YouTube" \
     Link    "Paste a video link" \

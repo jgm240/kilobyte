@@ -1,7 +1,7 @@
 Welcome to Kilobyte!
 ====================
 
-This is the Editor (mcedit). It works much like EDIT.COM:
+This is the Editor (mcedit). It works like the classic text-mode editors:
 
   F9            open the menu bar at the top
   F2            save

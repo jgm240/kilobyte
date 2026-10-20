@@ -82,9 +82,9 @@ def rc(t):
 
 
 THEMES = {
-    # EDIT.COM / QBasic / Turbo Vision: blue desk, gray boxes, cyan status line.
+    # The classic text-mode look: blue desk, gray boxes, cyan status line.
     "classic": dict(
-        name="Classic Blue (EDIT.COM)", mc="default", palette=CGA,
+        name="Classic Blue", mc="default", palette=CGA,
         screen="(CYAN,BLUE,ON)", dialog="(BLACK,WHITE,OFF)", title="(BLUE,WHITE,OFF)",
         border="(WHITE,WHITE,ON)", border2="(BLACK,WHITE,OFF)",
         btn_on="(WHITE,BLUE,ON)", btn_off="(BLACK,WHITE,OFF)",
@@ -94,9 +94,9 @@ THEMES = {
         sel_key="(RED,BLACK,ON)", arrow="(GREEN,WHITE,ON)", status="(BLACK,CYAN,OFF)",
         gauge="(BLUE,WHITE,ON)",
     ),
-    # Norton Commander: black desk, blue panels with cyan text, cyan bar.
-    "norton": dict(
-        name="Norton Commander", mc="double-lines", palette=CGA,
+    # Two-panel file manager look: black desk, blue panels with cyan text.
+    "panels": dict(
+        name="Blue Panels", mc="double-lines", palette=CGA,
         screen="(CYAN,BLACK,OFF)", dialog="(CYAN,BLUE,ON)", title="(YELLOW,BLUE,ON)",
         border="(CYAN,BLUE,ON)", border2="(CYAN,BLUE,OFF)",
         btn_on="(BLACK,CYAN,OFF)", btn_off="(WHITE,BLUE,ON)",
@@ -106,9 +106,9 @@ THEMES = {
         sel_key="(YELLOW,CYAN,ON)", arrow="(YELLOW,BLUE,ON)", status="(BLACK,CYAN,OFF)",
         gauge="(YELLOW,BLUE,ON)",
     ),
-    # Windows 1.0: cyan desk, white windows, blue title plates.
-    "windows": dict(
-        name="Windows 1.0", mc="default", palette=CGA,
+    # Cyan desk, white windows, blue title plates.
+    "cyan": dict(
+        name="Cyan Desk", mc="default", palette=CGA,
         screen="(BLACK,CYAN,OFF)", dialog="(BLACK,WHITE,OFF)", title="(WHITE,BLUE,ON)",
         border="(BLACK,WHITE,OFF)", border2="(BLACK,WHITE,OFF)",
         btn_on="(WHITE,BLACK,ON)", btn_off="(BLACK,WHITE,OFF)",
@@ -144,10 +144,10 @@ THEMES = {
         sel_key="(BLACK,YELLOW,OFF)", arrow="(YELLOW,BLACK,ON)", status="(BLACK,YELLOW,OFF)",
         gauge="(YELLOW,BLACK,ON)",
     ),
-    # Commodore 64: light blue on blue. The palette puts the C64's light blue
+    # 8-bit home computer: light blue on blue. The palette puts the light blue
     # into the cyan slot, so it can also be a background (selection bar).
-    "c64": dict(
-        name="Commodore 64", mc="default", shadow_on="OFF",
+    "lightblue": dict(
+        name="Light Blue (8-bit)", mc="default", shadow_on="OFF",
         palette="000000 883932 55a049 bfce72 40318d 8b3f96 7869c4 9f9f9f "
                 "626262 b86962 94e089 bfce72 7869c4 8b3f96 7869c4 ffffff",
         screen="(CYAN,BLUE,ON)", dialog="(CYAN,BLUE,ON)", title="(WHITE,BLUE,ON)",
@@ -159,9 +159,9 @@ THEMES = {
         sel_key="(WHITE,CYAN,ON)", arrow="(WHITE,BLUE,ON)", status="(BLUE,CYAN,OFF)",
         gauge="(WHITE,BLUE,ON)",
     ),
-    # Amiga Workbench 1.3: white on Workbench blue, orange highlights.
-    "amiga": dict(
-        name="Amiga Workbench 1.3", mc="default",
+    # 16-bit home computer: white on deep blue, orange highlights.
+    "orange": dict(
+        name="Blue and Orange (16-bit)", mc="default",
         palette="000022 ff8800 0055aa ff8800 0055aa ff8800 0055aa ffffff "
                 "000022 ff8800 ffffff ff8800 0055aa ff8800 ffffff ffffff",
         screen="(WHITE,BLUE,ON)", dialog="(WHITE,BLUE,ON)", title="(BLUE,WHITE,OFF)",
@@ -173,10 +173,10 @@ THEMES = {
         sel_key="(BLUE,YELLOW,OFF)", arrow="(YELLOW,BLUE,OFF)", status="(BLUE,WHITE,OFF)",
         gauge="(YELLOW,BLUE,OFF)",
     ),
-    # The first Macintosh: black on white windows over a grey desktop. The
+    # 1984 monochrome: black on white windows over a grey desktop. The
     # palette makes every colour black, white or grey.
-    "mac": dict(
-        name="Mac System 1", mc="default",
+    "mono": dict(
+        name="Black and White (1984)", mc="default",
         palette="000000 000000 000000 000000 000000 000000 a0a0a0 ffffff "
                 "555555 000000 000000 000000 000000 000000 a0a0a0 ffffff",
         screen="(BLACK,CYAN,OFF)", dialog="(BLACK,WHITE,OFF)", title="(WHITE,BLACK,ON)",
@@ -204,9 +204,9 @@ THEMES = {
         sel_key="(WHITE,BLACK,OFF)", arrow="(BLACK,WHITE,OFF)", status="(WHITE,BLACK,OFF)",
         gauge="(BLACK,WHITE,OFF)",
     ),
-    # Windows 3.1's most famous colour scheme.
-    "hotdog": dict(
-        name="Hot Dog Stand", mc="default",
+    # Red and yellow, loud on purpose.
+    "mustard": dict(
+        name="Ketchup and Mustard", mc="default",
         palette="000000 ff0000 00aa00 ffff00 0000aa aa00aa 00aaaa aaaaaa 555555 ff5555 55ff55 ffff55 5555ff ff55ff 55ffff ffffff",
         screen="(YELLOW,RED,ON)", dialog="(BLACK,YELLOW,OFF)", title="(WHITE,RED,ON)",
         border="(RED,YELLOW,OFF)", border2="(RED,YELLOW,OFF)",

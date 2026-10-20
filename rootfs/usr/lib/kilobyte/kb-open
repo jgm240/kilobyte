@@ -4,7 +4,7 @@
 # "Open with").
 #
 #   --choose   ask which program to use
-#   --here     run in this terminal; otherwise, in Kilobyte Windows, the
+#   --here     run in this terminal; otherwise, in Kilobyte Desktop, the
 #              program gets a window of its own
 . /usr/lib/kilobyte/lib.sh
 

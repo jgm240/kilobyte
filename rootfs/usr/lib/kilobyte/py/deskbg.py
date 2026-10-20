@@ -1,4 +1,4 @@
-"""The desktop of Kilobyte Windows: the wallpaper, the weather and news tiles
+"""The desktop of Kilobyte Desktop: the wallpaper, the weather and news tiles
 on it, and the status shown at the right of the menu bar.
 
 The wallpaper is set in Settings > Wallpaper and kept in

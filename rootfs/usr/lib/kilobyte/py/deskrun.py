@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Ask Kilobyte Windows for something (see screen_request in desk.py).
+"""Ask Kilobyte Desktop for something (see screen_request in desk.py).
 
     deskrun.py play ARGS...              kb-play ARGS on the whole screen; waits
     deskrun.py lock                      the lock screen on the whole screen
@@ -8,7 +8,7 @@
     deskrun.py clip                      put standard input on the clipboard
 
 Exit status: that of the program for play and lock, otherwise 0;
-125 when Kilobyte Windows cannot be reached."""
+125 when Kilobyte Desktop cannot be reached."""
 import json
 import os
 import socket

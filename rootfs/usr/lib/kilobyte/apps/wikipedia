@@ -1,11 +1,11 @@
 #!/bin/bash
-# Wikipedia without the Internet: a copy of Wikipedia (a ZIM file from
+# Encyclopedia: Wikipedia without the Internet. A copy of Wikipedia (a ZIM file from
 # Kiwix, download.kiwix.org) is read through kiwix-serve, on this computer
 # only, in Kilobyte's web browser. ZIM files copied into the Wikipedia folder
 # by hand work too (also other Kiwix libraries: Wiktionary, Gutenberg...).
 . /usr/lib/kilobyte/lib.sh
 
-T="Wikipedia"
+T="Encyclopedia"
 if [ "$KB_VARIANT" = kindle ]; then
     DIR=/mnt/us/kinlobyte/Wikipedia        # the Kindle's storage, where USB sees it
 else

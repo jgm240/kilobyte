@@ -4,7 +4,7 @@
 
 Kilobyte is a small Debian-based Linux system whose desktop is drawn entirely
 with coloured character cells: box-drawing lines, block characters and
-shadows, like EDIT.COM, Norton Commander, Windows 1.0 or `raspi-config`. It
+shadows, like the text-mode programs of the 1980s or `raspi-config`. It
 has no graphics server, no window system and no toolkit. It is shell scripts
 on top of [`dialog`](https://invisible-island.net/dialog/) and classic
 text-mode programs, plus a few small Python programs for the real-time parts
@@ -41,34 +41,34 @@ It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
 | Program Manager entry | Program | |
 |---|---|---|
-| Editor | `mcedit` | EDIT.COM-style editor with a menu bar (F9); also opens and saves DOCX and ODT |
+| Editor | `mcedit` | classic text-mode editor with a menu bar (F9); also opens and saves DOCX and ODT |
 | Spreadsheet | `sc-im` | formulas; opens and saves XLSX, ODS and CSV, `:w` saves |
 | Web | `elinks` | web browser with CSS and JavaScript, menus on Esc |
 | Email | `alpine` | Pine's successor; a setup wizard knows Gmail, Outlook, iCloud, Yahoo, GMX, WEB.DE, Posteo, mailbox.org |
 | Internet › Chat | `weechat` | IRC: pick a network and a room |
 | Internet › BBS Dialer | `telnet`, `ssh`, `luit` | bulletin boards that still run today, with modem sounds and CP437 ANSI art |
-| Internet › News feeds | `newsboat` | news sites, blogs and YouTube channels in one list; finds a site's feed by itself; videos open in the YouTube program |
-| Internet › YouTube Downloader | `yt-dlp` + QuickJS | search, watch, read (the subtitles or automatic captions as text, with times), save video (MP4) or sound (MP3) |
-| Files | `mc` | Midnight Commander, a Norton Commander clone |
+| Internet › News feeds | `newsboat` | news sites, blogs and YouTube channels in one list; finds a site's feed by itself; videos open in the Online videos program |
+| Internet › Online videos | `yt-dlp` + QuickJS | search, watch, read (the subtitles or automatic captions as text, with times), save video (MP4) or sound (MP3) |
+| Files | `mc` | Midnight Commander, a two-panel file manager |
 | Terminal | `bash` | fullscreen shell, `exit` returns |
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
 | Media › Pictures | `mpv` | photos in coloured blocks or the real picture; opens them in Paint |
 | Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
 | Internet › Network drives | `cifs-utils`, `sshfs` | shared folders of Windows PCs, NAS boxes (SMB) and SSH servers (SFTP) as folders in `~/Network` |
 | Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
-| Internet › Citrix Workspace | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
+| Internet › Company desktops | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
 | Media › Music Player | Kilobyte (`ffmpeg`, `aplay`) | songs and playlists with spectrum bars |
 | Accessories › Today | Kilobyte, `calcurse`, wttr.in | the date, weather, appointments, to-dos, headlines and unread feeds on one screen; can open at start-up |
 | Accessories › Notes | Kilobyte | quick notes as text files in `~/Documents/Notes`, with search and `#tags`; opens them in the chosen editor |
 | Accessories › Dictionary | WordNet (`dict-wn`), dict.org, MyMemory | English words without the Internet (WordNet), translation of words and sentences on-line |
-| Accessories › Wikipedia | `kiwix-tools` | downloads a Wikipedia from Kiwix (130 MB to 50 GB, many languages) and reads it in the web browser without the Internet |
+| Accessories › Encyclopedia | `kiwix-tools` | downloads a Wikipedia from Kiwix (130 MB to 50 GB, many languages) and reads it in the web browser without the Internet |
 | Accessories › Sync | `unison` | keeps `~/Documents` the same on several Kilobyte computers and a Kindle, over SSH or through a USB stick; deletions sync too, the newer change wins |
 | Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
 | Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |
 | Accessories › Lock the screen | Kilobyte | hides everything until the user's password is typed |
 | Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
 | Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
-| Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure, Trek |
+| Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure |
 | Games › Chess | Kilobyte, `gnuchess` | chess against GNU Chess (three strengths): arrows and Space, the mouse, or typed moves; the game is kept |
 | Games › Sudoku | `nudoku` | Sudoku in three difficulties |
 | Games › Text adventures | `frotz` | interactive fiction: free classics (9:05, Lost Pig, Bronze, Spider and Web, Anchorhead...) download from the IF Archive with a keypress; own story files in `~/Documents/Stories` |
@@ -90,13 +90,13 @@ is kept in `~/.config/kilobyte/defaults`; the list is
 `/usr/share/kilobyte/defaults.tsv`. A program that is not installed yet is
 installed when chosen. The editor is also `$EDITOR`, and mc's F4 opens it.
 
-**Themes** (Settings › Appearance): Classic Blue (EDIT.COM), Norton
-Commander, Windows 1.0, Commodore 64, Amiga Workbench 1.3, Mac System 1,
-Green Screen, Amber Screen and Hot Dog Stand. On the Linux console the themes
-reprogram the 16-colour palette, so the phosphor, C64, Amiga and Mac themes
-recolour every program.
+**Themes** (Settings › Appearance): Classic Blue, Blue Panels, Cyan Desk,
+Light Blue (8-bit), Blue and Orange (16-bit), Black and White (1984), Green
+Screen, Amber Screen, Ketchup and Mustard, and E-ink. On the Linux console the
+themes reprogram the 16-colour palette, so the phosphor, 8-bit, 16-bit and
+black-and-white themes recolour every program.
 
-**Kilobyte Windows** (`py/desk.py`, `py/deskbg.py`) is a desktop in text
+**Kilobyte Desktop** (`py/desk.py`, `py/deskbg.py`) is a desktop in text
 mode. Every program runs in a window of its own: a pseudo terminal emulated
 with `pyte` and drawn with the same character cells as everything else. The
 Program Manager is one of those windows and stays where it is.
@@ -127,11 +127,11 @@ Program Manager is one of those windows and stays where it is.
   time from Settings; the lock screen (`py/lock.py`) checks the password
   with PAM's `unix_chkpwd`, so it needs no root.
 
-Programs talk to Kilobyte Windows over a private socket (`KB_DESK_SOCK`,
+Programs talk to Kilobyte Desktop over a private socket (`KB_DESK_SOCK`,
 `py/deskrun.py`): open a window for a program, show a note, put text on the
 clipboard, or borrow the whole screen.
 
-**Video in Kilobyte Windows**: a window is a pseudo terminal, so it cannot
+**Video in Kilobyte Desktop**: a window is a pseudo terminal, so it cannot
 switch the console to a pixel font or draw on the screen itself. For the
 block modes and the real picture `kb-play` therefore borrows the whole
 screen: the windows step aside, the video plays exactly as without windows,
@@ -152,7 +152,7 @@ while your programs keep running.
 server on (it is off, and has no host keys, until then); Internet › Remote
 Kilobyte on another computer then runs that Kilobyte in a window. Citrix
 Workspace is proprietary and may not be redistributed, so Kilobyte cannot
-include it: Internet › Citrix Workspace installs the Debian package you
+include it: Internet › Company desktops installs the Debian package you
 download from Citrix (amd64, arm64, armhf) and runs it, and `.ica` files, on
 the graphics screen that Windows programs use (`kb-x`).
 
@@ -429,7 +429,27 @@ version. It is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the details.
 
-This covers Kilobyte's own files (this repository). The images also contain
-Debian and other programs (Wine, box86, yt-dlp, Raspberry Pi's kernel and
-firmware, ...), each under its own licence; on a running system they are in
-`/usr/share/doc/*/copyright`.
+This covers Kilobyte's own files (this repository), with two exceptions: the
+console fonts (`rootfs/usr/share/consolefonts`, made from Debian's
+console-setup fonts in `tools/data`) are under the GPL version 2 or later, and
+the patches in `image/debs` are under the licences of the programs they change
+(dialog: LGPL 2.1; ELinks: GPL 2). Kilobyte's sounds, themes, wallpapers,
+icons and boot logo are its own, made by the scripts in `tools/`.
+
+The images also contain Debian and other programs (Wine, DOSBox, box86, yt-dlp,
+Raspberry Pi's kernel and firmware, ...), each under its own licence; on a
+running system they are in `/usr/share/doc/*/copyright`.
+
+**Source code.** `/usr/share/doc/kilobyte/SOURCES` in every image says where
+the source of each part is, and `source-packages.txt` beside it lists the
+exact Debian source package versions (each release also has that list as
+`NAME-source-packages.txt`). Debian keeps every version at
+[snapshot.debian.org](https://snapshot.debian.org/).
+
+**Names.** Kilobyte is not affiliated with the companies whose services it
+can use or whose names appear in its texts (for example YouTube, Wikipedia,
+Citrix, Microsoft, Apple, Amazon, Raspberry Pi): their names belong to them and
+are used only to say what works with what. Wikipedia articles (CC BY-SA),
+the stories of Text adventures (their authors' terms, from the IF Archive) and
+everything else fetched from the Internet is downloaded by the user, from its
+source, when they ask for it; none of it is part of Kilobyte.

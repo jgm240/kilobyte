@@ -1,5 +1,6 @@
 #!/bin/bash
-# Citrix Workspace: remote desktops and apps of a company or school.
+# Company desktops: remote desktops and apps of a company or school, with
+# Citrix Workspace (Citrix's own program, which the user downloads).
 #
 # Citrix's program is not free software and may not be given away with
 # Kilobyte: it is downloaded from Citrix (who ask you to accept their
@@ -9,7 +10,7 @@
 #   citrix [FILE.ica]     open a connection file downloaded from a company portal
 . /usr/lib/kilobyte/lib.sh
 
-T="Citrix Workspace"
+T="Company Desktops"
 ICA=/opt/Citrix/ICAClient
 URL="https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html"
 

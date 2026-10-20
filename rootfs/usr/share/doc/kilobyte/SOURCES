@@ -1,0 +1,31 @@
+Kilobyte: where the source code is
+==================================
+
+Kilobyte's own programs (everything in /usr/lib/kilobyte, /usr/bin/kilobyte,
+/usr/share/kilobyte and the other files it adds) are free software under the
+GNU General Public License, version 3 or later (/usr/share/kilobyte/COPYING).
+They are their own source code; the project is at
+  https://github.com/jgm240/kilobyte
+
+Everything else in this system comes from other free software projects, each
+under its own licence (/usr/share/doc/*/copyright):
+
+  Debian packages   source-packages.txt (next to this file) lists the source
+                    package and the exact version of every package in this
+                    image when it was made. The source of each one:
+                      apt-get source PACKAGE=VERSION
+                    or https://snapshot.debian.org/package/PACKAGE/VERSION/
+  Kilobyte's own builds of dialog and ELinks (version "+kilobyte"):
+                    Debian's source plus the changes in image/debs/ of the
+                    Kilobyte repository.
+  box86 (Raspberry Pi, 32-bit)
+                    https://github.com/ptitSeb/box86 (MIT licence), the tag
+                    named in its package version.
+  yt-dlp            https://github.com/yt-dlp/yt-dlp (Unlicense), in
+                    /usr/local/bin/yt-dlp; it is itself a Python program.
+  Raspberry Pi kernel and firmware (Raspberry Pi images)
+                    https://archive.raspberrypi.com/debian/ (apt-get source)
+                    and https://github.com/raspberrypi/linux
+
+Each release of Kilobyte on GitHub names the commit it was built from
+(/usr/share/kilobyte/commit); image/build-in-container.sh shows how.

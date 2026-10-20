@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Kilobyte Windows: a desktop with movable windows, in text mode.
+"""Kilobyte Desktop: a desktop with movable windows, in text mode.
 
 Every window is a terminal of its own (a pseudo terminal, emulated with
 pyte) running a program. Windows have a title bar, a close box [X], minimise
@@ -1673,7 +1673,7 @@ class Desk:
         env["KB_FULL_SCREEN"] = "1"
         curses.def_prog_mode()
         curses.endwin()
-        # Ctrl+C is for the program, not for Kilobyte Windows.
+        # Ctrl+C is for the program, not for Kilobyte Desktop.
         old_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         def child_signals():
@@ -1740,7 +1740,7 @@ class Desk:
 if __name__ == "__main__":
     argv = sys.argv[1:] or ["kilobyte"]
     os.environ.setdefault("ESCDELAY", "100")
-    # On the console Kilobyte Windows reads gpm itself; the curses mouse must
+    # On the console Kilobyte Desktop reads gpm itself; the curses mouse must
     # stay off there, or ncurses opens gpm too and takes events from the same
     # connection.
     console = os.environ.get("TERM") == "linux"
