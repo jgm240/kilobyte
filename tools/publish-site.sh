@@ -4,15 +4,17 @@
 # tools/make-web-vm.sh), next to the APT repository in apt/ (kept as it is;
 # tools/publish-apt-repo.sh makes it).
 #
-# The gh-pages branch is only ever made by these scripts: it is published as
-# one fresh commit each time, so the virtual PC's hundreds of MB do not pile
-# up in its history. Everything on it comes from this repository and out/.
+# Big uploads to GitHub time out (HTTP 408) on a slow line, so changes go up
+# in batches of about 40 MB, each pushed by itself; the virtual PC's
+# manifest.json comes last, so the Try page only sees a complete PC.
 set -e
 cd "$(dirname "$0")/.."
 W=out/gh-pages
 REMOTE=$(git remote get-url origin)
 [ -d "$W/.git" ] || git clone -q --branch gh-pages "$REMOTE" "$W"
-git -C "$W" fetch -q origin gh-pages && git -C "$W" reset -q --hard origin/gh-pages
+git -C "$W" fetch -q origin gh-pages
+git -C "$W" checkout -q gh-pages 2>/dev/null || git -C "$W" checkout -q -b gh-pages origin/gh-pages
+git -C "$W" reset -q --hard origin/gh-pages
 
 # The pages (site/; its "try" is only a link to out/web-vm for previewing),
 # then the virtual PC: the emulator, and the disk once it is made.
@@ -55,12 +57,39 @@ print("text Download page: %d files of %s" % (len(items), rel["tag_name"]))
 PY
 : > "$W/.nojekyll"
 
-# One commit with everything, replacing the branch.
-git -C "$W" checkout -q --orphan site-new
-git -C "$W" add -A
-git -C "$W" commit -q -m "Kilobyte website ($(git rev-parse --short HEAD))"
-git -C "$W" branch -q -D gh-pages
-git -C "$W" branch -q -m gh-pages
-git -C "$W" push -q --force origin gh-pages
-du -sh "$W" --exclude=.git 2>/dev/null || du -sh "$W"
+# The changes, in batches.
+push() { # push MESSAGE: commit what is staged and push it, trying again on errors
+    git -C "$W" diff --cached --quiet && return 0
+    git -C "$W" commit -q -m "$1"
+    for try in 1 2 3 4 5; do
+        git -C "$W" push -q origin gh-pages && return 0
+        echo "(push failed, trying again in 20 s)"
+        sleep 20
+    done
+    echo "Pushing failed: run tools/publish-site.sh again later (it carries on)." >&2
+    exit 1
+}
+rev=$(git rev-parse --short HEAD)
+# 1: the pages, the emulator and what was removed (not yet the new manifest)
+git -C "$W" add -A -- . ':!try/disk'
+git -C "$W" add -u -- try/disk ':!try/disk/manifest.json' 2>/dev/null || true
+push "Website ($rev)"
+# 2: the virtual PC's disk pieces and state, about 40 MB at a time
+batch=0 n=0
+git -C "$W" ls-files -o --exclude-standard -- try/disk ':!try/disk/manifest.json' | sort > out/publish-new.txt
+while IFS= read -r f; do
+    git -C "$W" add -- "$f"
+    batch=$(( batch + $(stat -f %z "$W/$f" 2>/dev/null || stat -c %s "$W/$f") ))
+    n=$(( n + 1 ))
+    if [ $batch -ge 40000000 ]; then
+        push "Website: the virtual PC, part ($n files)"
+        echo "  $n of $(wc -l < out/publish-new.txt) files up"
+        batch=0
+    fi
+done < out/publish-new.txt
+git -C "$W" add -u -- try/disk ':!try/disk/manifest.json' 2>/dev/null || true
+push "Website: the virtual PC, last part"
+# 3: the manifest: now the Try page uses the new PC
+git -C "$W" add -A -- try/disk/manifest.json 2>/dev/null || true
+push "Website: the virtual PC is ready ($rev)"
 echo "Published: https://jgm240.github.io/kilobyte/"
