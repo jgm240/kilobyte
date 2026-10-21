@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download Kilobyte</title>
+<meta name="description" content="Download Kilobyte: ISO and USB stick images for PCs, SD card images for every Raspberry Pi, and KilobytEink for Kindles.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./" data-help="Kilobyte 1.5, the newest version">■ Kilobyte 1.5</a>
+  <nav>
+    <a href="./" data-help="What Kilobyte is">Home</a>
+    <a href="download.html" aria-current="page" data-help="ISO, USB stick and SD card images, and the Kindle version">Download</a>
+    <a href="try.html" data-help="Run Kilobyte in this browser, in a virtual PC">Try it</a>
+    <a href="transition.html" data-help="Add Kilobyte to your Debian, Ubuntu or Raspberry Pi OS with one line">Transition</a>
+    <a href="https://github.com/jgm240/kilobyte" data-help="The source code, on GitHub">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <h1 class="big">Download</h1>
+  <p class="lead" id="release">The newest release, from GitHub.</p>
+
+  <section class="box">
+    <h2>Choose your computer</h2>
+    <ul class="menu" id="files">
+      <li><span class="item"><span>Loading</span><span class="d">Asking GitHub for the newest release...</span></span></li>
+    </ul>
+    <p class="dim" style="margin-top:16px">Each file has a <code>.sha256</code> checksum next to it on the
+      <a href="https://github.com/jgm240/kilobyte/releases/latest">release page</a>, which also has the list of
+      source packages of each image.</p>
+  </section>
+
+  <section class="box" id="pc">
+    <h2>PCs</h2>
+    <p><b>USB stick:</b> write the <code>-usb.img</code> file (or the ISO) to the stick with
+      <a href="https://etcher.balena.io/">balenaEtcher</a>, Raspberry Pi Imager ("Use custom"), or on Linux and macOS:</p>
+    <pre data-copy>sudo dd if=kilobyte-1.5-amd64-usb.img of=/dev/sdX bs=4M status=progress</pre>
+    <p><b>CD:</b> burn the CD version's ISO as an image (not as a file). <b>Virtual machine:</b> start the ISO
+      in QEMU, VirtualBox or UTM. Kilobyte runs from the stick or CD; "Install Kilobyte to disk" in the
+      Program Manager puts it on the hard disk (the CD version can also keep Windows 98 next to it).</p>
+  </section>
+
+  <section class="box" id="pi">
+    <h2>Raspberry Pi</h2>
+    <p>Write the <code>.img.xz</code> file to a memory card with Raspberry Pi Imager ("Use custom") or
+      balenaEtcher; no need to unpack it. The first start asks for keyboard, time zone, name and password,
+      and makes the system fill the card.</p>
+  </section>
+
+  <section class="box" id="kindle">
+    <h2>KilobytEink (Kindle)</h2>
+    <p>For a jailbroken Kindle with the Universal Hotfix (scriptlets) and kterm. Copy the folders
+      <code>documents</code> and <code>kilobyteink</code> from the ZIP to the Kindle's main folder over USB;
+      "KilobytEink" then shows up in the Library. The ZIP's <code>README.txt</code> has the details, and
+      <code>Update_kilobyteink_boot_install.bin</code> makes the Kindle start straight into it.</p>
+  </section>
+
+  <section class="box">
+    <h2>Already have Debian?</h2>
+    <p>Debian, Ubuntu or Raspberry Pi OS keep their desktop and get Kilobyte next to it:
+      <a href="transition.html">one line</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <p>Kilobyte is free software under the GNU General Public License, version 3 or later.
+    <a href="https://github.com/jgm240/kilobyte">Source code</a></p>
+</footer>
+<div class="status" role="status">Point at a file to see what it is for.</div>
+<script src="site.js"></script>
+<script>
+// The files of the newest release, from GitHub's API, described for people.
+(function () {
+  "use strict";
+  var KINDS = [
+    [/-amd64\.iso$/, "64-bit PC", "ISO for 64-bit PCs and virtual machines: USB stick, DVD, BIOS and UEFI", "#pc"],
+    [/-amd64-usb\.img$/, "64-bit USB", "USB stick image for UEFI PCs and Intel Macs", "#pc"],
+    [/-i386\.iso$/, "32-bit PC", "ISO for 32-bit PCs, from the Pentium 4 era on", "#pc"],
+    [/-i386-usb\.img$/, "32-bit USB", "USB stick image for 32-bit PCs", "#pc"],
+    [/-i386-cd\.iso$/, "CD version", "Fits a 650 MB CD: for PCs and laptops from the 1990s that start only from CDs", "#pc"],
+    [/-raspberrypi-arm64\.img\.xz$/, "Pi 3, 4, 5", "Raspberry Pi 3, 4, 400, 5, 500 and Zero 2 W", "#pi"],
+    [/-raspberrypi-armhf\.img\.xz$/, "Pi 2, 3 (32)", "Raspberry Pi 2 and 3, 32-bit", "#pi"],
+    [/-raspberrypi-armel\.img\.xz$/, "Pi 1, Zero", "Raspberry Pi 1, Zero and Zero W", "#pi"],
+    [/^(kilobyteink|kinlobyte)-.*\.zip$/, "Kindle", "KilobytEink for jailbroken Kindles (Paperwhite 2 and others)", "#kindle"]
+  ];
+  function size(n) {
+    return n >= 1e9 ? (n / 1e9).toFixed(1) + " GB" : Math.round(n / 1e6) + " MB";
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+  var list = document.getElementById("files");
+  fetch("https://api.github.com/repos/jgm240/kilobyte/releases/latest")
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (rel) {
+      document.getElementById("release").textContent =
+        rel.name + ", " + new Date(rel.published_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ".";
+      var html = "";
+      KINDS.forEach(function (k) {
+        rel.assets.forEach(function (a) {
+          if (!k[0].test(a.name)) return;
+          html += '<li><a href="' + esc(a.browser_download_url) + '" data-help="' + esc(k[2] + " (" + a.name + ")") + '">' +
+            "<span>" + esc(k[1]) + "</span><span class=\"d\">" + esc(a.name) + " · " + size(a.size) + "</span></a></li>";
+        });
+      });
+      list.innerHTML = html || '<li><a href="' + esc(rel.html_url) + '"><span>Release</span><span class="d">See the files on GitHub</span></a></li>';
+    })
+    .catch(function () {
+      list.innerHTML = '<li><a href="https://github.com/jgm240/kilobyte/releases/latest" data-help="GitHub did not answer here; its release page has every file">' +
+        "<span>Releases</span><span class=\"d\">All files, on GitHub</span></a></li>";
+    });
+})();
+</script>
+</body>
+</html>

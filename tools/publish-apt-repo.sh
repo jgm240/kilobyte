@@ -27,7 +27,8 @@ if [ ! -d "$W/.git" ]; then
         mkdir -p "$W" && git -C "$W" init -q -b gh-pages && git -C "$W" remote add origin "$REMOTE"
     fi
 else
-    git -C "$W" pull -q --ff-only origin gh-pages 2>/dev/null || true
+    # (tools/publish-site.sh replaces the branch with one fresh commit.)
+    git -C "$W" fetch -q origin gh-pages && git -C "$W" reset -q --hard origin/gh-pages
 fi
 mkdir -p "$W/apt"
 cp out/kilobyte-transition_*_all.deb "$W/apt/"
@@ -71,7 +72,7 @@ v=$(ls "$W"/apt/kilobyte-transition_*_all.deb | sed 's/.*_\(.*\)_all.deb/\1/' | 
 # The newest package under a name that stays the same, for the one-line
 # install (outside apt/, so the repository lists every version once).
 cp "$W/apt/kilobyte-transition_${v}_all.deb" "$W/kilobyte-transition.deb"
-cat > "$W/index.html" <<HTML
+cat > "$W/apt/index.html" <<HTML
 <!doctype html>
 <html lang="en">
 <head>
@@ -108,15 +109,11 @@ kb autolaunch on    start the computer into Kilobyte
 kb autolaunch off   start the computer into the desktop again</pre>
 </section>
 <p>Kilobyte is free software (GNU GPL 3 or later): <a href="https://github.com/jgm240/kilobyte">github.com/jgm240/kilobyte</a>.
-The packages are signed with the key in <a href="apt/kilobyte-archive-keyring.asc">kilobyte-archive-keyring.asc</a>.</p>
+The packages are signed with the key in <a href="kilobyte-archive-keyring.asc">kilobyte-archive-keyring.asc</a>.</p>
 </main>
 </body>
 </html>
 HTML
-cp "$W/index.html" "$W/apt/index.html"
-sed -i '' 's|href="apt/kilobyte-archive-keyring.asc"|href="kilobyte-archive-keyring.asc"|' "$W/apt/index.html" 2>/dev/null ||
-    sed -i 's|href="apt/kilobyte-archive-keyring.asc"|href="kilobyte-archive-keyring.asc"|' "$W/apt/index.html"
-
 git -C "$W" add -A
 if git -C "$W" diff --cached --quiet; then
     echo "Nothing new to publish."

@@ -1,6 +1,7 @@
 # Kilobyte
 
-**A desktop environment that is not really one.**
+**A desktop environment that is not really one.** Website, downloads and a
+version to try in the browser: <https://jgm240.github.io/kilobyte/>
 
 Kilobyte is a small Debian-based Linux system whose desktop is drawn entirely
 with coloured character cells: box-drawing lines, block characters and
@@ -366,6 +367,11 @@ keeps it up to date. `apt remove` leaves the repository set up (so
 recommends (video, games, the offline encyclopedia...) take a few hundred MB;
 for the bare Program Manager add `--no-install-recommends` after `install`.
 
+The website (`site/`, published with `tools/publish-site.sh`) has a
+Download page, a Transition page and a Try page that runs the CD version in
+the browser with [v86](https://github.com/copy/v86) (`tools/make-web-vm.sh`
+prepares that virtual PC).
+
 `tools/make-transition-deb.sh` builds the package (from `transition/` and
 `rootfs/`), and `tools/publish-apt-repo.sh` signs and publishes the repository.
 
@@ -474,7 +480,8 @@ PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the details.
 
 This covers Kilobyte's own files (this repository), with two exceptions: the
 console fonts (`rootfs/usr/share/consolefonts`, made from Debian's
-console-setup fonts in `tools/data`) are under the GPL version 2 or later, and
+console-setup fonts in `tools/data`) and the website's font made from them
+(`site/fonts`) are under the GPL version 2 or later, and
 the patches in `image/debs` are under the licences of the programs they change
 (dialog: LGPL 2.1; ELinks: GPL 2). Kilobyte's sounds, themes, wallpapers,
 icons and boot logo are its own, made by the scripts in `tools/`.

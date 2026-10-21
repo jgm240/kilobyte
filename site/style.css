@@ -1,0 +1,257 @@
+/* Kilobyte's website: drawn like Kilobyte itself. Everything sits on a grid
+   of 8x16-pixel character cells, in Kilobyte's own console font, with the
+   colours of its themes (tools/make-themes.py). The classic blue one is the
+   default; the theme list at the bottom switches. */
+
+@font-face {
+  font-family: "Kilobyte VGA";
+  src: url("fonts/kilobyte-vga16.woff2") format("woff2"), url("fonts/kilobyte-vga16.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --cell-w: 8px;
+  --cell-h: 16px;
+  /* Classic Blue */
+  --desk: #0000aa;        /* the desktop behind the boxes */
+  --desk-ink: #55ffff;
+  --desk-hi: #ffffff;
+  --box: #aaaaaa;         /* dialog boxes */
+  --ink: #000000;
+  --title: #0000aa;       /* box titles */
+  --light: #ffffff;       /* box border, lit side */
+  --dark: #000000;        /* box border, shaded side */
+  --shadow: #000000;
+  --sel-bg: #000000;      /* the highlighted item */
+  --sel-ink: #ffffff;
+  --key: #aa0000;         /* hot keys, first letters */
+  --sel-key: #ff5555;
+  --btn-bg: #0000aa;      /* the active button */
+  --btn-ink: #ffffff;
+  --btn-key: #ffff55;
+  --status-bg: #00aaaa;   /* the bottom line */
+  --status-ink: #000000;
+  --code-bg: #000000;
+  --code-ink: #aaaaaa;
+  --link: #0000aa;
+}
+html[data-theme="panels"] {
+  --desk: #000000; --desk-ink: #00aaaa; --desk-hi: #ffff55;
+  --box: #0000aa; --ink: #55ffff; --title: #ffff55; --light: #55ffff; --dark: #00aaaa;
+  --sel-bg: #00aaaa; --sel-ink: #000000; --key: #ffff55; --sel-key: #ffff55;
+  --btn-bg: #00aaaa; --btn-ink: #000000; --btn-key: #ffff55;
+  --status-bg: #00aaaa; --status-ink: #000000; --link: #ffffff;
+}
+html[data-theme="cyan"] {
+  --desk: #00aaaa; --desk-ink: #000000; --desk-hi: #ffffff;
+  --box: #ffffff; --ink: #000000; --title: #0000aa; --light: #ffffff; --dark: #000000;
+  --sel-bg: #0000aa; --sel-ink: #ffffff; --key: #0000aa; --sel-key: #ffff55;
+  --btn-bg: #000000; --btn-ink: #ffffff; --btn-key: #ffffff;
+  --status-bg: #0000aa; --status-ink: #ffffff; --link: #0000aa;
+}
+html[data-theme="green"] {
+  --desk: #000000; --desk-ink: #1fb81f; --desk-hi: #4dff4d;
+  --box: #000000; --ink: #1fb81f; --title: #4dff4d; --light: #4dff4d; --dark: #0b3d0b; --shadow: #0b3d0b;
+  --sel-bg: #1fb81f; --sel-ink: #000000; --key: #4dff4d; --sel-key: #000000;
+  --btn-bg: #1fb81f; --btn-ink: #000000; --btn-key: #000000;
+  --status-bg: #1fb81f; --status-ink: #000000; --code-bg: #0b3d0b; --code-ink: #4dff4d; --link: #4dff4d;
+}
+html[data-theme="amber"] {
+  --desk: #000000; --desk-ink: #d98c00; --desk-hi: #ffc34d;
+  --box: #000000; --ink: #d98c00; --title: #ffc34d; --light: #ffc34d; --dark: #4a2a00; --shadow: #4a2a00;
+  --sel-bg: #d98c00; --sel-ink: #000000; --key: #ffc34d; --sel-key: #000000;
+  --btn-bg: #d98c00; --btn-ink: #000000; --btn-key: #000000;
+  --status-bg: #d98c00; --status-ink: #000000; --code-bg: #4a2a00; --code-ink: #ffc34d; --link: #ffc34d;
+}
+html[data-theme="lightblue"] {
+  --desk: #40318d; --desk-ink: #7869c4; --desk-hi: #ffffff;
+  --box: #40318d; --ink: #7869c4; --title: #ffffff; --light: #7869c4; --dark: #7869c4; --shadow: #40318d;
+  --sel-bg: #7869c4; --sel-ink: #40318d; --key: #ffffff; --sel-key: #ffffff;
+  --btn-bg: #7869c4; --btn-ink: #40318d; --btn-key: #ffffff;
+  --status-bg: #7869c4; --status-ink: #40318d; --code-bg: #7869c4; --code-ink: #ffffff; --link: #ffffff;
+}
+html[data-theme="orange"] {
+  --desk: #0055aa; --desk-ink: #ffffff; --desk-hi: #ff8800;
+  --box: #0055aa; --ink: #ffffff; --title: #0055aa; --light: #ffffff; --dark: #000022;
+  --sel-bg: #ff8800; --sel-ink: #000022; --key: #ff8800; --sel-key: #0055aa;
+  --btn-bg: #ff8800; --btn-ink: #000022; --btn-key: #0055aa;
+  --status-bg: #ffffff; --status-ink: #0055aa; --code-bg: #000022; --code-ink: #ffffff; --link: #ff8800;
+}
+html[data-theme="orange"] .box > h2, html[data-theme="cyan"] .box > h2 { background: var(--light); }
+html[data-theme="mono"] {
+  --desk: #a0a0a0; --desk-ink: #000000; --desk-hi: #000000;
+  --box: #ffffff; --ink: #000000; --title: #ffffff; --light: #000000; --dark: #000000;
+  --sel-bg: #000000; --sel-ink: #ffffff; --key: #000000; --sel-key: #ffffff;
+  --btn-bg: #000000; --btn-ink: #ffffff; --btn-key: #ffffff;
+  --status-bg: #ffffff; --status-ink: #000000; --code-bg: #000000; --code-ink: #ffffff; --link: #000000;
+}
+html[data-theme="mono"] .box > h2 { background: #000000; }
+html[data-theme="mustard"] {
+  --desk: #ff0000; --desk-ink: #ffff55; --desk-hi: #ffffff;
+  --box: #ffff00; --ink: #000000; --title: #ffffff; --light: #ff0000; --dark: #ff0000;
+  --sel-bg: #ff0000; --sel-ink: #ffffff; --key: #ff0000; --sel-key: #ffff55;
+  --btn-bg: #ff0000; --btn-ink: #ffff55; --btn-key: #ffffff;
+  --status-bg: #ff0000; --status-ink: #ffff55; --link: #ff0000;
+}
+html[data-theme="mustard"] .box > h2 { background: #ff0000; }
+html[data-theme="eink"] {
+  --desk: #ffffff; --desk-ink: #000000; --desk-hi: #000000;
+  --box: #ffffff; --ink: #000000; --title: #000000; --light: #000000; --dark: #000000; --shadow: #ffffff;
+  --sel-bg: #000000; --sel-ink: #ffffff; --key: #000000; --sel-key: #ffffff;
+  --btn-bg: #000000; --btn-ink: #ffffff; --btn-key: #ffffff;
+  --status-bg: #000000; --status-ink: #ffffff; --code-bg: #ffffff; --code-ink: #000000; --link: #000000;
+}
+html[data-theme="eink"] pre, html[data-theme="eink"] .screen { border: 2px solid #000; }
+
+* { box-sizing: border-box; }
+html { background: var(--desk); }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--desk);
+  color: var(--desk-ink);
+  font: 16px/16px "Kilobyte VGA", ui-monospace, Menlo, Consolas, monospace;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  text-rendering: optimizeSpeed;
+  padding-bottom: calc(var(--cell-h) * 3);
+}
+a { color: inherit; }
+img, canvas { image-rendering: pixelated; }
+::selection { background: var(--sel-bg); color: var(--sel-ink); }
+
+/* The top line: like the line above every Kilobyte screen. */
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--desk); color: var(--desk-hi);
+  border-bottom: 2px solid var(--desk-ink);
+  padding: 8px 16px;
+  display: flex; flex-wrap: wrap; gap: 0 16px; align-items: baseline;
+}
+.topbar .brand { color: var(--desk-hi); text-decoration: none; white-space: nowrap; }
+.topbar nav { display: flex; flex-wrap: wrap; gap: 0; }
+.topbar nav a {
+  color: var(--desk-hi); text-decoration: none; padding: 0 8px; white-space: nowrap;
+  border-left: 0;
+}
+.topbar nav a::before { content: "│ "; color: var(--desk-ink); }
+.topbar nav a[aria-current="page"] { background: var(--desk-hi); color: var(--desk); }
+.topbar nav a:hover, .topbar nav a:focus-visible { background: var(--sel-bg); color: var(--sel-ink); outline: none; }
+
+main { max-width: 864px; margin: 0 auto; padding: 32px 16px 16px; }
+
+/* A dialog box: grey, lit border top-left, dark bottom-right, a black
+   shadow two cells to the right and one down, the title in the frame. */
+.box {
+  position: relative;
+  background: var(--box); color: var(--ink);
+  border: 2px solid; border-color: var(--light) var(--dark) var(--dark) var(--light);
+  outline: 2px solid var(--box);
+  box-shadow: 18px 18px 0 0 var(--shadow);
+  margin: 0 18px 48px 0;
+  padding: 24px 22px 16px;
+}
+.box > h2, .box > h1 {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  margin: 0; padding: 0 8px;
+  background: var(--box); color: var(--title);
+  font-size: 16px; font-weight: normal; white-space: nowrap; max-width: calc(100% - 32px);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.box p { margin: 0 0 16px; }
+.box p:last-child { margin-bottom: 0; }
+.box a { color: var(--link); }
+.lead { color: var(--desk-hi); margin: 0 0 32px; }
+h1.big {
+  color: var(--desk-hi); font-weight: normal; margin: 0 0 16px;
+  font-size: 32px; line-height: 32px;
+}
+@media (min-width: 640px) { h1.big { font-size: 48px; line-height: 48px; } }
+
+/* Menus like dialog's --menu: first letter in the hot-key colour,
+   the highlighted item reversed. */
+.menu { list-style: none; margin: 0; padding: 0; border: 2px solid; border-color: var(--dark) var(--light) var(--light) var(--dark); padding: 8px 0; }
+.menu li a, .menu li button, .menu li .item {
+  display: grid; grid-template-columns: minmax(10ch, 14ch) 1fr; gap: 16px;
+  padding: 0 16px; color: var(--ink); text-decoration: none;
+  background: none; border: 0; font: inherit; width: 100%; text-align: left; cursor: pointer;
+}
+.menu li .k { color: var(--key); }
+.menu li a:hover, .menu li a:focus-visible, .menu li button:hover, .menu li button:focus-visible,
+.menu li .item:hover, .menu li [aria-current="true"] {
+  background: var(--sel-bg); color: var(--sel-ink); outline: none;
+}
+.menu li a:hover .k, .menu li a:focus-visible .k, .menu li button:hover .k, .menu li button:focus-visible .k,
+.menu li [aria-current="true"] .k { color: var(--sel-key); }
+@media (max-width: 520px) { .menu li a, .menu li button, .menu li .item { grid-template-columns: 1fr; gap: 0; } .menu li .d { opacity: .8; padding-left: 2ch; } }
+
+/* Buttons: < OK > */
+.buttons { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 16px; }
+.btn {
+  display: inline-block; font: inherit; cursor: pointer; text-decoration: none;
+  background: var(--box); color: var(--ink); border: 0; padding: 0 8px;
+}
+.btn::before { content: "<"; } .btn::after { content: ">"; }
+.btn > span { padding: 0 8px; }
+.btn .k { color: var(--key); }
+.btn.primary, .btn:hover, .btn:focus-visible { background: var(--btn-bg); color: var(--btn-ink); outline: none; }
+.btn.primary .k, .btn:hover .k, .btn:focus-visible .k { color: var(--btn-key); }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+pre, code { font: inherit; }
+pre {
+  background: var(--code-bg); color: var(--code-ink);
+  padding: 8px 16px; margin: 0 0 16px; overflow-x: auto; white-space: pre;
+}
+.copy { position: relative; }
+.copy pre { padding-top: 24px; }
+.copy button {
+  position: absolute; top: 0; right: 0; font: inherit; cursor: pointer;
+  background: var(--btn-bg); color: var(--btn-ink); border: 0; padding: 0 8px;
+}
+table { border-collapse: collapse; width: 100%; margin: 0 0 16px; }
+th, td { text-align: left; vertical-align: top; padding: 0 16px 0 0; }
+th { color: var(--title); font-weight: normal; }
+tr + tr td { padding-top: 8px; }
+.cols { display: grid; gap: 0 32px; }
+@media (min-width: 760px) { .cols { grid-template-columns: 1fr 1fr; } }
+.dim { opacity: .75; }
+.warn { color: var(--key); }
+
+/* The Program Manager, drawn in text (index.html). */
+.screen {
+  background: var(--desk); color: var(--desk-ink); padding: 16px 0; margin: 0 0 32px;
+  overflow-x: auto;
+}
+.screen pre { background: none; color: inherit; padding: 0 16px; margin: 0; overflow: visible; }
+.c-w { color: #ffffff; } .c-y { color: #ffff55; } .c-g { color: #aaaaaa; } .c-k { color: #000000; }
+.c-r { color: #aa0000; } .c-b { color: #0000aa; } .c-c { color: #55ffff; }
+.b-g { background: #aaaaaa; } .b-k { background: #000000; } .b-b { background: #0000aa; } .b-c { background: #00aaaa; }
+
+/* The bottom line: what the item under the mouse does. */
+.status {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--status-bg); color: var(--status-ink);
+  padding: 8px 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Theme list (footer). */
+.themes { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.themes button {
+  font: inherit; cursor: pointer; border: 0; padding: 0 8px; background: none; color: var(--ink);
+}
+.themes button::before { content: "( ) "; }
+.themes button[aria-pressed="true"]::before { content: "(*) "; }
+.themes button:hover, .themes button:focus-visible { background: var(--sel-bg); color: var(--sel-ink); outline: none; }
+footer { max-width: 864px; margin: 0 auto; padding: 0 16px 32px; color: var(--desk-ink); }
+footer a { color: var(--desk-hi); }
+
+/* Try it: the virtual machine's screen. */
+.vm { background: #000; color: #aaa; margin: 0 0 16px; overflow: auto; min-height: 400px; position: relative; display: flex; justify-content: center; align-items: center; }
+.vm > div { white-space: pre; font: 14px/16px monospace; line-height: normal; }
+.vm canvas { max-width: 100%; height: auto; }
+.vm:focus { outline: 2px solid var(--btn-key); }
+.vm .msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; font: 16px/16px "Kilobyte VGA", monospace; color: #fff; white-space: normal; }
+.bar { height: 16px; background: var(--dark); margin: 8px 0; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--btn-bg); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
