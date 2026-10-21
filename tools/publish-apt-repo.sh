@@ -62,7 +62,7 @@ docker run --rm -v "$PWD/$W/apt:/repo" -v "$KEY:/gpg" -e URL="$URL" debian:trixi
     gpg --batch --yes -abs -o Release.gpg Release
     gpg --batch --yes --export -o kilobyte-archive-keyring.gpg
     gpg --batch --yes --armor --export -o kilobyte-archive-keyring.asc
-    printf "Types: deb\nURIs: %s\nSuites: ./\nSigned-By: /usr/share/keyrings/kilobyte-archive-keyring.gpg\n" "$URL" > kilobyte.sources
+    printf "Types: deb\nURIs: %s\nSuites: ./\nSigned-By: /etc/apt/keyrings/kilobyte-archive-keyring.gpg\n" "$URL" > kilobyte.sources
     chmod -R a+rX /repo
     echo "Packages:"; grep -E "^(Package|Version):" Packages | paste - -
 '

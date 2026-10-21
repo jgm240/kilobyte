@@ -1,4 +1,4 @@
 Types: deb
 URIs: https://jgm240.github.io/kilobyte/apt
 Suites: ./
-Signed-By: /usr/share/keyrings/kilobyte-archive-keyring.gpg
+Signed-By: /etc/apt/keyrings/kilobyte-archive-keyring.gpg

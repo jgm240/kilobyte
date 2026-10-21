@@ -360,8 +360,9 @@ cd /tmp && wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb && 
 
 The package brings its APT repository along (on GitHub Pages: the entry
 `/etc/apt/sources.list.d/kilobyte.sources` and the signing key
-`/usr/share/keyrings/kilobyte-archive-keyring.gpg`), so `sudo apt upgrade`
-keeps it up to date, and removing it removes them too. The packages it
+`/etc/apt/keyrings/kilobyte-archive-keyring.gpg`), so `sudo apt upgrade`
+keeps it up to date. `apt remove` leaves the repository set up (so
+`apt install kilobyte-transition` brings it back); `apt purge` removes it too. The packages it
 recommends (video, games, the offline encyclopedia...) take a few hundred MB;
 for the bare Program Manager add `--no-install-recommends` after `install`.
 
