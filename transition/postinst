@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    mkdir -p /etc/kilobyte
+    echo transition > /etc/kilobyte/variant
+    if [ ! -e /etc/kilobyte/transition ]; then
+        target=$(systemctl get-default 2>/dev/null | tail -n 1)
+        case $target in
+            multi-user.target | "" | *[!A-Za-z0-9.@_-]*) target=graphical.target ;;
+            *.target) ;;
+            *) target=graphical.target ;;
+        esac
+        printf '# kilobyte-transition: written by kb (kb open, kb autolaunch). TTY is the\n# text console Kilobyte runs on.\nTTY=6\nUSER_NAME=\nAUTOLAUNCH=off\nDEFAULT_TARGET=%s\n' "$target" \
+            > /etc/kilobyte/transition
+    fi
+    [ -d /run/systemd/system ] && systemctl daemon-reload || true
+    if [ -z "$2" ]; then
+        echo
+        echo "Kilobyte is installed. Type  kb open  to go to Kilobyte, and  kb close  to come back."
+        echo "kb autolaunch on  makes the computer start into Kilobyte."
+        echo
+    fi
+fi
+exit 0

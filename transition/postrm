@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+case $1 in
+    remove)
+        rm -f /etc/kilobyte/variant ;;
+    purge)
+        rm -f /etc/kilobyte/variant /etc/kilobyte/transition
+        rmdir /etc/kilobyte 2>/dev/null || true ;;
+esac
+[ -d /run/systemd/system ] && systemctl daemon-reload || true
+exit 0

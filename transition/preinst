@@ -1,0 +1,9 @@
+#!/bin/sh
+# kilobyte-transition is for a normal Debian, Ubuntu or Raspberry Pi OS. A
+# Kilobyte image already has Kilobyte, outside any package: leave it alone.
+set -e
+if [ "$1" = install ] && [ -e /usr/lib/kilobyte/lib.sh ] && ! dpkg-query -S /usr/lib/kilobyte/lib.sh >/dev/null 2>&1; then
+    echo "kilobyte-transition: this computer runs Kilobyte already (it updates itself in Settings)." >&2
+    exit 1
+fi
+exit 0

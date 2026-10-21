@@ -1,0 +1,8 @@
+#!/bin/sh
+# Leaving: the computer starts into its desktop again, and Kilobyte's console
+# is an ordinary one.
+set -e
+if [ "$1" = remove ] && [ -x /usr/lib/kilobyte/kb-transition ]; then
+    /usr/lib/kilobyte/kb-transition remove || true
+fi
+exit 0

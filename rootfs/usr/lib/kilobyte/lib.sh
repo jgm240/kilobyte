@@ -167,7 +167,9 @@ kb_backtitle() {
 KB_POWER=${KB_POWER:-/sys/class/power_supply}
 
 # Which Kilobyte this is: "" (a PC or Raspberry Pi image), "cd" (the 32-bit
-# CD version) or "kindle" (KilobytEink, in a chroot on a Kindle).
+# CD version), "kindle" (KilobytEink, in a chroot on a Kindle) or
+# "transition" (the kilobyte-transition package on a normal Debian, Ubuntu or
+# Raspberry Pi OS, next to its own desktop; see /usr/bin/kb).
 KB_VARIANT=""
 { read -r KB_VARIANT < /etc/kilobyte/variant; } 2>/dev/null
 

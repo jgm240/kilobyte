@@ -1,0 +1,129 @@
+#!/bin/sh
+# kb-transition: the root half of "kb" (kilobyte-transition). Run by kb
+# through sudo; not for calling directly.
+#
+#   kb-transition open USER            Kilobyte's console for USER, and show it
+#   kb-transition close USER           show the desktop (start it if needed)
+#   kb-transition autolaunch on|off USER
+#   kb-transition boot                 at start-up (kilobyte-autolaunch.service)
+#   kb-transition remove               undo everything (package removal)
+#
+# Kilobyte's console is tty$TTY (6 unless /etc/kilobyte/transition says
+# otherwise), where getty logs USER in by itself; /etc/profile.d/kilobyte.sh
+# starts Kilobyte there and only there.
+set -e
+CONF=/etc/kilobyte/transition
+TTY=6 USER_NAME="" AUTOLAUNCH=off DEFAULT_TARGET=graphical.target
+[ -r "$CONF" ] && . "$CONF"
+DROPIN=/etc/systemd/system/getty@tty$TTY.service.d/kilobyte.conf
+
+[ "$(id -u)" -eq 0 ] || { echo "kb-transition: needs root (use kb)" >&2; exit 1; }
+
+save_conf() {
+    cat > "$CONF.new" <<CONFIG
+# kilobyte-transition: written by kb (kb open, kb autolaunch). TTY is the
+# text console Kilobyte runs on.
+TTY=$TTY
+USER_NAME=$USER_NAME
+AUTOLAUNCH=$AUTOLAUNCH
+DEFAULT_TARGET=$DEFAULT_TARGET
+CONFIG
+    mv "$CONF.new" "$CONF"
+}
+
+check_user() { # check_user NAME: a real user of this computer
+    [ -n "$1" ] && [ "$1" != root ] && id "$1" >/dev/null 2>&1 ||
+        { echo "kb: \"$1\" is not a user who can run Kilobyte" >&2; exit 1; }
+}
+
+# Kilobyte's console: getty logs USER in by itself on tty$TTY.
+prepare() { # prepare USER
+    local changed=""
+    check_user "$1"
+    mkdir -p "$(dirname "$DROPIN")"
+    new=$(printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM\n' "$1")
+    if [ "$(cat "$DROPIN" 2>/dev/null)" != "$new" ]; then
+        printf '%s\n' "$new" > "$DROPIN"
+        systemctl daemon-reload
+        changed=1
+    fi
+    if [ "$USER_NAME" != "$1" ]; then USER_NAME=$1; save_conf; fi
+    systemctl enable "getty@tty$TTY.service" >/dev/null 2>&1 || true
+    if [ -n "$changed" ] || ! systemctl -q is-active "getty@tty$TTY.service"; then
+        systemctl restart "getty@tty$TTY.service"
+    fi
+    # Kilobyte's font (every block and line character) on its console only.
+    command -v setfont >/dev/null && [ -e /usr/share/consolefonts/Kilobyte-VGA16.psf.gz ] &&
+        setfont -C "/dev/tty$TTY" /usr/share/consolefonts/Kilobyte-VGA16.psf.gz 2>/dev/null || true
+}
+
+# The console of the desktop: the graphical session of USER if there is one,
+# else the login screen.
+desktop_vt() { # desktop_vt USER
+    local s user type class vt best=""
+    for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+        user="" type="" class="" vt=""
+        eval "$(loginctl show-session "$s" -p Name -p Type -p Class -p VTNr 2>/dev/null |
+                sed -n 's/^Name=\([A-Za-z0-9._-]*\)$/user=\1/p; s/^Type=\([a-z0-9]*\)$/type=\1/p;
+                        s/^Class=\([a-z-]*\)$/class=\1/p; s/^VTNr=\([0-9]*\)$/vt=\1/p')"
+        case $type in x11 | wayland | mir) ;; *) continue ;; esac
+        [ -n "$vt" ] && [ "$vt" != 0 ] || continue
+        if [ "$class" = user ] && [ "$user" = "$1" ]; then echo "$vt"; return 0; fi
+        [ -z "$best" ] && best=$vt
+    done
+    [ -n "$best" ] && { echo "$best"; return 0; }
+    return 1
+}
+
+case "${1:-} ${2:-}" in
+    "open "*)
+        prepare "${2:-}"
+        chvt "$TTY" ;;
+    "close "*)
+        user=${2:-$USER_NAME}
+        if ! systemctl -q is-active display-manager.service 2>/dev/null; then
+            systemctl cat display-manager.service >/dev/null 2>&1 ||
+                { echo "kb: this computer has no desktop (no display manager)" >&2; exit 1; }
+            echo "Starting the desktop ..."
+            systemctl start display-manager.service
+        fi
+        i=0
+        while ! vt=$(desktop_vt "$user"); do
+            i=$((i + 1))
+            [ $i -le 30 ] || { echo "kb: the desktop did not come up" >&2; exit 1; }
+            sleep 1
+        done
+        chvt "$vt" ;;
+    "autolaunch on")
+        prepare "${3:-}"
+        cur=$(systemctl get-default 2>/dev/null | tail -n 1)
+        # (Only a plain target name goes into the settings file.)
+        case $cur in
+            multi-user.target | "" | *[!A-Za-z0-9.@_-]*) ;;
+            *.target) DEFAULT_TARGET=$cur ;;
+        esac
+        AUTOLAUNCH=on
+        save_conf
+        systemctl set-default multi-user.target >/dev/null 2>&1
+        systemctl enable kilobyte-autolaunch.service >/dev/null 2>&1 ;;
+    "autolaunch off")
+        AUTOLAUNCH=off
+        save_conf
+        systemctl set-default "${DEFAULT_TARGET:-graphical.target}" >/dev/null 2>&1
+        systemctl disable kilobyte-autolaunch.service >/dev/null 2>&1 || true ;;
+    "boot "*)
+        # Started without the desktop: show Kilobyte's console.
+        [ "$AUTOLAUNCH" = on ] || exit 0
+        systemctl start "getty@tty$TTY.service" || true
+        chvt "$TTY" ;;
+    "remove "*)
+        if [ "$AUTOLAUNCH" = on ]; then
+            systemctl set-default "${DEFAULT_TARGET:-graphical.target}" >/dev/null 2>&1 || true
+        fi
+        systemctl disable kilobyte-autolaunch.service >/dev/null 2>&1 || true
+        systemctl disable "getty@tty$TTY.service" >/dev/null 2>&1 || true
+        rm -f "$DROPIN"
+        rmdir "$(dirname "$DROPIN")" 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true ;;
+    *) echo "usage: kb-transition open|close USER | autolaunch on|off USER | boot | remove" >&2; exit 2 ;;
+esac

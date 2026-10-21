@@ -64,6 +64,9 @@ package_list() { sed 's/#.*//' "$@" 2>/dev/null | xargs -n 1 | sort -u; }
 
 cmd_apply() {
     local sha=${1:-} src
+    if [ "$(cat /etc/kilobyte/variant 2>/dev/null)" = transition ]; then
+        echo "kb-update: kilobyte-transition is updated with apt (sudo apt upgrade)" >&2; exit 1
+    fi
     [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: kb-update apply COMMIT-ID" >&2; exit 2; }
     [ "$(id -u)" -eq 0 ] || { echo "kb-update: apply needs root" >&2; exit 1; }
 

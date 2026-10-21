@@ -1,0 +1,7 @@
+# kilobyte-transition: what Kilobyte's programs may do as root without a
+# password on a normal Debian (shut down, USB sticks, network drives,
+# switching consoles, sounds). Wi-Fi, logins and the rest of kb-root stay
+# with the computer's own tools; "kb" asks for your password.
+%users ALL=(root) NOPASSWD: /usr/lib/kilobyte/kb-root power *, /usr/lib/kilobyte/kb-root usb *, \
+    /usr/lib/kilobyte/kb-root smb *, /usr/lib/kilobyte/kb-root vt switch *, \
+    /usr/lib/kilobyte/kb-root sounds *, /usr/lib/kilobyte/kb-root ytdlp update

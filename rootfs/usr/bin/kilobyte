@@ -481,13 +481,20 @@ quit_menu() {
         return 0
     fi
     [ -n "${KILOBYTE_DESK:-}" ] && items+=(Close "Close this window" "The other windows stay open")
+    if [ "$KB_VARIANT" = transition ]; then
+        # Next to a normal desktop: Kilobyte keeps its own console, and
+        # logging out there would only log in again.
+        items+=(Desktop "Back to the desktop" "Kilobyte stays as it is; \"kb open\" or this menu comes back")
+    else
+        items+=(Logout "Log out" "End this session")
+    fi
     sel=$(submenu "Exit" "Leave Kilobyte." "${items[@]}" \
-        Logout   "Log out"                "End this session" \
         Shell    "Exit to shell"          "Leave Kilobyte; type kilobyte to come back" \
         Restart  "Restart the computer"   "Reboot" \
         Shutdown "Shut down the computer" "Power off") || return 0
     case $sel in
         Close)    return 12 ;;
+        Desktop)  clear; /usr/bin/kb close || { echo; read -r -n 1 -s -p "Press any key." || true; } ;;
         Logout)
             # In windows, log out means closing all of them.
             [ -n "${KB_DESK_PID:-}" ] && kill -USR1 "$KB_DESK_PID" 2>/dev/null
@@ -613,7 +620,8 @@ export KILOBYTE=1
 # Ctrl-Z would suspend Kilobyte and leave a bare shell: switch it off.
 KB_STTY=$(stty -g 2>/dev/null)
 stty susp undef 2>/dev/null
-kb_update_check_later
+# (kilobyte-transition is updated by apt, with the rest of the computer.)
+[ "$KB_VARIANT" = transition ] || kb_update_check_later
 [ -n "${KILOBYTE_DESK:-}" ] || kb_sound startup
 # Today first, if chosen in its Options.
 [ -e "$KB_CONF/today-at-start" ] && "$APPS/today"

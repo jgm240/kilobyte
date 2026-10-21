@@ -137,6 +137,14 @@ case "${1:-} ${2:-}" in
         ;;
     "ytdlp update")
         # The downloader has to keep up with YouTube, faster than Debian can.
+        # (A computer with only Debian's yt-dlp gets its makers' one.)
+        if [ ! -x /usr/local/bin/yt-dlp ]; then
+            mkdir -p /usr/local/bin
+            curl -fsSL --max-time 300 -o /usr/local/bin/yt-dlp.new \
+                https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+            chmod 755 /usr/local/bin/yt-dlp.new
+            mv /usr/local/bin/yt-dlp.new /usr/local/bin/yt-dlp
+        fi
         /usr/local/bin/yt-dlp --update
         ;;
     "power reboot")   systemctl reboot ;;

@@ -326,6 +326,34 @@ Write the Raspberry Pi images to an SD card with Raspberry Pi Imager
 partition to fill the card and asks for keyboard, time zone, computer name
 and your account.
 
+## On a normal Debian, Ubuntu or Raspberry Pi OS
+
+The package **kilobyte-transition** adds Kilobyte to a computer that keeps its
+own desktop. Kilobyte runs on a text console of its own (tty6); the command
+`kb` moves between the two, and each stays as it was while the other shows:
+
+```
+kb open             go to Kilobyte (the first time it starts it)
+kb close            go back to the desktop (starts it if it is not running)
+kb autolaunch on    the computer starts into Kilobyte instead of the desktop
+kb autolaunch off   the computer starts into the desktop again
+```
+
+Exit › "Back to the desktop" in the Program Manager does the same as
+`kb close`. Settings shows only Kilobyte's own settings there (the computer's
+own tools look after the network, users and fonts), and updates come with
+`apt upgrade` instead of Kilobyte Update. From the APT repository on GitHub
+Pages:
+
+```
+sudo curl -fsSLo /usr/share/keyrings/kilobyte-archive-keyring.gpg https://jgm240.github.io/kilobyte/apt/kilobyte-archive-keyring.gpg
+sudo curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources https://jgm240.github.io/kilobyte/apt/kilobyte.sources
+sudo apt update && sudo apt install kilobyte-transition
+```
+
+`tools/make-transition-deb.sh` builds the package (from `transition/` and
+`rootfs/`), and `tools/publish-apt-repo.sh` signs and publishes the repository.
+
 ## Try it in QEMU
 
 ```bash

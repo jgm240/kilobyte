@@ -1,0 +1,11 @@
+[Unit]
+Description=Show Kilobyte at start-up (kilobyte-transition, "kb autolaunch on")
+After=systemd-user-sessions.service getty@tty6.service
+ConditionPathExists=/etc/kilobyte/transition
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/kb-transition boot
+
+[Install]
+WantedBy=multi-user.target

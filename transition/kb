@@ -1,0 +1,48 @@
+#!/bin/sh
+# kb: switch between Kilobyte and this computer's normal desktop
+# (kilobyte-transition: Kilobyte added to a normal Debian, Ubuntu or
+# Raspberry Pi OS). Kilobyte runs on a text console of its own; the desktop
+# keeps running on its own, and each stays as it was while the other shows.
+#
+#   kb open             go to Kilobyte (starts it the first time)
+#   kb close            go back to the desktop (starts it if it is not running)
+#   kb autolaunch on    the computer starts into Kilobyte instead of the desktop
+#   kb autolaunch off   the computer starts into the desktop again
+#   kb autolaunch       say which it is
+HELPER=/usr/lib/kilobyte/kb-transition
+CONF=/etc/kilobyte/transition
+TTY=6
+[ -r "$CONF" ] && . "$CONF"
+
+usage() {
+    sed -n 's/^#   //p' "$0"
+    exit "${1:-0}"
+}
+
+root() { # root ACTION...: the helper as root (sudo asks for your password)
+    if [ "$(id -u)" -eq 0 ]; then
+        "$HELPER" "$@"
+    else
+        sudo "$HELPER" "$@"
+    fi
+}
+
+me=${SUDO_USER:-$(id -un)}
+case "${1:-} ${2:-}" in
+    "open ")
+        if [ "$(tty 2>/dev/null)" = "/dev/tty$TTY" ] && [ -z "${KILOBYTE:-}" ]; then
+            exec kilobyte                     # on Kilobyte's console already
+        fi
+        [ -n "${KILOBYTE:-}" ] && { echo "This is Kilobyte already."; exit 0; }
+        root open "$me" ;;
+    "close ")
+        root close "$me" ;;
+    "autolaunch on")
+        root autolaunch on "$me" && echo "From the next start, the computer starts into Kilobyte. \"kb close\" goes to the desktop." ;;
+    "autolaunch off")
+        root autolaunch off "$me" && echo "From the next start, the computer starts into the desktop. \"kb open\" goes to Kilobyte." ;;
+    "autolaunch ")
+        if [ "${AUTOLAUNCH:-off}" = on ]; then echo "on: the computer starts into Kilobyte"; else echo "off: the computer starts into the desktop"; fi ;;
+    "help " | "--help " | "-h ") usage 0 ;;
+    *) usage 2 ;;
+esac

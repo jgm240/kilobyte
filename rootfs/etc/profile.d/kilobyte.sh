@@ -6,8 +6,14 @@ if grep -q '^CPU implementer.*0x61' /proc/cpuinfo 2>/dev/null; then
 fi
 export BOX64_NOBANNER=1 BOX86_NOBANNER=1
 
-# Start Kilobyte after logging in on a text console (tty1-tty6).
-if [ -z "${KILOBYTE:-}" ] && [ -z "${KILOBYTE_SHELL:-}" ] && [ -t 0 ] \
+# Start Kilobyte after logging in on a text console (tty1-tty6). With
+# kilobyte-transition (Kilobyte added to a normal Debian) only on Kilobyte's
+# own console, the one "kb open" shows.
+KB_ONLY_TTY=""
+[ -r /etc/kilobyte/transition ] && KB_ONLY_TTY=$(sed -n 's/^TTY=\([0-9]*\)$/\1/p' /etc/kilobyte/transition)
+if [ -n "$KB_ONLY_TTY" ] && [ "$(tty)" != "/dev/tty$KB_ONLY_TTY" ]; then
+    :
+elif [ -z "${KILOBYTE:-}" ] && [ -z "${KILOBYTE_SHELL:-}" ] && [ -t 0 ] \
    && [ ! -e "$HOME/.config/kilobyte/noautostart" ] && command -v kilobyte >/dev/null; then
     case $(tty) in
         /dev/tty[1-6])

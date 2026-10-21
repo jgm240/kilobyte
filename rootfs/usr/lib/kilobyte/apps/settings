@@ -1128,6 +1128,14 @@ while true; do
                 [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
             done
             items=("${k[@]}")
+        elif [ "$KB_VARIANT" = transition ]; then
+            # Next to a normal desktop: the computer's own settings look after
+            # the network, login, fonts, printers, users and updates (apt).
+            keep=" Windows Appearance Wallpaper Desktop Defaults Saver Tiles Sound Battery Email Software Tasks About " k=()
+            for ((n = 0; n < ${#items[@]}; n += 3)); do
+                [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
+            done
+            items=("${k[@]}")
         fi
         sel=$(kb_dialog --title " Settings " --item-help --default-item "$sel" \
             --ok-label "Open" --cancel-label "Close" \
