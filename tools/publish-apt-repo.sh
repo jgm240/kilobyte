@@ -59,6 +59,9 @@ docker run --rm -v "$PWD/$W/apt:/repo" -v "$KEY:/gpg" -e URL="$URL" debian:trixi
 '
 
 v=$(ls "$W"/apt/kilobyte-transition_*_all.deb | sed 's/.*_\(.*\)_all.deb/\1/' | sort -V | tail -n 1)
+# The newest package under a name that stays the same, for the one-line
+# install (outside apt/, so the repository lists every version once).
+cp "$W/apt/kilobyte-transition_${v}_all.deb" "$W/kilobyte-transition.deb"
 cat > "$W/index.html" <<HTML
 <!doctype html>
 <html lang="en">
@@ -83,11 +86,10 @@ cat > "$W/index.html" <<HTML
 or Raspberry Pi OS, next to its own desktop.</p>
 <section>
 <h2>Install</h2>
-<pre>sudo curl -fsSLo /usr/share/keyrings/kilobyte-archive-keyring.gpg $URL/kilobyte-archive-keyring.gpg
-sudo curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources $URL/kilobyte.sources
-sudo apt update
-sudo apt install kilobyte-transition</pre>
-<p>Updates then come with <code>sudo apt upgrade</code>.</p>
+<p>One line in a terminal:</p>
+<pre>cd /tmp &amp;&amp; wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb &amp;&amp; sudo apt install ./kilobyte-transition.deb</pre>
+<p>The package sets up this repository too, so updates come with <code>sudo apt upgrade</code>.
+Already have the repository? Then <code>sudo apt install kilobyte-transition</code> is enough.</p>
 </section>
 <section>
 <h2>Use</h2>

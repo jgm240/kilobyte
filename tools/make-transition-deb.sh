@@ -8,9 +8,11 @@ cd "$(dirname "$0")/.."
 mkdir -p out
 docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" debian:trixie bash -c '
     set -e
-    v=$(sed -n "s/^KB_VERSION=\"\(.*\)\"/\1/p" /src/rootfs/usr/lib/kilobyte/lib.sh)-1
+    # The Kilobyte version, then the package revision (transition/revision).
+    v=$(sed -n "s/^KB_VERSION=\"\(.*\)\"/\1/p" /src/rootfs/usr/lib/kilobyte/lib.sh)-$(cat /src/transition/revision)
     p=/tmp/pkg
     install -d $p/DEBIAN $p/usr/bin $p/usr/lib/systemd/system $p/etc/profile.d $p/etc/sudoers.d \
+        $p/etc/apt/sources.list.d $p/usr/share/keyrings \
         $p/usr/share/consolefonts $p/usr/share/doc/kilobyte-transition
     cp -a /src/rootfs/usr/lib/kilobyte $p/usr/lib/kilobyte
     cp -a /src/rootfs/usr/share/kilobyte $p/usr/share/kilobyte
@@ -22,8 +24,11 @@ docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" debian:trixie bash -c '
     install -m 440 /src/transition/sudoers $p/etc/sudoers.d/kilobyte-transition
     install -m 644 /src/transition/kilobyte-autolaunch.service $p/usr/lib/systemd/system/
     install -m 644 /src/transition/copyright $p/usr/share/doc/kilobyte-transition/copyright
+    # Its own APT repository: installing this one file also brings the updates.
+    install -m 644 /src/transition/kilobyte-archive-keyring.gpg $p/usr/share/keyrings/
+    install -m 644 /src/transition/kilobyte.sources $p/etc/apt/sources.list.d/
     install -m 755 /src/transition/preinst /src/transition/postinst /src/transition/prerm /src/transition/postrm $p/DEBIAN/
-    printf "/etc/profile.d/kilobyte.sh\n/etc/sudoers.d/kilobyte-transition\n" > $p/DEBIAN/conffiles
+    printf "/etc/profile.d/kilobyte.sh\n/etc/sudoers.d/kilobyte-transition\n/etc/apt/sources.list.d/kilobyte.sources\n" > $p/DEBIAN/conffiles
     sed "s/@VERSION@/$v/" /src/transition/control.in > $p/DEBIAN/control
     echo "Installed-Size: $(du -sk --exclude=DEBIAN $p | cut -f1)" >> $p/DEBIAN/control
     chmod -R u+rwX,go+rX,go-w $p/usr $p/etc/profile.d

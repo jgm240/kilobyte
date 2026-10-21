@@ -12,6 +12,16 @@ text-mode programs, plus a few small Python programs for the real-time parts
 
 It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
+**Already have Debian, Ubuntu or Raspberry Pi OS?** Add Kilobyte next to your
+desktop with one line, then type `kb open` (and `kb close` to go back):
+
+```bash
+cd /tmp && wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb && sudo apt install ./kilobyte-transition.deb
+```
+
+([more about it](#on-a-normal-debian-ubuntu-or-raspberry-pi-os); the whole
+system as an ISO or SD card image: [Downloads](#downloads-and-builds))
+
 ```
  ■ Kilobyte 1.5  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
  ─────────────────────────────────────────────────────────────────────────
@@ -342,14 +352,18 @@ kb autolaunch off   the computer starts into the desktop again
 Exit › "Back to the desktop" in the Program Manager does the same as
 `kb close`. Settings shows only Kilobyte's own settings there (the computer's
 own tools look after the network, users and fonts), and updates come with
-`apt upgrade` instead of Kilobyte Update. From the APT repository on GitHub
-Pages:
+`apt upgrade` instead of Kilobyte Update. Installing:
 
+```bash
+cd /tmp && wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb && sudo apt install ./kilobyte-transition.deb
 ```
-sudo curl -fsSLo /usr/share/keyrings/kilobyte-archive-keyring.gpg https://jgm240.github.io/kilobyte/apt/kilobyte-archive-keyring.gpg
-sudo curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources https://jgm240.github.io/kilobyte/apt/kilobyte.sources
-sudo apt update && sudo apt install kilobyte-transition
-```
+
+The package brings its APT repository along (on GitHub Pages: the entry
+`/etc/apt/sources.list.d/kilobyte.sources` and the signing key
+`/usr/share/keyrings/kilobyte-archive-keyring.gpg`), so `sudo apt upgrade`
+keeps it up to date, and removing it removes them too. The packages it
+recommends (video, games, the offline encyclopedia...) take a few hundred MB;
+for the bare Program Manager add `--no-install-recommends` after `install`.
 
 `tools/make-transition-deb.sh` builds the package (from `transition/` and
 `rootfs/`), and `tools/publish-apt-repo.sh` signs and publishes the repository.
