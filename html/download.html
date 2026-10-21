@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download Kilobyte (text version)</title>
+<link rel="icon" href="../favicon.ico">
+</head>
+<body>
+<p><a href="index.html">Home</a> | <a href="download.html">Download</a> | <a href="try.html">Try it</a> | <a href="transition.html">Transition</a> | <a href="https://github.com/jgm240/kilobyte">GitHub</a> | <a href="../download.html?graphical">Graphical version</a></p>
+<hr>
+
+<h1>Download</h1>
+<!--DOWNLOADS-->
+<p>Kilobyte 1.4:</p>
+<ul>
+<li><a href="https://github.com/jgm240/kilobyte/releases/download/v1.4/kilobyte-1.4-amd64.iso">kilobyte-1.4-amd64.iso</a>: 64-bit PC (ISO), 994 MB</li>
+<li><a href="https://github.com/jgm240/kilobyte/releases/download/v1.4/kilobyte-1.4-amd64-usb.img">kilobyte-1.4-amd64-usb.img</a>: 64-bit PC (USB stick), 1.0 GB</li>
+<li><a href="https://github.com/jgm240/kilobyte/releases/download/v1.4/kilobyte-1.4-i386-cd.iso">kilobyte-1.4-i386-cd.iso</a>: CD version, for PCs from the 1990s, 502 MB</li>
+<li><a href="https://github.com/jgm240/kilobyte/releases/download/v1.4/kilobyte-1.4-raspberrypi-arm64.img.xz">kilobyte-1.4-raspberrypi-arm64.img.xz</a>: Raspberry Pi 3, 4, 400, 5, 500, Zero 2 W, 489 MB</li>
+<li><a href="https://github.com/jgm240/kilobyte/releases/download/v1.4/kilobyte-1.4-raspberrypi-armhf.img.xz">kilobyte-1.4-raspberrypi-armhf.img.xz</a>: Raspberry Pi 2, 3 (32-bit), 495 MB</li>
+<li><a href="https://github.com/jgm240/kilobyte/releases/download/v1.4/kilobyte-1.4-raspberrypi-armel.img.xz">kilobyte-1.4-raspberrypi-armel.img.xz</a>: Raspberry Pi 1, Zero, Zero W, 357 MB</li>
+</ul>
+<p>Each file has a .sha256 checksum next to it on <a href="https://github.com/jgm240/kilobyte/releases/tag/v1.4">the release page</a>, with the list of source packages of each image.</p>
+<!--/DOWNLOADS-->
+
+<h2>PCs</h2>
+<p><b>USB stick:</b> write the -usb.img file (or the ISO) to the stick with
+balenaEtcher, Raspberry Pi Imager ("Use custom"), or on Linux and macOS:</p>
+<pre>sudo dd if=kilobyte-1.5-amd64-usb.img of=/dev/sdX bs=4M status=progress</pre>
+<p><b>CD:</b> burn the CD version's ISO as an image (not as a file).
+<b>Virtual machine:</b> start the ISO in QEMU, VirtualBox or UTM. Kilobyte runs
+from the stick or CD; "Install Kilobyte to disk" in the Program Manager puts it
+on the hard disk (the CD version can also keep Windows 98 next to it).</p>
+
+<h2>Raspberry Pi</h2>
+<p>Write the .img.xz file to a memory card with Raspberry Pi Imager ("Use
+custom") or balenaEtcher; no need to unpack it. The first start asks for
+keyboard, time zone, name and password, and makes the system fill the card.</p>
+
+<h2>KilobytEink (Kindle)</h2>
+<p>For a jailbroken Kindle with the Universal Hotfix (scriptlets) and kterm.
+Copy the folders documents and kilobyteink from the ZIP to the Kindle's main
+folder over USB; "KilobytEink" then shows up in the Library. The ZIP's
+README.txt has the details.</p>
+
+<h2>Already have Debian?</h2>
+<p>Debian, Ubuntu or Raspberry Pi OS keep their desktop and get Kilobyte next
+to it: <a href="transition.html">one line</a>.</p>
+
+<hr>
+<p>Kilobyte is free software under the GNU General Public License, version 3 or
+later. <a href="https://github.com/jgm240/kilobyte">Source code</a></p>
+</body>
+</html>

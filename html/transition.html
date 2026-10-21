@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kilobyte Transition (text version)</title>
+<link rel="icon" href="../favicon.ico">
+</head>
+<body>
+<p><a href="index.html">Home</a> | <a href="download.html">Download</a> | <a href="try.html">Try it</a> | <a href="transition.html">Transition</a> | <a href="https://github.com/jgm240/kilobyte">GitHub</a> | <a href="../transition.html?graphical">Graphical version</a></p>
+<hr>
+
+<h1>Transition</h1>
+<p><b>Keep your desktop. Add Kilobyte next to it, and switch with one word.</b></p>
+
+<h2>Install</h2>
+<p>On Debian, Ubuntu or Raspberry Pi OS, in a terminal:</p>
+<pre>cd /tmp &amp;&amp; wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb &amp;&amp; sudo apt install ./kilobyte-transition.deb</pre>
+<p>The package brings its own APT repository, so later versions come with
+"sudo apt upgrade". The programs it recommends (video, games, the offline
+encyclopedia) take a few hundred MB; for the Program Manager alone, add
+--no-install-recommends after "install".</p>
+
+<h2>Use</h2>
+<table>
+<tr><td><b>kb open</b></td><td>go to Kilobyte</td></tr>
+<tr><td><b>kb close</b></td><td>go back to the desktop</td></tr>
+<tr><td><b>kb autolaunch on</b></td><td>start the computer into Kilobyte</td></tr>
+<tr><td><b>kb autolaunch off</b></td><td>start into the desktop again</td></tr>
+</table>
+<p>In Kilobyte, Exit &gt; "Back to the desktop" does the same as kb close. kb
+asks for your password: it is for users who may use sudo.</p>
+
+<h2>How it works</h2>
+<p>Kilobyte runs on a text console of its own (the sixth, Ctrl+Alt+F6), where you
+are logged in by yourself. Your desktop keeps running on its own console; kb
+switches between the two, and each stays exactly as you left it.</p>
+<p>Kilobyte leaves the computer's own settings alone: the network, users, fonts,
+printers and updates stay with your desktop's tools.</p>
+<p><b>Removing it:</b> "sudo apt remove kilobyte-transition" puts the computer back
+as it was and keeps the repository; "sudo apt purge kilobyte-transition" removes
+the repository too.</p>
+
+<h2>The repository by hand</h2>
+<pre>sudo curl -fsSLo /etc/apt/keyrings/kilobyte-archive-keyring.gpg https://jgm240.github.io/kilobyte/apt/kilobyte-archive-keyring.gpg
+sudo curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources https://jgm240.github.io/kilobyte/apt/kilobyte.sources
+sudo apt update &amp;&amp; sudo apt install kilobyte-transition</pre>
+
+<hr>
+<p>Kilobyte is free software under the GNU General Public License, version 3 or
+later. <a href="https://github.com/jgm240/kilobyte">Source code</a></p>
+</body>
+</html>

@@ -1,0 +1,33 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: all
+Codename: stable
+Date: Wed, 21 Oct 2026 16:01:52 +0000
+Description: Kilobyte for normal Debian, Ubuntu and Raspberry Pi OS
+Label: Kilobyte
+Origin: Kilobyte
+Suite: stable
+MD5Sum:
+ 6cea64dfdf747eba2d4677898389b1e6             4173 Packages
+ a4ddd4856434e90d03ee7428c11339a0             1105 Packages.gz
+ fdf47f69147a8611e751001b6e815676              189 Release
+SHA1:
+ 9425045333d96a7fd01308cb3bcd9971fdc22157             4173 Packages
+ 5a5ed4f78c3a8210da1f480cef417b6de49e9a6b             1105 Packages.gz
+ 10a63915b81a8e1cb0fc7abbce09d0704ea47e81              189 Release
+SHA256:
+ 2d44c32ac71b38591352f5c639524d9647c9011300a2df79ba6df7fd23c33ccb             4173 Packages
+ 76a8298be1dd04dc1aa4e44f3751934e8e5ba9da09e27f0e855590de6218661f             1105 Packages.gz
+ f9d9e56c70b9336abb89fdd295621f704d6346f630dbfa1c602570336ae4a8ed              189 Release
+SHA512:
+ f62332d9ed4ea2c1f608b6ea0854a1e5d2cbe0d8e4d66cf4efdb8377487a0f9d6d52981dca654d1f8d719b19d5b67cb6cb3688b9fd79f71d4808e8f40734dc65             4173 Packages
+ 3f19781b887e654f628b66dfd105d73364428c43d69f5056638358f676323128618aa1da1817b3022aae4dc2bf7ca5328e2e8e10c2386f7a405c858fbc85b1a8             1105 Packages.gz
+ dd142e80922e759a467638b95064792777572b5a7f2b1b8a2641b1424cd89d58224a5a69955f43e42ff9e7fac7d2887d06224305031ddb20ab2fe0c34b5b6929              189 Release
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQTIcRYaEAR7AXAA7TfbDJjWZaEuBgUCatjh8AAKCRDbDJjWZaEu
+Bh0vAQD6Ty/tjiTJIv1tHzX32DjT4jp31usSUzrcfJbTnbJmuQD9G+Pb17g89Dv2
+++gtW5gEDvr5sBz0ucztRg2HI5MOrQI=
+=7CGE
+-----END PGP SIGNATURE-----

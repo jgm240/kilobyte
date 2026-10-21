@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kilobyte APT repository</title>
+<style>
+  :root { --bg: #0000aa; --fg: #ffffff; --box: #aaaaaa; --ink: #000000; --hi: #55ffff; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  main { max-width: 52rem; margin: 2rem auto; padding: 0 16px; }
+  section { background: var(--box); color: var(--ink); padding: 1rem 1.25rem; margin: 1.25rem 0; box-shadow: 8px 8px 0 #000; }
+  h1 { color: var(--hi); font-size: 1.4rem; } h2 { margin-top: 0; font-size: 1.05rem; }
+  pre { background: #000; color: #fff; padding: .75rem; overflow-x: auto; white-space: pre; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+<h1>■ Kilobyte APT repository</h1>
+<p><b>kilobyte-transition</b> 1.5-3 adds Kilobyte, the text-mode desktop, to a normal Debian, Ubuntu
+or Raspberry Pi OS, next to its own desktop.</p>
+<section>
+<h2>Install</h2>
+<p>One line in a terminal:</p>
+<pre>cd /tmp &amp;&amp; wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb &amp;&amp; sudo apt install ./kilobyte-transition.deb</pre>
+<p>The package sets up this repository too, so updates come with <code>sudo apt upgrade</code>.
+Already have the repository? Then <code>sudo apt install kilobyte-transition</code> is enough.</p>
+</section>
+<section>
+<h2>Use</h2>
+<pre>kb open             go to Kilobyte
+kb close            go back to the desktop
+kb autolaunch on    start the computer into Kilobyte
+kb autolaunch off   start the computer into the desktop again</pre>
+</section>
+<p>Kilobyte is free software (GNU GPL 3 or later): <a href="https://github.com/jgm240/kilobyte">github.com/jgm240/kilobyte</a>.
+The packages are signed with the key in <a href="kilobyte-archive-keyring.asc">kilobyte-archive-keyring.asc</a>.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Text browsers (ELinks, Lynx, w3m...) get the text version, html/: those
+     without JavaScript by the refresh below, the others by the script. ?graphical stays. -->
+<noscript><meta http-equiv="refresh" content="0; url=html/index.html"></noscript>
+<script>
+if (!/[?&]graphical\b/.test(location.search) &&
+    (/\b(ELinks|Links|Lynx|w3m|NetSurf|Dillo|Browsh)\b/i.test(navigator.userAgent) || !document.querySelector || !window.fetch || !window.CSS)) {
+  try { location.replace("html/index.html"); } catch (e) { location.href = "html/index.html"; }
+}
+</script>
+<title>Kilobyte</title>
+<meta name="description" content="Kilobyte: a desktop environment that is not really one. A small Debian-based system whose desktop is drawn with coloured text, for PCs, the Raspberry Pi, Kindles, and next to your desktop.">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="sr" href="html/index.html">Text version of this page</a>
+<header class="topbar">
+  <a class="brand" href="./" data-help="Kilobyte 1.5, the newest version">■ Kilobyte 1.5</a>
+  <nav>
+    <a href="./" aria-current="page" data-help="What Kilobyte is">Home</a>
+    <a href="download.html" data-help="ISO, USB stick and SD card images, and the Kindle version">Download</a>
+    <a href="try.html" data-help="Run Kilobyte in this browser, in a virtual PC">Try it</a>
+    <a href="transition.html" data-help="Add Kilobyte to your Debian, Ubuntu or Raspberry Pi OS with one line">Transition</a>
+    <a href="https://github.com/jgm240/kilobyte" data-help="The source code, on GitHub">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <h1 class="big">Kilobyte</h1>
+  <p class="lead">A desktop environment that is not really one.</p>
+
+  <section class="box">
+    <h2>Program Manager</h2>
+    <p>Choose with the mouse, or try the arrow keys and the first letters on the <a href="try.html">real thing</a>.</p>
+    <ul class="menu">
+      <li><a href="#programs" data-help="Text files and documents (also DOCX, ODT); F9 opens the menus"><span><span class="k">E</span>ditor</span><span class="d">Text editor</span></a></li>
+      <li><a href="#programs" data-help="Tables and formulas, also XLSX and ODS"><span><span class="k">S</span>preadsheet</span><span class="d">Spreadsheet</span></a></li>
+      <li><a href="#programs" data-help="Web pages with CSS and JavaScript (ELinks)"><span><span class="k">W</span>eb</span><span class="d">Web browser</span></a></li>
+      <li><a href="#programs" data-help="Read and write email (Alpine; a setup wizard knows the big providers)"><span><span class="k">M</span>ail</span><span class="d">Email</span></a></li>
+      <li><a href="#programs" data-help="Two-panel file manager (Midnight Commander); F2 has Open with, Trash, Desktop"><span><span class="k">F</span>iles</span><span class="d">File manager</span></a></li>
+      <li><a href="#programs" data-help="News feeds, chat, BBS dialer, online videos, network drives, remote computers"><span><span class="k">I</span>nternet</span><span class="d">Internet  »</span></a></li>
+      <li><a href="#programs" data-help="Video player, music, pictures, discs"><span>M<span class="k">e</span>dia</span><span class="d">Media  »</span></a></li>
+      <li><a href="#programs" data-help="Today, notes, dictionary, encyclopedia, sync, paint, calculator, agenda"><span><span class="k">A</span>ccessories</span><span class="d">Accessories  »</span></a></li>
+      <li><a href="#programs" data-help="Chess, Sudoku, text adventures, Mines, Solitaire"><span><span class="k">G</span>ames</span><span class="d">Games  »</span></a></li>
+      <li><a href="#themes" data-help="Wi-Fi, theme, wallpaper, keyboard, date, software, users"><span>Se<span class="k">t</span>tings</span><span class="d">Settings</span></a></li>
+    </ul>
+    <div class="buttons">
+      <a class="btn primary" href="download.html" data-help="Get Kilobyte for a PC, a Raspberry Pi or a Kindle"><span><span class="k">D</span>ownload</span></a>
+      <a class="btn" href="try.html" data-help="Run Kilobyte in this browser"><span><span class="k">T</span>ry it</span></a>
+      <a class="btn" href="transition.html" data-help="Next to your normal desktop, with one line"><span>T<span class="k">r</span>ansition</span></a>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>What it is</h2>
+    <p>Kilobyte is a small Linux system, made from Debian, whose desktop is drawn entirely with
+      coloured characters: box-drawing lines, block characters and shadows, like the text-mode
+      programs of the 1980s. It has no graphics server and no toolkit. It is shell scripts on top
+      of <code>dialog</code> and classic text-mode programs, plus a few small Python programs for
+      games, Paint, the screen saver and the movable windows of the Kilobyte Desktop.</p>
+    <p>It starts in seconds, runs in 50 MB of memory, and is at home on old PCs, a Raspberry Pi 1,
+      a laptop that only starts from CDs, and an e-ink Kindle.</p>
+  </section>
+
+  <section class="box" id="programs">
+    <h2>Programs</h2>
+    <div class="cols">
+      <table>
+        <tr><th>Work</th></tr>
+        <tr><td>Editor, Spreadsheet (also DOCX, ODT, XLSX, ODS), Email, Web browser, File manager, Terminal, Notes, Agenda, Cardfile, Calculator, Print</td></tr>
+        <tr><th>Internet</th></tr>
+        <tr><td>News feeds, Online videos (watch, save, or read what is said), Chat, BBS dialer, Network drives, Remote Kilobyte, Company desktops</td></tr>
+        <tr><th>Every day</th></tr>
+        <tr><td>Today (weather, appointments, headlines), Dictionary and translator, Encyclopedia (Wikipedia without the Internet), Sync between your computers</td></tr>
+      </table>
+      <table>
+        <tr><th>Media</th></tr>
+        <tr><td>Video player (as coloured blocks, or the real picture), Music player, Pictures, DVDs and CDs, Paint</td></tr>
+        <tr><th>Games</th></tr>
+        <tr><td>Chess, Sudoku, text adventures, Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure</td></tr>
+        <tr><th>Old programs</th></tr>
+        <tr><td>DOS programs and games (DOSBox), Windows programs (Wine), and a Store of text-mode programs from Debian</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>Runs on</h2>
+    <table>
+      <tr><td>PCs</td><td>64-bit and 32-bit, from the Pentium 4 on: ISO and USB stick image; a CD version for PCs from the 1990s</td></tr>
+      <tr><td>Raspberry Pi</td><td>every model, from the Pi 1 and Zero to the Pi 5</td></tr>
+      <tr><td>Kindle</td><td>KilobytEink, for jailbroken Kindles (made on a Paperwhite 2)</td></tr>
+      <tr><td>Your computer</td><td><a href="transition.html">next to the desktop</a> of Debian, Ubuntu or Raspberry Pi OS</td></tr>
+      <tr><td>This browser</td><td><a href="try.html">try it</a> in a virtual PC</td></tr>
+    </table>
+  </section>
+
+  <section class="box" id="themes">
+    <h2>Appearance</h2>
+    <p>Kilobyte has ten colour themes. Try them on this page:</p>
+    <div class="themes" role="group" aria-label="Colour theme"></div>
+  </section>
+</main>
+
+<footer>
+  <p>Kilobyte is free software under the GNU General Public License, version 3 or later.
+    It is not affiliated with the companies whose services it works with.
+    <a href="https://github.com/jgm240/kilobyte">Source code</a> · <a href="html/index.html" data-help="The same pages without pictures, colours or scripts, for text browsers and screen readers">Text version</a></p>
+</footer>
+<div class="status" role="status">Point at something to see what it does.</div>
+<script src="site.js"></script>
+</body>
+</html>

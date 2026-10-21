@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Text browsers (ELinks, Lynx, w3m...) get the text version, html/: those
+     without JavaScript by the refresh below, the others by the script. ?graphical stays. -->
+<noscript><meta http-equiv="refresh" content="0; url=html/try.html"></noscript>
+<script>
+if (!/[?&]graphical\b/.test(location.search) &&
+    (/\b(ELinks|Links|Lynx|w3m|NetSurf|Dillo|Browsh)\b/i.test(navigator.userAgent) || !document.querySelector || !window.fetch || !window.CSS)) {
+  try { location.replace("html/try.html"); } catch (e) { location.href = "html/try.html"; }
+}
+</script>
+<title>Try Kilobyte</title>
+<meta name="description" content="Try Kilobyte in your browser: the real system in a virtual PC (v86), nothing to install.">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="sr" href="html/try.html">Text version of this page</a>
+<header class="topbar">
+  <a class="brand" href="./" data-help="Kilobyte 1.5, the newest version">■ Kilobyte 1.5</a>
+  <nav>
+    <a href="./" data-help="What Kilobyte is">Home</a>
+    <a href="download.html" data-help="ISO, USB stick and SD card images, and the Kindle version">Download</a>
+    <a href="try.html" aria-current="page" data-help="Run Kilobyte in this browser, in a virtual PC">Try it</a>
+    <a href="transition.html" data-help="Add Kilobyte to your Debian, Ubuntu or Raspberry Pi OS with one line">Transition</a>
+    <a href="https://github.com/jgm240/kilobyte" data-help="The source code, on GitHub">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <h1 class="big">Try it</h1>
+  <p class="lead">The real Kilobyte, in a virtual PC that runs in this page. Nothing is installed.</p>
+
+  <section class="box">
+    <h2>Kilobyte 1.5 (CD version, 32-bit)</h2>
+    <div id="screen" class="vm" tabindex="0" aria-label="The virtual PC's screen">
+      <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+      <canvas style="display: none"></canvas>
+      <div class="msg" id="msg">Starting downloads about 40 MB; the rest of the system loads as it is used.</div>
+    </div>
+    <div class="bar" id="bar" hidden><i></i></div>
+    <div class="buttons" id="start-row">
+      <button class="btn primary" id="start" type="button" data-help="Download the virtual PC and start Kilobyte"><span><span class="k">S</span>tart</span></button>
+    </div>
+    <div id="keys" hidden>
+      <p style="margin:16px 0 8px">Keys for phones and tablets (with a keyboard, just type: click the screen first):</p>
+      <div class="buttons" style="justify-content:flex-start; margin-top:0">
+        <button class="btn" type="button" data-key="esc" data-help="Esc: back, cancel"><span>Esc</span></button>
+        <button class="btn" type="button" data-key="tab" data-help="Tab: between the list and the buttons"><span>Tab</span></button>
+        <button class="btn" type="button" data-key="up" data-help="Up"><span>↑</span></button>
+        <button class="btn" type="button" data-key="down" data-help="Down"><span>↓</span></button>
+        <button class="btn" type="button" data-key="left" data-help="Left"><span>←</span></button>
+        <button class="btn" type="button" data-key="right" data-help="Right"><span>→</span></button>
+        <button class="btn" type="button" data-key="enter" data-help="Enter: run, open, OK"><span>Enter</span></button>
+        <button class="btn" type="button" data-key="ctrlc" data-help="Ctrl+C: close a program"><span>Ctrl+C</span></button>
+        <button class="btn" type="button" data-key="f10" data-help="F10: quits the editor and the file manager"><span>F10</span></button>
+        <button class="btn" type="button" id="full" data-help="The screen alone, as large as it goes"><span>Full screen</span></button>
+      </div>
+      <form id="typing" style="display:flex; gap:8px; margin-top:16px">
+        <label class="sr" for="text">Text to type</label>
+        <input id="text" autocomplete="off" placeholder="Type here, then Send" style="flex:1; min-width:0; font:inherit; background:var(--code-bg); color:var(--code-ink); border:0; padding:4px 8px">
+        <button class="btn" type="submit" data-help="Type this text into the virtual PC"><span>Send</span></button>
+      </form>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>Good to know</h2>
+    <table>
+      <tr><td>Speed</td><td>The PC is emulated in JavaScript and WebAssembly (<a href="https://github.com/copy/v86">v86</a>): slower than a real one, a bit like the 1990s PCs the CD version is made for. Programs open after a moment the first time, while their part of the system downloads.</td></tr>
+      <tr><td>Keys</td><td>Arrow keys and first letters choose, Enter runs, Esc goes back. Ctrl+C closes a program. Some keys (Ctrl+W, F11) belong to the browser.</td></tr>
+      <tr><td>Internet</td><td>The virtual PC has none: web, email, feeds and videos need a <a href="download.html">real Kilobyte</a>.</td></tr>
+      <tr><td>Your files</td><td>Everything stays in this page and is gone when you leave or reload it.</td></tr>
+    </table>
+  </section>
+</main>
+
+<footer>
+  <p>The virtual PC is <a href="https://github.com/copy/v86">v86</a> (BSD licence) with SeaBIOS and the VGA BIOS (LGPL).
+    Kilobyte is free software under the GNU GPL, version 3 or later. <a href="https://github.com/jgm240/kilobyte">Source code</a> · <a href="html/try.html" data-help="The same pages without pictures, colours or scripts, for text browsers and screen readers">Text version</a></p>
+</footer>
+<div class="status" role="status">Press Start to run Kilobyte in this page.</div>
+<script src="site.js"></script>
+<script src="try/v86/libv86.js"></script>
+<script src="try.js"></script>
+</body>
+</html>
