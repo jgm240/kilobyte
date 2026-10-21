@@ -37,8 +37,24 @@ if (!/[?&]graphical\b/.test(location.search) &&
   <h1 class="big">Download</h1>
   <p class="lead" id="release">The newest release, from GitHub.</p>
 
+  <section class="box" id="selector">
+    <h2>PC Selector</h2>
+    <p>What will Kilobyte run on?</p>
+    <ul class="menu" id="choices">
+      <li><button type="button" data-pc="x64" data-help="Most PCs and laptops from about 2007 on, and Intel Macs"><span><span class="k">6</span>4-bit PC</span><span class="d">x64 (amd64)</span></button></li>
+      <li><button type="button" data-pc="i386" data-help="Older PCs: Pentium 4, the first Atom netbooks, PCs from the 1990s"><span><span class="k">3</span>2-bit PC</span><span class="d">i386</span></button></li>
+      <li><button type="button" data-pc="pi2" data-help="Raspberry Pi 2, 3, 4, 400, 5, 500 and Zero 2 W"><span><span class="k">R</span>aspberry Pi</span><span class="d">2 or newer</span></button></li>
+      <li><button type="button" data-pc="pi1" data-help="The first Raspberry Pi: models A, B, A+ and B+"><span>Raspberry Pi <span class="k">1</span></span><span class="d">the first one</span></button></li>
+      <li><button type="button" data-pc="zero" data-help="Raspberry Pi Zero and Zero W (the Zero 2 W is under Raspberry Pi 2 or newer)"><span>Raspberry Pi <span class="k">Z</span>ero</span><span class="d">Zero, Zero W</span></button></li>
+    </ul>
+    <div id="pick" hidden style="margin-top:16px"></div>
+    <p class="dim" style="margin-top:16px">Not sure whether a PC is 64-bit? Windows says it in Settings &gt; System &gt; About
+      ("System type"); on Linux, <code>uname -m</code> says x86_64. Most PCs since 2007 are.
+      A Kindle: <a href="#kindle">KilobytEink</a>. Keeping Debian, Ubuntu or Raspberry Pi OS: <a href="transition.html">Transition</a>.</p>
+  </section>
+
   <section class="box">
-    <h2>Choose your computer</h2>
+    <h2>All files</h2>
     <ul class="menu" id="files">
       <li><span class="item"><span>Loading</span><span class="d">Asking GitHub for the newest release...</span></span></li>
     </ul>
@@ -90,6 +106,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
 (function () {
   "use strict";
   var KINDS = [
+    // [pattern, label, help, section, id]
     [/-amd64\.iso$/, "64-bit PC", "ISO for 64-bit PCs and virtual machines: USB stick, DVD, BIOS and UEFI", "#pc"],
     [/-amd64-usb\.img$/, "64-bit USB", "USB stick image for UEFI PCs and Intel Macs", "#pc"],
     [/-i386\.iso$/, "32-bit PC", "ISO for 32-bit PCs, from the Pentium 4 era on", "#pc"],
@@ -107,6 +124,54 @@ if (!/[?&]graphical\b/.test(location.search) &&
     return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
   }
   var list = document.getElementById("files");
+
+  // The PC Selector: the file for one kind of computer, and how to use it.
+  function newest(releases, rx) {
+    for (var i = 0; i < releases.length; i++) {
+      var a = releases[i].assets.filter(function (a) { return rx.test(a.name); })[0];
+      if (a) return a;
+    }
+    return null;
+  }
+  var STICK = "<p>Write it to a USB stick (4 GB or more; everything on it is erased) with " +
+    '<a href="https://etcher.balena.io/">balenaEtcher</a> or Raspberry Pi Imager ("Use custom"), then start the PC ' +
+    "from the stick (a key such as F12, F11, Esc or F8 at power-on shows the boot menu). " +
+    '<a href="#pc">More about PCs</a></p>';
+  var CARD = "<p>Write it to a memory card with Raspberry Pi Imager (\"Use custom\") or " +
+    '<a href="https://etcher.balena.io/">balenaEtcher</a>; no need to unpack it. The first start asks for keyboard, ' +
+    'time zone, name and password. <a href="#pi">More about the Raspberry Pi</a></p>';
+  var PICKS = {
+    x64: { title: "64-bit PC", files: [[/-amd64-usb\.img$/, "For a USB stick (UEFI PCs, Intel Macs)"], [/-amd64\.iso$/, "ISO: DVD, virtual machine, or a stick for older BIOS PCs"]], how: STICK },
+    i386: { title: "32-bit PC", files: [[/-i386-usb\.img$/, "For a USB stick"], [/-i386\.iso$/, "ISO: DVD, CD-sized stick, virtual machine"], [/-i386-cd\.iso$/, "CD version: fits a 650 MB CD, for PCs from the 1990s and laptops that only start from CDs"]], how: STICK },
+    pi2: { title: "Raspberry Pi 2 or newer", files: [[/-raspberrypi-arm64\.img\.xz$/, "Raspberry Pi 3, 4, 400, 5, 500 and Zero 2 W"], [/-raspberrypi-armhf\.img\.xz$/, "Raspberry Pi 2 (and the 3, in 32-bit)"]], how: CARD },
+    pi1: { title: "Raspberry Pi 1", files: [[/-raspberrypi-armel\.img\.xz$/, "Raspberry Pi 1 (A, B, A+, B+)"]], how: CARD },
+    zero: { title: "Raspberry Pi Zero", files: [[/-raspberrypi-armel\.img\.xz$/, "Raspberry Pi Zero and Zero W"]], how: CARD + "<p>A Zero 2 W takes the image for the Raspberry Pi 2 or newer.</p>" }
+  };
+  function selector(releases) {
+    var box = document.getElementById("pick");
+    function show(id) {
+      var p = PICKS[id];
+      if (!p) return;
+      document.querySelectorAll("#choices button").forEach(function (b) {
+        b.setAttribute("aria-current", b.getAttribute("data-pc") === id ? "true" : "false");
+      });
+      var html = "<p><b>" + esc(p.title) + "</b></p><ul class=\"menu\">";
+      p.files.forEach(function (f) {
+        var a = newest(releases, f[0]);
+        html += a ? '<li><a href="' + esc(a.browser_download_url) + '" data-help="' + esc(f[1]) + '"><span>Download</span>' +
+                    '<span class="d">' + esc(a.name) + " · " + size(a.size) + "<br>" + esc(f[1]) + "</span></a></li>"
+                  : '<li><span class="item"><span>Not yet</span><span class="d">' + esc(f[1]) + ": not in a release yet</span></span></li>";
+      });
+      box.innerHTML = html + "</ul>" + p.how;
+      box.hidden = false;
+      try { history.replaceState(null, "", "#" + id); } catch (e) { /* not kept in the address */ }
+    }
+    document.querySelectorAll("#choices button").forEach(function (b) {
+      b.addEventListener("click", function () { show(b.getAttribute("data-pc")); });
+    });
+    var start = location.hash.replace("#", "");
+    if (PICKS[start]) show(start);
+  }
   // For each kind of computer, the newest release that has a file for it
   // (a version for one kind, such as KilobytEink, can come out on its own).
   fetch("https://api.github.com/repos/jgm240/kilobyte/releases?per_page=20")
@@ -125,6 +190,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
         }
       });
       document.getElementById("release").textContent = "From GitHub: " + Object.keys(versions).join(", ") + ".";
+      selector(releases);
       list.innerHTML = html || '<li><a href="https://github.com/jgm240/kilobyte/releases"><span>Releases</span><span class="d">See the files on GitHub</span></a></li>';
     })
     .catch(function () {
