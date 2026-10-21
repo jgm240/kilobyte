@@ -16,14 +16,16 @@ cd "$(dirname "$0")/.."
 VERSION=$(sed -n 's/^KB_VERSION="\(.*\)"/\1/p' rootfs/usr/lib/kilobyte/lib.sh)
 ISO=${1:-out/kilobyte-$VERSION-i386-cd.iso}
 V86_VERSION=0.5.472
-MEMORY_MB=256
+MEMORY_MB=${MEMORY_MB:-384}
 [ -f "$ISO" ] || { echo "No $ISO: build it with ./build.sh --arch i386 --cd" >&2; exit 1; }
 mkdir -p out/web-vm
 docker run --rm -v "$PWD/$ISO:/iso/kilobyte.iso:ro" -v "$PWD/out/web-vm:/out" -v "$PWD/tools:/tools:ro" \
     -e V86_VERSION=$V86_VERSION -e MEMORY_MB=$MEMORY_MB -e NAME="kilobyte-$VERSION-i386-cd" node:22-bookworm bash -c '
     set -e
     apt-get update -qq >/dev/null && apt-get install -y -qq zstd >/dev/null 2>&1
-    rm -rf /out/v86 /out/disk && mkdir -p /out/v86 /out/disk /w && cd /w
+    rm -rf /out/v86 && mkdir -p /out/v86 /out/disk /w && cd /w
+    # Pieces of another ISO go; pieces of this one stay (cutting takes a while).
+    [ -f "/out/disk/.iso-$(stat -c %s /iso/kilobyte.iso)-$NAME" ] || rm -rf /out/disk/* /out/disk/.iso-*
     echo "==> v86 $V86_VERSION"
     npm pack -s v86@$V86_VERSION >/dev/null && tar -xzf v86-$V86_VERSION.tgz
     cp package/build/libv86.js package/build/v86.wasm package/LICENSE /out/v86/
@@ -31,9 +33,13 @@ docker run --rm -v "$PWD/$ISO:/iso/kilobyte.iso:ro" -v "$PWD/out/web-vm:/out" -v
     curl -fsSL -o /out/v86/vgabios.bin https://raw.githubusercontent.com/copy/v86/master/bios/vgabios.bin
     npm init -y >/dev/null && npm install -s ./v86-$V86_VERSION.tgz >/dev/null
 
-    echo "==> The ISO in 1 MB pieces"
     CHUNK=1048576
     size=$(stat -c %s /iso/kilobyte.iso)
+    if [ -f "/out/disk/.iso-$size-$NAME" ]; then
+        n=$(ls /out/disk/*.iso.zst | wc -l)
+        echo "==> The ISO pieces are there already ($n)"
+    else
+    echo "==> The ISO in 1 MB pieces"
     split -b $CHUNK -d -a 6 /iso/kilobyte.iso /w/part-
     last=$(ls /w/part-* | tail -n 1)
     truncate -s $CHUNK "$last"                  # every piece is whole: the last one padded
@@ -43,6 +49,8 @@ docker run --rm -v "$PWD/$ISO:/iso/kilobyte.iso:ro" -v "$PWD/out/web-vm:/out" -v
         zstd -q -12 --rm "$f" -o "/out/disk/$NAME-$off-$(( off + CHUNK )).iso.zst"
         n=$(( n + 1 ))
     done
+    : > "/out/disk/.iso-$size-$NAME"
+    fi
     padded=$(( n * CHUNK ))
     echo "$n pieces, $(du -sh /out/disk | cut -f1)"
 

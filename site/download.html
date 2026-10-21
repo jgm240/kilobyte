@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Text browsers (ELinks, Lynx, w3m...) get the text version, html/: those
+     without JavaScript by the refresh below, the others by the script. ?graphical stays. -->
+<noscript><meta http-equiv="refresh" content="0; url=html/download.html"></noscript>
+<script>
+if (!/[?&]graphical\b/.test(location.search) &&
+    (/\b(ELinks|Links|Lynx|w3m|NetSurf|Dillo|Browsh)\b/i.test(navigator.userAgent) || !document.querySelector || !window.fetch || !window.CSS)) {
+  try { location.replace("html/download.html"); } catch (e) { location.href = "html/download.html"; }
+}
+</script>
 <title>Download Kilobyte</title>
 <meta name="description" content="Download Kilobyte: ISO and USB stick images for PCs, SD card images for every Raspberry Pi, and KilobytEink for Kindles.">
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
@@ -12,6 +21,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="sr" href="html/download.html">Text version of this page</a>
 <header class="topbar">
   <a class="brand" href="./" data-help="Kilobyte 1.5, the newest version">■ Kilobyte 1.5</a>
   <nav>
@@ -71,7 +81,7 @@
 
 <footer>
   <p>Kilobyte is free software under the GNU General Public License, version 3 or later.
-    <a href="https://github.com/jgm240/kilobyte">Source code</a></p>
+    <a href="https://github.com/jgm240/kilobyte">Source code</a> · <a href="html/download.html" data-help="The same pages without pictures, colours or scripts, for text browsers and screen readers">Text version</a></p>
 </footer>
 <div class="status" role="status">Point at a file to see what it is for.</div>
 <script src="site.js"></script>

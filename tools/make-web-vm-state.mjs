@@ -6,8 +6,6 @@ import { V86 } from "v86";
 
 const [iso, dir, out] = process.argv.slice(2);
 const memory = (+process.env.MEMORY_MB || 256) * 1024 * 1024;
-const COLS = 80, ROWS = 25;
-const screen = Array.from({ length: ROWS }, () => new Array(COLS).fill(" "));
 const started = Date.now();
 const seconds = () => Math.round((Date.now() - started) / 1000);
 
@@ -23,19 +21,47 @@ const emulator = new V86({
     autostart: true,
 });
 
-// The text screen, from the characters the VGA card is given.
-emulator.add_listener("screen-put-char", ([row, col, chr]) => {
-    if (row < ROWS && col < COLS) screen[row][col] = chr >= 32 && chr < 127 ? String.fromCharCode(chr) : " ";
-});
-const text = () => screen.map(r => r.join("")).join("\n");
+// The text on the screen, read from the VGA card's memory the way v86 draws
+// it (from the start address, which Linux moves to scroll).
+function text() {
+    const vga = emulator.v86.cpu.devices.vga;
+    if (vga.graphical_mode) return "(graphics mode)";
+    const cols = vga.max_cols, rows = vga.max_rows;
+    const rowOffset = Math.max(0, (vga.offset_register * 2 - cols) * 2);
+    let addr = vga.start_address << 1;
+    const lines = [];
+    for (let r = 0; r < rows; r++) {
+        let line = "";
+        for (let c = 0; c < cols; c++, addr += 2) {
+            const ch = vga.vga_memory[addr];
+            line += ch >= 32 && ch < 127 ? String.fromCharCode(ch) : ch >= 128 ? "#" : " ";
+        }
+        lines.push(line.trimEnd());
+        addr += rowOffset;
+    }
+    return lines.join("\n");
+}
 
-let last = "";
+// The boot menu (GRUB, in a graphics mode) takes "Kilobyte (safe graphics)",
+// the fourth entry: nomodeset keeps the console in VGA text mode, which v86
+// draws far faster than a graphics console (Debian would load the driver
+// for v86's Bochs graphics card otherwise).
+let menuDone = false;
+function bootMenu() {
+    if (menuDone || seconds() > 120 || !emulator.v86.cpu.devices.vga.graphical_mode) return;
+    menuDone = true;
+    console.log(`boot menu at ${seconds()} s: choosing "safe graphics"`);
+    const down = [0xe0, 0x50, 0xe0, 0xd0];
+    setTimeout(() => emulator.keyboard_send_scancodes([...down, ...down, ...down, 0x1c, 0x9c]), 1500);
+}
+setInterval(() => { try { bootMenu(); } catch (e) { /* not started yet */ } }, 250);
+
+let lastShown = 0;
 const timer = setInterval(async () => {
     const t = text();
-    if (t !== last && seconds() % 30 < 5) {
-        console.log(`--- ${seconds()} s`);
-        console.log(t.split("\n").filter(l => l.trim()).slice(-4).join("\n"));
-        last = t;
+    if (seconds() - lastShown >= 60) {             // the whole screen once a minute
+        lastShown = seconds();
+        console.log(`--- ${seconds()} s ` + "-".repeat(60) + "\n" + t.replace(/ +$/gm, ""));
     }
     if (t.includes("Program Manager") && t.includes("Choose with the arrow keys")) {
         clearInterval(timer);
