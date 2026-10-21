@@ -35,11 +35,20 @@ cp out/kilobyte-transition_*_all.deb "$W/apt/"
 
 docker run --rm -v "$PWD/$W/apt:/repo" -v "$KEY:/gpg" -e URL="$URL" debian:trixie bash -c '
     set -e
-    export GNUPGHOME=/gpg DEBIAN_FRONTEND=noninteractive
+    export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends dpkg-dev apt-utils gnupg >/dev/null 2>&1
+    # gpg works on a copy inside the container: its agent needs sockets,
+    # which a folder shared from a Mac cannot hold.
+    export GNUPGHOME=/tmp/gpg
+    mkdir -p -m 700 $GNUPGHOME
+    (cd /gpg && find . ! -name "S.*" ! -name . -print0 | cpio -0pdm --quiet $GNUPGHOME) 2>/dev/null ||
+        (cd /gpg && tar --exclude="./S.*" -cf - . | tar -C $GNUPGHOME -xf -)
+    chmod -R go-rwx $GNUPGHOME
     if ! gpg --batch --list-secret-keys 2>/dev/null | grep -q sec; then
         echo "==> Making the signing key (once)"
         gpg --batch --passphrase "" --quick-gen-key "Kilobyte APT repository <kilobyte@users.noreply.github.com>" ed25519 sign 5y
+        gpgconf --kill gpg-agent
+        (cd $GNUPGHOME && tar --exclude="./S.*" -cf - .) | tar -C /gpg -xf -
     fi
     cd /repo
     dpkg-scanpackages --multiversion . /dev/null 2>/dev/null > Packages
