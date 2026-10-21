@@ -7,6 +7,8 @@
 #                      (so the page opens at the Program Manager); manifest.json
 #
 #   tools/make-web-vm.sh [ISO]     default: out/kilobyte-VERSION-i386-cd.iso
+#   RESUME=1 tools/make-web-vm.sh  carry on from out/web-vm/state.bin (made by
+#                                  an earlier run) instead of starting the PC
 #
 # The state is made by starting the ISO in v86 under Node until the Program
 # Manager shows. It only fits that exact ISO and v86 version: make both anew
@@ -20,7 +22,7 @@ MEMORY_MB=${MEMORY_MB:-384}
 [ -f "$ISO" ] || { echo "No $ISO: build it with ./build.sh --arch i386 --cd" >&2; exit 1; }
 mkdir -p out/web-vm
 docker run --rm -v "$PWD/$ISO:/iso/kilobyte.iso:ro" -v "$PWD/out/web-vm:/out" -v "$PWD/tools:/tools:ro" \
-    -e V86_VERSION=$V86_VERSION -e MEMORY_MB=$MEMORY_MB -e NAME="kilobyte-$VERSION-i386-cd" node:22-bookworm bash -c '
+    -e V86_VERSION=$V86_VERSION -e MEMORY_MB=$MEMORY_MB -e RESUME -e NAME="kilobyte-$VERSION-i386-cd" node:22-bookworm bash -c '
     set -e
     apt-get update -qq >/dev/null && apt-get install -y -qq zstd >/dev/null 2>&1
     rm -rf /out/v86 && mkdir -p /out/v86 /out/disk /w && cd /w
@@ -58,9 +60,16 @@ docker run --rm -v "$PWD/$ISO:/iso/kilobyte.iso:ro" -v "$PWD/out/web-vm:/out" -v
     # (The same size as the pieces: the saved PC knows how big its CD is.)
     cp /iso/kilobyte.iso /w/padded.iso && truncate -s $padded /w/padded.iso
     cp /tools/make-web-vm-state.mjs /w/          # (next to its node_modules)
-    MEMORY_MB=$MEMORY_MB node /w/make-web-vm-state.mjs /w/padded.iso /out/v86 /w/state.bin
-    zstd -q -19 -T0 /w/state.bin -o /out/disk/state.bin.zst
-    echo "state: $(du -h /w/state.bin | cut -f1) -> $(du -h /out/disk/state.bin.zst | cut -f1)"
+    # (The raw state is kept in out/web-vm: starting the PC takes many minutes.)
+    if [ -n "$RESUME" ] && [ -f /out/state.bin ]; then
+        echo "(carrying on from the saved state in out/web-vm/state.bin)"
+        cp /out/state.bin /w/resume.bin && export RESUME=/w/resume.bin
+    else
+        unset RESUME
+    fi
+    MEMORY_MB=$MEMORY_MB node /w/make-web-vm-state.mjs /w/padded.iso /out/v86 /out/state.bin
+    zstd -q -f -19 -T0 /out/state.bin -o /out/disk/state.bin.zst
+    echo "state: $(du -h /out/state.bin | cut -f1) -> $(du -h /out/disk/state.bin.zst | cut -f1)"
     printf "{\"iso\": \"%s.iso.zst\", \"size\": %d, \"chunk\": %d, \"state\": \"state.bin.zst\", \"memory\": %d, \"v86\": \"%s\"}\n" \
         "$NAME" $padded $CHUNK $(( MEMORY_MB * 1048576 )) "$V86_VERSION" > /out/disk/manifest.json
     cat /out/disk/manifest.json

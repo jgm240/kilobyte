@@ -104,6 +104,7 @@ html[data-theme="eink"] {
 html[data-theme="eink"] pre, html[data-theme="eink"] .screen { border: 2px solid #000; }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }       /* even where a rule sets display */
 html { background: var(--desk); }
 body {
   margin: 0;
