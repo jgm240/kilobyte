@@ -45,6 +45,8 @@
       }
     });
     emulator.add_listener("emulator-ready", function () {
+      var st = document.querySelector(".status");
+      if (st) st.textContent = "Kilobyte runs below: click the screen, then type. Arrow keys and first letters choose, Enter runs, Esc goes back.";
       $("bar").hidden = true;
       say(m.state ? "" : "Starting Kilobyte (a minute or two)...");
       $("keys").hidden = false;

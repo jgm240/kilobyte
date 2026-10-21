@@ -173,7 +173,7 @@ h1.big {
    the highlighted item reversed. */
 .menu { list-style: none; margin: 0; padding: 0; border: 2px solid; border-color: var(--dark) var(--light) var(--light) var(--dark); padding: 8px 0; }
 .menu li a, .menu li button, .menu li .item {
-  display: grid; grid-template-columns: minmax(10ch, 14ch) 1fr; gap: 16px;
+  display: grid; grid-template-columns: minmax(10ch, 18ch) 1fr; gap: 16px;
   padding: 0 16px; color: var(--ink); text-decoration: none;
   background: none; border: 0; font: inherit; width: 100%; text-align: left; cursor: pointer;
 }
@@ -253,6 +253,7 @@ footer a { color: var(--desk-hi); }
 .vm canvas { max-width: 100%; height: auto; }
 .vm:focus { outline: 2px solid var(--btn-key); }
 .vm .msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; font: 16px/16px "Kilobyte VGA", monospace; color: #fff; white-space: normal; }
+#pick .menu + p { margin-top: 16px; }
 .bar { height: 16px; background: var(--dark); margin: 8px 0; }
 .bar > i { display: block; height: 100%; width: 0; background: var(--btn-bg); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
