@@ -107,20 +107,25 @@ if (!/[?&]graphical\b/.test(location.search) &&
     return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
   }
   var list = document.getElementById("files");
-  fetch("https://api.github.com/repos/jgm240/kilobyte/releases/latest")
+  // For each kind of computer, the newest release that has a file for it
+  // (a version for one kind, such as KilobytEink, can come out on its own).
+  fetch("https://api.github.com/repos/jgm240/kilobyte/releases?per_page=20")
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (rel) {
-      document.getElementById("release").textContent =
-        rel.name + ", " + new Date(rel.published_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ".";
-      var html = "";
+    .then(function (releases) {
+      releases = releases.filter(function (r) { return !r.draft && !r.prerelease; });
+      var html = "", versions = {};
       KINDS.forEach(function (k) {
-        rel.assets.forEach(function (a) {
-          if (!k[0].test(a.name)) return;
+        for (var i = 0; i < releases.length; i++) {
+          var a = releases[i].assets.filter(function (a) { return k[0].test(a.name); })[0];
+          if (!a) continue;
+          versions[releases[i].name] = true;
           html += '<li><a href="' + esc(a.browser_download_url) + '" data-help="' + esc(k[2] + " (" + a.name + ")") + '">' +
             "<span>" + esc(k[1]) + "</span><span class=\"d\">" + esc(a.name) + " · " + size(a.size) + "</span></a></li>";
-        });
+          break;
+        }
       });
-      list.innerHTML = html || '<li><a href="' + esc(rel.html_url) + '"><span>Release</span><span class="d">See the files on GitHub</span></a></li>';
+      document.getElementById("release").textContent = "From GitHub: " + Object.keys(versions).join(", ") + ".";
+      list.innerHTML = html || '<li><a href="https://github.com/jgm240/kilobyte/releases"><span>Releases</span><span class="d">See the files on GitHub</span></a></li>';
     })
     .catch(function () {
       list.innerHTML = '<li><a href="https://github.com/jgm240/kilobyte/releases/latest" data-help="GitHub did not answer here; its release page has every file">' +

@@ -28,10 +28,12 @@ else
 fi
 # The text version's Download page lists the newest release's files itself
 # (text browsers cannot ask GitHub's API the way the graphical page does).
-gh api repos/jgm240/kilobyte/releases/latest > out/latest-release.json 2>/dev/null &&
+gh api "repos/jgm240/kilobyte/releases?per_page=20" > out/latest-release.json 2>/dev/null &&
 python3 - "$W/html/download.html" out/latest-release.json <<'PY' || echo "(the text Download page keeps its link to the release page)"
 import html, json, re, sys
-page, rel = sys.argv[1], json.load(open(sys.argv[2]))
+# For each kind of computer, the newest release with a file for it.
+page = sys.argv[1]
+releases = [r for r in json.load(open(sys.argv[2])) if not r["draft"] and not r["prerelease"]]
 kinds = [(r"-amd64\.iso$", "64-bit PC (ISO)"), (r"-amd64-usb\.img$", "64-bit PC (USB stick)"),
          (r"-i386\.iso$", "32-bit PC (ISO)"), (r"-i386-usb\.img$", "32-bit PC (USB stick)"),
          (r"-i386-cd\.iso$", "CD version, for PCs from the 1990s"),
@@ -39,21 +41,28 @@ kinds = [(r"-amd64\.iso$", "64-bit PC (ISO)"), (r"-amd64-usb\.img$", "64-bit PC 
          (r"-raspberrypi-armhf\.img\.xz$", "Raspberry Pi 2, 3 (32-bit)"),
          (r"-raspberrypi-armel\.img\.xz$", "Raspberry Pi 1, Zero, Zero W"),
          (r"^(kilobyteink|kinlobyte)-.*\.zip$", "KilobytEink, for jailbroken Kindles")]
-items = []
+items, names = [], []
 for rx, what in kinds:
-    for a in rel["assets"]:
-        if re.search(rx, a["name"]):
-            mb = a["size"] / 1e6
-            size = "%.1f GB" % (mb / 1000) if mb >= 1000 else "%d MB" % mb
-            items.append('<li><a href="%s">%s</a>: %s, %s</li>' % (html.escape(a["browser_download_url"]),
-                         html.escape(a["name"]), html.escape(what), size))
-block = ("<p>%s:</p>\n<ul>\n%s\n</ul>\n<p>Each file has a .sha256 checksum next to it on "
-         '<a href="%s">the release page</a>, with the list of source packages of each image.</p>'
-         % (html.escape(rel.get("name") or rel["tag_name"]), "\n".join(items), html.escape(rel["html_url"])))
+    for rel in releases:
+        found = [a for a in rel["assets"] if re.search(rx, a["name"])]
+        if not found:
+            continue
+        a = found[0]
+        mb = a["size"] / 1e6
+        size = "%.1f GB" % (mb / 1000) if mb >= 1000 else "%d MB" % mb
+        items.append('<li><a href="%s">%s</a>: %s, %s</li>' % (html.escape(a["browser_download_url"]),
+                     html.escape(a["name"]), html.escape(what), size))
+        name = rel.get("name") or rel["tag_name"]
+        if name not in names:
+            names.append(name)
+        break
+block = ("<p>From GitHub: %s.</p>\n<ul>\n%s\n</ul>\n<p>Each file has a .sha256 checksum next to it on "
+         '<a href="https://github.com/jgm240/kilobyte/releases">the release pages</a>, with the list of source packages of each image.</p>'
+         % (html.escape(", ".join(names)), "\n".join(items)))
 s = open(page).read()
 s = re.sub(r"<!--DOWNLOADS-->.*<!--/DOWNLOADS-->", lambda m: "<!--DOWNLOADS-->\n" + block + "\n<!--/DOWNLOADS-->", s, flags=re.S)
 open(page, "w").write(s)
-print("text Download page: %d files of %s" % (len(items), rel["tag_name"]))
+print("text Download page: %d files from %s" % (len(items), ", ".join(names)))
 PY
 : > "$W/.nojekyll"
 
