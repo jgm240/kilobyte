@@ -1,0 +1,6 @@
+# Made by tools/make-windows.sh
+PackageIdentifier: Kilobyte.Transition
+PackageVersion: 1.5.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0
