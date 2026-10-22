@@ -64,9 +64,9 @@ mkdir -p "$M"
     echo "NestedInstallerFiles:"
     echo "- RelativeFilePath: kb.exe"
     echo "  PortableCommandAlias: kb"
-    echo "Dependencies:"
-    echo "  PackageDependencies:"
-    echo "  - PackageIdentifier: Microsoft.WSL"
+    # (No dependency on Microsoft.WSL: kb open turns WSL on itself, with
+    # Windows' own "wsl --install", and WinGet's validation sandbox cannot
+    # install WSL.)
     echo "ReleaseDate: $(date +%Y-%m-%d)"
     echo "Installers:"
     for a in $archs; do
