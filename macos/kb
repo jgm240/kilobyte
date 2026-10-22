@@ -40,7 +40,27 @@ ensure() {
     limactl start --tty=false "$VM"
 }
 
-run_here() { exec limactl shell --workdir / "$VM" /usr/bin/kilobyte; }
+# The machine runs before Kilobyte is in it: the first time, its setup
+# (Debian's packages, then Kilobyte's) goes on for some minutes.
+wait_ready() {
+    limactl shell --workdir / "$VM" test -x /usr/bin/kilobyte 2>/dev/null && return 0
+    echo "Kilobyte is still being set up in its machine (the first time takes a few minutes)."
+    i=0
+    until limactl shell --workdir / "$VM" test -x /usr/bin/kilobyte 2>/dev/null; do
+        i=$((i + 1))
+        if [ $i -gt 240 ]; then
+            echo >&2
+            echo "kb: Kilobyte did not finish setting up. What happened:" >&2
+            limactl shell --workdir / "$VM" sudo tail -n 15 /var/log/cloud-init-output.log >&2 || true
+            exit 1
+        fi
+        printf '.'
+        sleep 5
+    done
+    echo " ready."
+}
+
+run_here() { wait_ready; exec limactl shell --workdir / "$VM" /usr/bin/kilobyte; }
 
 case "${1:-} ${2:-}" in
     "open ")
