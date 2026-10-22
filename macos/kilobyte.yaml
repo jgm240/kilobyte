@@ -39,7 +39,7 @@ probes:
 - description: "Kilobyte is installed"
   script: |
     #!/bin/sh
-    timeout 900 sh -c 'until command -v kilobyte >/dev/null 2>&1; do sleep 3; done'
+    timeout 1800 sh -c 'until dpkg-query -W -f="\${Status}" kilobyte-transition 2>/dev/null | grep -q "ok installed" && ! pgrep -x apt-get >/dev/null; do sleep 3; done'
   hint: "The Kilobyte package is being installed; this takes a few minutes the first time."
 message: |
   Kilobyte is set up. Type  kb open  to go to Kilobyte.

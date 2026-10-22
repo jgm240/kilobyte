@@ -42,11 +42,18 @@ ensure() {
 
 # The machine runs before Kilobyte is in it: the first time, its setup
 # (Debian's packages, then Kilobyte's) goes on for some minutes.
+# (Ready when Debian has kilobyte-transition fully installed and set up: the
+# program file is there minutes earlier, while the packages are unpacked.)
+ready() {
+    limactl shell --workdir / "$VM" sh -c \
+        'dpkg-query -W -f="\${Status}" kilobyte-transition 2>/dev/null | grep -q "ok installed" && ! pgrep -x apt-get >/dev/null' 2>/dev/null
+}
+
 wait_ready() {
-    limactl shell --workdir / "$VM" test -x /usr/bin/kilobyte 2>/dev/null && return 0
+    ready && return 0
     echo "Kilobyte is still being set up in its machine (the first time takes a few minutes)."
     i=0
-    until limactl shell --workdir / "$VM" test -x /usr/bin/kilobyte 2>/dev/null; do
+    until ready; do
         i=$((i + 1))
         if [ $i -gt 240 ]; then
             echo >&2
