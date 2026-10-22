@@ -13,11 +13,16 @@ text-mode programs, plus a few small Python programs for the real-time parts
 
 It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
-**Already have Debian, Ubuntu or Raspberry Pi OS?** Add Kilobyte next to your
-desktop with one line, then type `kb open` (and `kb close` to go back):
+**Already have a computer?** Add Kilobyte next to your system, then type
+`kb open`:
 
 ```bash
+# Debian, Ubuntu, Raspberry Pi OS
 cd /tmp && wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb && sudo apt install ./kilobyte-transition.deb
+# macOS (Kilobyte.app in Applications; runs in a small Lima machine)
+brew trust jgm240/kilobyte && brew install --cask jgm240/kilobyte/kilobyte
+# Windows (runs in WSL, in Windows Terminal)
+winget install Kilobyte.Transition
 ```
 
 ([more about it](#on-a-normal-debian-ubuntu-or-raspberry-pi-os); the whole

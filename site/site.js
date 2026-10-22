@@ -44,6 +44,33 @@
   }
   setTheme(saved);
 
+  // Tabs (Transition: Linux, macOS, Windows): the visitor's own system first,
+  // or the one named in the address (#macos).
+  var tabs = document.querySelectorAll('[role="tab"]');
+  if (tabs.length) {
+    var pick = function (id, keepHash) {
+      tabs.forEach(function (t) {
+        var on = t.getAttribute("aria-controls") === id;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      });
+      if (!keepHash) { try { history.replaceState(null, "", "#" + id); } catch (e) { /* not kept */ } }
+    };
+    tabs.forEach(function (t, n) {
+      t.addEventListener("click", function () { pick(t.getAttribute("aria-controls")); });
+      t.addEventListener("keydown", function (e) {
+        var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!d) return;
+        var next = tabs[(n + d + tabs.length) % tabs.length];
+        next.focus(); pick(next.getAttribute("aria-controls"));
+      });
+    });
+    var ua = navigator.userAgent, wanted = location.hash.slice(1);
+    var guess = /Windows/i.test(ua) ? "windows" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua) ? "macos" : "linux";
+    pick(document.getElementById(wanted) && document.querySelector('[aria-controls="' + wanted + '"]') ? wanted : guess, true);
+  }
+
   // Copy buttons on commands.
   document.querySelectorAll("pre[data-copy]").forEach(function (pre) {
     var wrap = document.createElement("div");

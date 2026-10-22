@@ -11,9 +11,12 @@
 <hr>
 
 <h1>Transition</h1>
-<p><b>Keep your desktop. Add Kilobyte next to it, and switch with one word.</b></p>
+<p><b>Keep your system. Add Kilobyte next to it, and switch with one word: on Linux, macOS and Windows.</b></p>
+<p>Jump to: <a href="#linux">Linux</a> | <a href="#macos">macOS</a> | <a href="#windows">Windows</a></p>
 
-<h2>Install</h2>
+<h2 id="linux">Linux</h2>
+
+<h3>Install</h3>
 <p>On Debian, Ubuntu or Raspberry Pi OS, in a terminal:</p>
 <pre>cd /tmp &amp;&amp; wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb &amp;&amp; sudo apt install ./kilobyte-transition.deb</pre>
 <p>The package brings its own APT repository, so later versions come with
@@ -21,7 +24,7 @@
 encyclopedia) take a few hundred MB; for the Program Manager alone, add
 --no-install-recommends after "install".</p>
 
-<h2>Use</h2>
+<h3>Use</h3>
 <table>
 <tr><td><b>kb open</b></td><td>go to Kilobyte</td></tr>
 <tr><td><b>kb close</b></td><td>go back to the desktop</td></tr>
@@ -31,7 +34,7 @@ encyclopedia) take a few hundred MB; for the Program Manager alone, add
 <p>In Kilobyte, Exit &gt; "Back to the desktop" does the same as kb close. kb
 asks for your password: it is for users who may use sudo.</p>
 
-<h2>How it works</h2>
+<h3>How it works</h3>
 <p>Kilobyte runs on a text console of its own (the sixth, Ctrl+Alt+F6), where you
 are logged in by yourself. Your desktop keeps running on its own console; kb
 switches between the two, and each stays exactly as you left it.</p>
@@ -41,10 +44,33 @@ printers and updates stay with your desktop's tools.</p>
 as it was and keeps the repository; "sudo apt purge kilobyte-transition" removes
 the repository too.</p>
 
-<h2>The repository by hand</h2>
+<h3>The repository by hand</h3>
 <pre>sudo curl -fsSLo /etc/apt/keyrings/kilobyte-archive-keyring.gpg https://jgm240.github.io/kilobyte/apt/kilobyte-archive-keyring.gpg
 sudo curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources https://jgm240.github.io/kilobyte/apt/kilobyte.sources
 sudo apt update &amp;&amp; sudo apt install kilobyte-transition</pre>
+
+<h2 id="macos">macOS</h2>
+<p>With Homebrew, in Terminal:</p>
+<pre>brew trust jgm240/kilobyte
+brew install --cask jgm240/kilobyte/kilobyte</pre>
+<p>That puts Kilobyte in Applications. The first time you open it, macOS asks you to allow it
+(System Settings &gt; Privacy &amp; Security &gt; "Open Anyway", once) and whether it may use
+Terminal; then it sets itself up (about 1 GB, once). Only the kb command, without the app:
+"brew install jgm240/kilobyte/kilobyte-transition", then "kb open".</p>
+<p>Kilobyte runs in a small Debian machine made with Lima (the Mac's own virtualisation) and shows
+in Terminal. kb close also stops the machine; kb autolaunch on opens Kilobyte when you log in; kb
+update gets the newest Kilobyte; kb remove deletes the machine.</p>
+
+<h2 id="windows">Windows</h2>
+<p>In a terminal:</p>
+<pre>winget install Kilobyte.Transition</pre>
+<p>Then "kb open". The first time it turns on WSL if it is off (Windows asks, then one restart),
+downloads Kilobyte (about 280 MB) and sets it up. Until the package is listed in WinGet, take the zip
+from <a href="https://github.com/jgm240/kilobyte/releases/tag/windows-v1.5">the Kilobyte for Windows
+release</a>, unpack it and run "kb open" there.</p>
+<p>Kilobyte runs as a Linux system of its own in WSL, in Windows Terminal with its colours and pixel
+font. kb close stops it; kb autolaunch on opens it when you sign in; kb remove deletes it. Windows
+drives are in /mnt (C: is /mnt/c).</p>
 
 <hr>
 <p>Kilobyte is free software under the GNU General Public License, version 3 or
