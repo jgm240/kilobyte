@@ -11,7 +11,8 @@
 set -e
 cd "$(dirname "$0")/.."
 VERSION=$(sed -n 's/^KB_VERSION="\(.*\)"/\1/p' rootfs/usr/lib/kilobyte/lib.sh)
-PKGVER=$VERSION.0
+# The package's version (kb.exe changes without a new Kilobyte system): PKGVER=1.5.1
+PKGVER=${PKGVER:-$VERSION.0}
 TAG=windows-v$VERSION
 URL=https://github.com/jgm240/kilobyte/releases/download/$TAG
 OUT=out/windows
@@ -31,8 +32,8 @@ for a in $archs; do
     echo "==> kb.exe for Windows $win"
     docker run --rm -v "$PWD/windows:/src" -v "$PWD/$OUT:/out" -w /src -e GOOS=windows -e GOARCH=$a -e CGO_ENABLED=0 \
         golang:1.23 go build -trimpath -o /out/kb-$a.exe \
-        -ldflags "-s -w -X main.version=$VERSION -X main.rootfsURL=$URL/kilobyte-$VERSION-wsl-$a.tar.gz -X main.rootfsSHA256=$sum" .
-    z="$OUT/kilobyte-transition-$VERSION-windows-$win.zip"
+        -ldflags "-s -w -X main.version=$PKGVER -X main.rootfsURL=$URL/kilobyte-$VERSION-wsl-$a.tar.gz -X main.rootfsSHA256=$sum" .
+    z="$OUT/kilobyte-transition-$PKGVER-windows-$win.zip"
     rm -rf "$OUT/zip" && mkdir -p "$OUT/zip"
     cp "$OUT/kb-$a.exe" "$OUT/zip/kb.exe"
     cp windows/README.txt "$OUT/zip/README.txt"
@@ -70,7 +71,7 @@ mkdir -p "$M"
     echo "Installers:"
     for a in $archs; do
         win=$([ $a = amd64 ] && echo x64 || echo arm64)
-        z=kilobyte-transition-$VERSION-windows-$win.zip
+        z=kilobyte-transition-$PKGVER-windows-$win.zip
         echo "- Architecture: $win"
         echo "  InstallerUrl: $URL/$z"
         echo "  InstallerSha256: $(tr a-f A-F < "$OUT/$z.sha256")"

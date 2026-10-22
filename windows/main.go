@@ -9,6 +9,9 @@
 //	kb autolaunch on    open Kilobyte when you sign in to Windows
 //	kb autolaunch off   do not
 //	kb autolaunch       say which it is
+//	kb size N           Kilobyte's text size (as on the Mac: 16 is the size it
+//	                    has on a PC, each font pixel one screen pixel; 24, 32...)
+//	kb size auto        16 again
 //	kb remove           remove the Kilobyte system and everything kb added
 //
 // Copyright (C) 2026 Kilobyte contributors. GNU GPL, version 3 or later.
@@ -26,6 +29,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -72,6 +76,22 @@ func main() {
 		} else {
 			fmt.Println("off: Kilobyte does not open by itself")
 		}
+	case "size ":
+		fmt.Printf("Kilobyte's text size: %d (16 is the size it has on a PC)\n", textSize())
+	case "size auto":
+		os.Remove(filepath.Join(home, "size"))
+		fmt.Println("Kilobyte's text size: 16. kb open shows it.")
+	case "size " + args[1]:
+		n, perr := strconv.Atoi(args[1])
+		if perr != nil || n < 4 || n > 200 {
+			err = fmt.Errorf("a size such as 16, 24 or 32, or auto")
+			break
+		}
+		os.MkdirAll(home, 0o755)
+		err = os.WriteFile(filepath.Join(home, "size"), []byte(strconv.Itoa(n)+"\n"), 0o644)
+		if err == nil {
+			fmt.Printf("Kilobyte's text size: %d (sharpest at 8, 16, 24, 32...). kb open shows it.\n", n)
+		}
 	case "remove ":
 		err = remove()
 	case "version ", "--version ":
@@ -94,6 +114,7 @@ const usage = `kb: Kilobyte, the text-mode desktop, in Windows.
   kb close            close Kilobyte
   kb autolaunch on    open Kilobyte when you sign in to Windows
   kb autolaunch off   do not
+  kb size N           its text size (16, as on a PC; 24, 32... bigger)
   kb remove           remove Kilobyte (its system and its files)
 
 https://jgm240.github.io/kilobyte/
@@ -256,6 +277,16 @@ grep -q '^\[user\]' /etc/wsl.conf || printf '\n[user]\ndefault=%[1]s\n' >> /etc/
 	return nil
 }
 
+// textSize: the size chosen with "kb size", in the Mac's points: 16 is the size
+// Kilobyte has on a PC (each font pixel one screen pixel, 2 x 2 at 200 %).
+func textSize() int {
+	b, err := os.ReadFile(filepath.Join(home, "size"))
+	if n, e := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && e == nil && n > 0 {
+		return n
+	}
+	return 16
+}
+
 // look: Kilobyte's pixel font and a Windows Terminal profile with its colours.
 func look() {
 	if _, err := os.Stat(fontFile); err != nil {
@@ -274,7 +305,7 @@ func look() {
       "commandline": "wsl.exe -d Kilobyte -- /usr/bin/kilobyte",
       "icon": %q,
       "colorScheme": "Kilobyte CGA",
-      "font": { "face": "Kilobyte VGA", "size": 12 },
+      "font": { "face": "Kilobyte VGA", "size": %s },
       "cursorShape": "underscore",
       "tabColor": "#0000AA",
       "closeOnExit": "always",
@@ -294,7 +325,7 @@ func look() {
     }
   ]
 }
-`, icon)
+`, icon, strconv.FormatFloat(float64(textSize())*0.75, 'f', -1, 64))
 	if old, _ := os.ReadFile(fragment); string(old) != profile {
 		os.MkdirAll(filepath.Dir(fragment), 0o755)
 		os.WriteFile(fragment, []byte(profile), 0o644)
@@ -314,9 +345,10 @@ func open() error {
 	// Windows Terminal with Kilobyte's profile (if it is not known yet, the
 	// same command in the usual profile); else a console window.
 	if wt, err := exec.LookPath("wt.exe"); err == nil {
-		return exec.Command(wt, "-p", "Kilobyte", "wsl.exe", "-d", distro, "--", "/usr/bin/kilobyte").Start()
+		// Maximised: like Kilobyte on a PC, the whole screen.
+		return exec.Command(wt, "--maximized", "-p", "Kilobyte", "wsl.exe", "-d", distro, "--", "/usr/bin/kilobyte").Start()
 	}
-	return exec.Command("cmd.exe", "/c", "start", "Kilobyte", "wsl.exe", "-d", distro, "--", "/usr/bin/kilobyte").Start()
+	return exec.Command("cmd.exe", "/c", "start", "Kilobyte", "/max", "wsl.exe", "-d", distro, "--", "/usr/bin/kilobyte").Start()
 }
 
 func autolaunch(on bool) error {

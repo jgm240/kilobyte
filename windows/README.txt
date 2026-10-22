@@ -8,6 +8,7 @@ WSL, shown in Windows Terminal with Kilobyte's colours and pixel font.
   kb close            close Kilobyte
   kb autolaunch on    open Kilobyte when you sign in to Windows
   kb autolaunch off   do not
+  kb size N           its text size (16, the size it has on a PC; 24, 32...)
   kb remove           remove Kilobyte (its system and its files)
 
 The first "kb open" sets everything up:
