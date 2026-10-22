@@ -13,7 +13,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
 }
 </script>
 <title>Kilobyte Transition</title>
-<meta name="description" content="kilobyte-transition: add Kilobyte to Debian, Ubuntu or Raspberry Pi OS next to its own desktop, with one line. kb open, kb close, kb autolaunch.">
+<meta name="description" content="kilobyte-transition: Kilobyte next to your system on Linux (APT), macOS (Homebrew) and Windows (WinGet). kb open, kb close, kb autolaunch.">
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -35,10 +35,17 @@ if (!/[?&]graphical\b/.test(location.search) &&
 
 <main>
   <h1 class="big">Transition</h1>
-  <p class="lead">Keep your desktop. Add Kilobyte next to it, and switch with one word.</p>
+  <p class="lead">Keep your system. Add Kilobyte next to it, and switch with one word: on Linux, macOS and Windows.</p>
 
+  <div class="tabs" role="tablist" aria-label="Your system">
+    <button type="button" role="tab" id="tab-linux" aria-controls="linux" data-help="Debian, Ubuntu, Raspberry Pi OS"><span><span class="k">L</span>inux</span></button>
+    <button type="button" role="tab" id="tab-macos" aria-controls="macos" data-help="Apple silicon and Intel Macs, macOS 12 or newer"><span><span class="k">m</span>acOS</span></button>
+    <button type="button" role="tab" id="tab-windows" aria-controls="windows" data-help="Windows 10 (2004 or newer) and Windows 11"><span><span class="k">W</span>indows</span></button>
+  </div>
+
+  <div role="tabpanel" id="linux" aria-labelledby="tab-linux">
   <section class="box">
-    <h2>Install</h2>
+    <h2>Install on Linux</h2>
     <p>On Debian, Ubuntu or Raspberry Pi OS, in a terminal:</p>
     <pre data-copy>cd /tmp &amp;&amp; wget -q https://jgm240.github.io/kilobyte/kilobyte-transition.deb &amp;&amp; sudo apt install ./kilobyte-transition.deb</pre>
     <p>The package brings its own APT repository, so later versions come with
@@ -46,32 +53,20 @@ if (!/[?&]graphical\b/.test(location.search) &&
       take a few hundred MB; for the Program Manager alone, add <code>--no-install-recommends</code>
       after <code>install</code>.</p>
   </section>
-
   <section class="box">
-    <h2>Use</h2>
-    <ul class="menu">
-      <li><span class="item" data-help="The first time it logs you in on its own console and starts Kilobyte"><span>kb <span class="k">o</span>pen</span><span class="d">go to Kilobyte</span></span></li>
-      <li><span class="item" data-help="Kilobyte stays as it is; the desktop is started if it is not running"><span>kb <span class="k">c</span>lose</span><span class="d">go back to the desktop</span></span></li>
-      <li><span class="item" data-help="Next start: no desktop, straight into Kilobyte (kb close still brings the desktop)"><span>kb <span class="k">a</span>utolaunch on</span><span class="d">start the computer into Kilobyte</span></span></li>
-      <li><span class="item" data-help="Next start: the desktop, as before"><span>kb autolaunch off</span><span class="d">start into the desktop again</span></span></li>
-    </ul>
-    <p style="margin-top:16px">In Kilobyte, Exit › "Back to the desktop" does the same as <code>kb close</code>.
-      <code>kb</code> asks for your password: it is for users who may use <code>sudo</code>.</p>
-  </section>
-
-  <section class="box">
-    <h2>How it works</h2>
+    <h2>How it works on Linux</h2>
     <p>Kilobyte runs on a text console of its own (the sixth, Ctrl+Alt+F6), where you are logged in
       by yourself. Your desktop keeps running on its own console; <code>kb</code> switches between the
-      two, and each stays exactly as you left it.</p>
+      two, and each stays exactly as you left it. <code>kb close</code> goes back to the desktop, and
+      <code>kb autolaunch on</code> starts the computer straight into Kilobyte. In Kilobyte, Exit ›
+      "Back to the desktop" does the same as <code>kb close</code>. <code>kb</code> asks for your
+      password: it is for users who may use <code>sudo</code>.</p>
     <p>Kilobyte leaves the computer's own settings alone: the network, users, fonts, printers and
-      updates stay with your desktop's tools, and Kilobyte's Settings show only its own things
-      (themes, wallpaper, default programs, email, sounds).</p>
+      updates stay with your desktop's tools, and Kilobyte's Settings show only its own things.</p>
     <p><b>Removing it:</b> <code>sudo apt remove kilobyte-transition</code> puts the computer back as it
       was and keeps the repository, so <code>apt install kilobyte-transition</code> brings Kilobyte back;
       <code>sudo apt purge kilobyte-transition</code> removes the repository too.</p>
   </section>
-
   <section class="box">
     <h2>The repository by hand</h2>
     <p>The same, without the one-line package:</p>
@@ -80,6 +75,66 @@ sudo curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources https://jgm240.github.
 sudo apt update &amp;&amp; sudo apt install kilobyte-transition</pre>
     <p class="dim">The packages are signed with the key in
       <a href="apt/kilobyte-archive-keyring.asc">kilobyte-archive-keyring.asc</a>.</p>
+  </section>
+  </div>
+
+  <div role="tabpanel" id="macos" aria-labelledby="tab-macos" hidden>
+  <section class="box">
+    <h2>Install on macOS</h2>
+    <p>With <a href="https://brew.sh/">Homebrew</a>, in Terminal:</p>
+    <pre data-copy>brew trust jgm240/kilobyte
+brew install --cask jgm240/kilobyte/kilobyte</pre>
+    <p>That puts <b>Kilobyte</b> in Applications. Open it: the first time, macOS asks you to allow it
+      (System Settings › Privacy &amp; Security › "Open Anyway", once) and whether it may use Terminal.
+      Then it sets itself up, which downloads about 1 GB once and takes a few minutes.</p>
+    <p class="dim">Only the <code>kb</code> command, without the app:
+      <code>brew install jgm240/kilobyte/kilobyte-transition</code>, then <code>kb open</code>.</p>
+  </section>
+  <section class="box">
+    <h2>How it works on macOS</h2>
+    <p>Kilobyte runs in a small Debian machine made with <a href="https://lima-vm.io/">Lima</a>, using
+      the Mac's own virtualisation, and shows in Terminal. <code>kb open</code> (or the app) starts it;
+      Exit in Kilobyte closes the window, and <code>kb close</code> also stops the machine and frees its
+      memory. <code>kb autolaunch on</code> opens Kilobyte when you log in, <code>kb update</code> gets
+      the newest Kilobyte, and your Mac's home folder can be read from inside it.</p>
+    <p><b>Removing it:</b> <code>kb remove</code> deletes Kilobyte's machine, then
+      <code>brew uninstall --cask kilobyte</code>.</p>
+  </section>
+  </div>
+
+  <div role="tabpanel" id="windows" aria-labelledby="tab-windows" hidden>
+  <section class="box">
+    <h2>Install on Windows</h2>
+    <p>In a terminal (Windows Terminal or PowerShell):</p>
+    <pre data-copy>winget install Kilobyte.Transition</pre>
+    <p>Then type <code>kb open</code>. The first time it turns on WSL if it is off (Windows asks for
+      permission and then wants one restart; type <code>kb open</code> again afterwards), downloads
+      Kilobyte (about 280 MB), checks it and sets it up.</p>
+    <p class="dim">Until the package is listed in WinGet, take the zip from the
+      <a href="https://github.com/jgm240/kilobyte/releases/tag/windows-v1.5">Kilobyte for Windows release</a>,
+      unpack it and run <code>kb open</code> from that folder.</p>
+  </section>
+  <section class="box">
+    <h2>How it works on Windows</h2>
+    <p>Kilobyte runs as a Linux system of its own in WSL, the part of Windows that runs Linux, and
+      shows in Windows Terminal with Kilobyte's colours and pixel font. Exit in Kilobyte closes it;
+      <code>kb close</code> stops it. <code>kb autolaunch on</code> opens Kilobyte when you sign in.
+      Your Windows drives are in <code>/mnt</code> (C: is <code>/mnt/c</code>), and Kilobyte Update in
+      Settings keeps Kilobyte new.</p>
+    <p><b>Removing it:</b> <code>kb remove</code> deletes Kilobyte's system, then
+      <code>winget uninstall Kilobyte.Transition</code>.</p>
+  </section>
+  </div>
+
+  <section class="box">
+    <h2>The kb command</h2>
+    <ul class="menu">
+      <li><span class="item" data-help="The first time it sets Kilobyte up"><span>kb <span class="k">o</span>pen</span><span class="d">go to Kilobyte</span></span></li>
+      <li><span class="item" data-help="Linux: back to the desktop; macOS and Windows: Kilobyte stops"><span>kb <span class="k">c</span>lose</span><span class="d">leave Kilobyte</span></span></li>
+      <li><span class="item" data-help="Linux: start the computer into Kilobyte; macOS and Windows: open it when you log in"><span>kb <span class="k">a</span>utolaunch on</span><span class="d">Kilobyte first, at every start</span></span></li>
+      <li><span class="item" data-help="Back to how it was"><span>kb autolaunch off</span><span class="d">not any more</span></span></li>
+      <li><span class="item" data-help="macOS and Windows: Kilobyte's machine with everything in it (on Linux: apt remove)"><span>kb <span class="k">r</span>emove</span><span class="d">remove Kilobyte</span></span></li>
+    </ul>
   </section>
 </main>
 

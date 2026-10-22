@@ -229,6 +229,19 @@ tr + tr td { padding-top: 8px; }
 .c-r { color: #aa0000; } .c-b { color: #0000aa; } .c-c { color: #55ffff; }
 .b-g { background: #aaaaaa; } .b-k { background: #000000; } .b-b { background: #0000aa; } .b-c { background: #00aaaa; }
 
+/* Tabs, drawn like buttons: the chosen one lit. */
+.tabs { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 32px; }
+.tabs [role="tab"] {
+  font: inherit; cursor: pointer; border: 0; padding: 0 8px;
+  background: var(--box); color: var(--ink); box-shadow: 8px 8px 0 0 var(--shadow);
+}
+.tabs [role="tab"]::before { content: "< "; } .tabs [role="tab"]::after { content: " >"; }
+.tabs [role="tab"] .k { color: var(--key); }
+.tabs [role="tab"]:hover, .tabs [role="tab"]:focus-visible { background: var(--btn-bg); color: var(--btn-ink); outline: none; }
+.tabs [role="tab"]:hover .k, .tabs [role="tab"]:focus-visible .k { color: var(--btn-key); }
+.tabs [role="tab"][aria-selected="true"] { background: var(--sel-bg); color: var(--sel-ink); }
+.tabs [role="tab"][aria-selected="true"] .k { color: var(--sel-key); }
+
 /* The bottom line: what the item under the mouse does. */
 .status {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
