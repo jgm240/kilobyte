@@ -1,0 +1,93 @@
+#!/bin/sh
+# kb: Kilobyte, the text-mode desktop, on macOS (the kilobyte-transition
+# Homebrew package). Kilobyte runs in a small Debian virtual machine made
+# with Lima (Apple's own virtualisation), shown in your terminal:
+#
+#   kb open             go to Kilobyte (the first time it sets the machine up)
+#   kb close            stop Kilobyte's machine
+#   kb autolaunch on    open Kilobyte in Terminal when you log in to your Mac
+#   kb autolaunch off   do not
+#   kb autolaunch       say which it is
+#   kb update           the newest Kilobyte (apt upgrade in the machine)
+#   kb remove           remove Kilobyte's machine and everything in it
+#
+# Copyright (C) 2026 Kilobyte contributors. GNU GPL, version 3 or later.
+set -e
+VM=kilobyte
+here=$(cd "$(dirname "$0")" && pwd -P)
+# The Lima template: next to kb in a Homebrew install, or in the repository.
+TEMPLATE=""
+for t in "$here/../share/kilobyte-transition/kilobyte.yaml" "$here/kilobyte.yaml"; do
+    [ -f "$t" ] && { TEMPLATE=$t; break; }
+done
+AGENT="$HOME/Library/LaunchAgents/io.github.jgm240.kilobyte.plist"
+
+usage() { sed -n 's/^#   //p' "$0"; exit "${1:-0}"; }
+
+command -v limactl >/dev/null || { echo "kb: Lima is missing (brew install lima)" >&2; exit 1; }
+
+status() { limactl list --format '{{.Status}}' "$VM" 2>/dev/null || true; }
+
+ensure() {
+    case $(status) in
+        Running) return 0 ;;
+        "")
+            [ -n "$TEMPLATE" ] || { echo "kb: the Kilobyte template is missing" >&2; exit 1; }
+            echo "Setting up Kilobyte's machine: Debian and Kilobyte download once (about 1 GB);"
+            echo "this takes a few minutes."
+            limactl create --name="$VM" --tty=false "$TEMPLATE" ;;
+    esac
+    limactl start --tty=false "$VM"
+}
+
+run_here() { exec limactl shell --workdir / "$VM" /usr/bin/kilobyte; }
+
+case "${1:-} ${2:-}" in
+    "open ")
+        ensure
+        if [ -t 0 ] && [ -t 1 ]; then
+            run_here                              # in this terminal
+        else
+            # From the login item (no terminal): a Terminal window.
+            osascript -e "tell application \"Terminal\" to do script \"'$0' open; exit\"" \
+                      -e 'tell application "Terminal" to activate' >/dev/null
+        fi ;;
+    "close ")
+        [ "$(status)" = Running ] && limactl stop "$VM" || echo "Kilobyte is not running." ;;
+    "autolaunch on")
+        mkdir -p "$(dirname "$AGENT")"
+        cat > "$AGENT" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>io.github.jgm240.kilobyte</string>
+  <key>ProgramArguments</key><array><string>$here/kb</string><string>open</string></array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$(dirname "$(command -v limactl)"):/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+        launchctl bootout "gui/$(id -u)" "$AGENT" 2>/dev/null || true
+        launchctl bootstrap "gui/$(id -u)" "$AGENT" 2>/dev/null || true
+        echo "Kilobyte opens in Terminal when you log in. (kb autolaunch off undoes it.)" ;;
+    "autolaunch off")
+        launchctl bootout "gui/$(id -u)" "$AGENT" 2>/dev/null || true
+        rm -f "$AGENT"
+        echo "Kilobyte no longer opens when you log in." ;;
+    "autolaunch ")
+        if [ -f "$AGENT" ]; then echo "on: Kilobyte opens when you log in"; else echo "off: Kilobyte does not open by itself"; fi ;;
+    "update ")
+        ensure
+        limactl shell --workdir / "$VM" sudo sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y' ;;
+    "remove ")
+        printf 'This removes Kilobyte'"'"'s machine with everything in it (your Kilobyte documents too). Remove it? [y/N] '
+        read -r a
+        case $a in y | Y | yes) ;; *) exit 0 ;; esac
+        launchctl bootout "gui/$(id -u)" "$AGENT" 2>/dev/null || true
+        rm -f "$AGENT"
+        limactl delete --force "$VM" 2>/dev/null || true
+        echo "Kilobyte's machine is removed. (brew uninstall kilobyte-transition removes kb itself.)" ;;
+    "help " | "--help " | "-h " | " ") usage 0 ;;
+    *) usage 2 ;;
+esac

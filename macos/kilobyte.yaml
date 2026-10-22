@@ -1,0 +1,45 @@
+# Kilobyte for macOS: a small Debian virtual machine (Lima, with Apple's own
+# virtualisation) that runs Kilobyte from the kilobyte-transition package.
+# kb (macos/kb) makes it with "limactl create --name=kilobyte" and starts it.
+minimumLimaVersion: 1.0.0
+vmType: vz
+images:
+- location: "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-arm64.qcow2"
+  arch: "aarch64"
+- location: "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
+  arch: "x86_64"
+cpus: 2
+memory: "1GiB"
+disk: "10GiB"
+# Your Mac's home folder, readable in Kilobyte (in /Users/you, as on the Mac).
+mounts:
+- location: "~"
+  writable: false
+containerd:
+  system: false
+  user: false
+ssh:
+  forwardAgent: false
+provision:
+- mode: system
+  script: |
+    #!/bin/sh
+    # Kilobyte, from its APT repository (later versions come with apt upgrade).
+    set -e
+    command -v kilobyte >/dev/null 2>&1 && exit 0
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq curl ca-certificates >/dev/null
+    install -d /etc/apt/keyrings
+    curl -fsSLo /etc/apt/keyrings/kilobyte-archive-keyring.gpg https://jgm240.github.io/kilobyte/apt/kilobyte-archive-keyring.gpg
+    curl -fsSLo /etc/apt/sources.list.d/kilobyte.sources https://jgm240.github.io/kilobyte/apt/kilobyte.sources
+    apt-get update -qq
+    apt-get install -y kilobyte-transition
+probes:
+- description: "Kilobyte is installed"
+  script: |
+    #!/bin/sh
+    timeout 900 sh -c 'until command -v kilobyte >/dev/null 2>&1; do sleep 3; done'
+  hint: "The Kilobyte package is being installed; this takes a few minutes the first time."
+message: |
+  Kilobyte is set up. Type  kb open  to go to Kilobyte.

@@ -464,13 +464,21 @@ tiles_args() {
     printf '%s\0' --colors --cr-wrap --begin 3 $(( x - 66 ))
 }
 
+# kilobyte-transition in a terminal window rather than on a console of its
+# own (the Mac's Lima machine, an SSH login): Exit just closes Kilobyte.
+kb_in_window() {
+    [ "$KB_VARIANT" = transition ] || return 1
+    case $(tty 2>/dev/null) in /dev/tty[0-9]*) return 1 ;; esac
+    return 0
+}
+
 shut_down() {
     if [ "$KB_VARIANT" = kindle ]; then
         kb_yesno "Exit" "Leave KilobytEink and go back to the Kindle?" 7 50 && exit 0
         return
     fi
-    if [ "$KB_VARIANT" = wsl ]; then
-        kb_yesno "Exit" "Close Kilobyte? (kb open, or the Kilobyte entry of Windows Terminal, brings it back.)" 8 60 && exit 0
+    if [ "$KB_VARIANT" = wsl ] || kb_in_window; then
+        kb_yesno "Exit" "Close Kilobyte? (kb open brings it back.)" 7 50 && exit 0
         return
     fi
     kb_yesno "Shut Down" "Turn off the computer now?" || return
@@ -488,8 +496,8 @@ quit_menu() {
         kb_yesno "Exit" "Leave KilobytEink and go back to the Kindle?" 7 50 && return 10
         return 0
     fi
-    if [ "$KB_VARIANT" = wsl ]; then
-        kb_yesno "Exit" "Close Kilobyte? (kb open, or the Kilobyte entry of Windows Terminal, brings it back.)" 8 60 && return 10
+    if [ "$KB_VARIANT" = wsl ] || kb_in_window; then
+        kb_yesno "Exit" "Close Kilobyte? (kb open brings it back.)" 7 50 && return 10
         return 0
     fi
     [ -n "${KILOBYTE_DESK:-}" ] && items+=(Close "Close this window" "The other windows stay open")
