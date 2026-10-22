@@ -3,7 +3,11 @@
 # Homebrew package). Kilobyte runs in a small Debian virtual machine made
 # with Lima (Apple's own virtualisation), shown in your terminal:
 #
-#   kb open             go to Kilobyte (the first time it sets the machine up)
+#   kb open             go to Kilobyte, in a Terminal window of its own with its
+#                       pixel font (the first time it sets the machine up)
+#   kb open --here      go to Kilobyte in this terminal
+#   kb size N           Kilobyte's text size in points (sharpest at 8, 16, 24, 32...)
+#   kb size auto        16 points, the size of Kilobyte on a PC (the default)
 #   kb close            stop Kilobyte's machine
 #   kb autolaunch on    open Kilobyte in Terminal when you log in to your Mac
 #   kb autolaunch off   do not
@@ -20,6 +24,8 @@ TEMPLATE=""
 for t in "$here/../share/kilobyte-transition/kilobyte.yaml" "$here/kilobyte.yaml"; do
     [ -f "$t" ] && { TEMPLATE=$t; break; }
 done
+FONT="$(dirname "${TEMPLATE:-$here/x}")/kilobyte-vga16.ttf"
+CONF="$HOME/Library/Application Support/Kilobyte"
 AGENT="$HOME/Library/LaunchAgents/io.github.jgm240.kilobyte.plist"
 
 usage() { sed -n 's/^#   //p' "$0"; exit "${1:-0}"; }
@@ -67,18 +73,132 @@ wait_ready() {
     echo " ready."
 }
 
-run_here() { wait_ready; exec limactl shell --workdir / "$VM" /usr/bin/kilobyte; }
+run_here() { ensure; wait_ready; exec limactl shell --workdir / "$VM" /usr/bin/kilobyte; }
+
+# Kilobyte's pixel font, for the user (Terminal finds it in ~/Library/Fonts).
+install_font() {
+    [ -f "$HOME/Library/Fonts/KilobyteVGA.ttf" ] && return 0
+    [ -f "$FONT" ] || return 0
+    mkdir -p "$HOME/Library/Fonts" && cp "$FONT" "$HOME/Library/Fonts/KilobyteVGA.ttf"
+}
+
+# Text sizes to try, first choice first. 16 points draws each pixel of
+# Kilobyte's font as 2 x 2 on a Retina screen (1 x 1 on others): the size it
+# has on a PC's console, sharp. 8 if the screen is too small for 80 x 25
+# characters at 16. "kb size N" picks another.
+sizes() {
+    size=$(cat "$CONF/size" 2>/dev/null || echo auto)
+    if [ "$size" = auto ]; then echo "16, 8"; else echo "$size, 8"; fi
+}
+
+# The "Kilobyte" Terminal profile, made once: the pixel font without smoothing,
+# line spacing 1, the 16 CGA colours, and the window closing when Kilobyte
+# ends. Only Kilobyte's windows use it; your own profile stays as it is.
+# Written as a .terminal file (Terminal adds a profile when one is opened).
+PROFILE="$CONF/Kilobyte.terminal"
+make_profile() {
+    mkdir -p "$CONF"
+    osascript -l JavaScript - "$PROFILE" "$here/kb" >/dev/null <<'JS'
+ObjC.import("AppKit");
+function run(argv) {
+    var path = argv[0], kb = argv[1];
+    var d = $.NSMutableDictionary.alloc.init;
+    function put(key, value) { d.setObjectForKey(value, key); }
+    function archive(o) { return $.NSKeyedArchiver.archivedDataWithRootObjectRequiringSecureCodingError(o, false, null); }
+    function color(hex) {
+        var n = parseInt(hex, 16);
+        return archive($.NSColor.colorWithSRGBRedGreenBlueAlpha(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, 1));
+    }
+    put("name", "Kilobyte");
+    put("type", "Window Settings");
+    put("ProfileCurrentVersion", $.NSNumber.numberWithDouble(2.07));
+    var font = $.NSFont.fontWithNameSize("KilobyteVGA-Regular", 16);
+    if (font.isNil()) font = $.NSFont.userFixedPitchFontOfSize(16);
+    put("Font", archive(font));
+    put("FontAntialias", $.NSNumber.numberWithBool(false));
+    put("FontHeightSpacing", $.NSNumber.numberWithDouble(1.0));
+    put("FontWidthSpacing", $.NSNumber.numberWithDouble(1.0));
+    put("columnCount", $.NSNumber.numberWithInt(100));
+    put("rowCount", $.NSNumber.numberWithInt(32));
+    put("BackgroundColor", color("000000"));
+    put("TextColor", color("AAAAAA"));
+    put("TextBoldColor", color("FFFFFF"));
+    put("CursorColor", color("FFFFFF"));
+    put("SelectionColor", color("5555FF"));
+    var ansi = [["Black", "000000"], ["Red", "AA0000"], ["Green", "00AA00"], ["Yellow", "AA5500"],
+                ["Blue", "0000AA"], ["Magenta", "AA00AA"], ["Cyan", "00AAAA"], ["White", "AAAAAA"],
+                ["BrightBlack", "555555"], ["BrightRed", "FF5555"], ["BrightGreen", "55FF55"], ["BrightYellow", "FFFF55"],
+                ["BrightBlue", "5555FF"], ["BrightMagenta", "FF55FF"], ["BrightCyan", "55FFFF"], ["BrightWhite", "FFFFFF"]];
+    ansi.forEach(function (c) { put("ANSI" + c[0] + "Color", color(c[1])); });
+    put("UseBrightBold", $.NSNumber.numberWithBool(true));
+    put("useOptionAsMetaKey", $.NSNumber.numberWithBool(true));
+    put("shellExitAction", $.NSNumber.numberWithInt(1));       // close when Kilobyte ends
+    put("ShowWindowSettingsNameInTitle", $.NSNumber.numberWithBool(false));
+    d.writeToFileAtomically(path, true);
+}
+JS
+}
+
+# A Terminal window of Kilobyte's own, in its profile, as large as the
+# screen allows (the whole screen, like Kilobyte on a PC).
+open_window() {
+    install_font
+    sleep 1                                   # (a font just added takes a moment)
+    make_profile
+    osascript >/dev/null <<OSA
+tell application "Terminal"
+    if not (exists settings set "Kilobyte") then
+        -- Opening the profile's file adds it to Terminal, in a window of its
+        -- own: that window (and only that one) is closed again.
+        set oldWindows to id of every window
+        do shell script "open " & quoted form of "$PROFILE"
+        repeat 20 times
+            if exists settings set "Kilobyte" then exit repeat
+            delay 0.25
+        end repeat
+        delay 0.5
+        repeat with w in (every window)
+            if (id of w) is not in oldWindows then close w
+        end repeat
+    end if
+    set t to do script "clear; exec '$here/kb' open --here"
+    try
+        set current settings of t to settings set "Kilobyte"
+    end try
+    activate
+    try
+        set custom title of t to "Kilobyte"
+    end try
+    repeat with n in {$(sizes)}
+        try
+            set font name of t to "KilobyteVGA-Regular"
+            set font antialiasing of t to false
+            set font size of t to (n as integer)
+            set number of columns of t to 400
+            set number of rows of t to 200
+            if (number of columns of t) ≥ 80 and (number of rows of t) ≥ 25 then exit repeat
+        end try
+    end repeat
+end tell
+OSA
+}
 
 case "${1:-} ${2:-}" in
+    "open --here")
+        run_here ;;
     "open ")
-        ensure
-        if [ -t 0 ] && [ -t 1 ]; then
-            run_here                              # in this terminal
-        else
-            # From the login item (no terminal): a Terminal window.
-            osascript -e "tell application \"Terminal\" to do script \"'$0' open; exit\"" \
-                      -e 'tell application "Terminal" to activate' >/dev/null
-        fi ;;
+        open_window ;;
+    "size ")
+        echo "Kilobyte's text size: $(cat "$CONF/size" 2>/dev/null || echo "auto (16 points, as on a PC)")" ;;
+    "size auto")
+        rm -f "$CONF/size"
+        echo "Kilobyte picks its text size by itself; kb open shows it." ;;
+    "size "*)
+        case $2 in
+            [1-9] | [1-9][0-9] | 1[0-9][0-9]) mkdir -p "$CONF" && echo "$2" > "$CONF/size"
+                echo "Kilobyte's text size: $2 points (sharpest at 8, 16, 24, 32...); kb open shows it." ;;
+            *) echo "kb: a size in points, such as 24, or auto" >&2; exit 2 ;;
+        esac ;;
     "close ")
         [ "$(status)" = Running ] && limactl stop "$VM" || echo "Kilobyte is not running." ;;
     "autolaunch on")

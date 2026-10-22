@@ -107,6 +107,8 @@ def main():
     fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=BASELINE * PX, descent=-(height - BASELINE) * PX)
     fb.setupNameTable({"familyName": "Kilobyte VGA", "styleName": "Regular",
+                       "fullName": "Kilobyte VGA", "psName": "KilobyteVGA-Regular",
+                       "uniqueFontIdentifier": "Kilobyte VGA Regular",
                        "copyright": "Debian console-setup authors; Kilobyte contributors. GNU GPL 2 or later.",
                        "licenseDescription": "GNU General Public License, version 2 or later"})
     fb.setupOS2(sTypoAscender=BASELINE * PX, sTypoDescender=-(height - BASELINE) * PX, sTypoLineGap=0,

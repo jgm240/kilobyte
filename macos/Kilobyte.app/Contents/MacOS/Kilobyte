@@ -9,15 +9,5 @@ if [ -z "$KB" ]; then
     osascript -e 'display alert "Kilobyte" message "The kb command is missing. In Terminal: brew install jgm240/kilobyte/kilobyte-transition"' >/dev/null
     exit 1
 fi
-osascript >/dev/null <<OSA
-tell application "Terminal"
-    activate
-    set t to do script "clear; '$KB' open; exit"
-    try
-        set w to (first window whose tabs contains t)
-        set number of columns of w to 100
-        set number of rows of w to 32
-        set custom title of t to "Kilobyte"
-    end try
-end tell
-OSA
+# kb opens Kilobyte's own Terminal window (its font, size and colours).
+exec "$KB" open
