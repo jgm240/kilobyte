@@ -1,0 +1,12 @@
+# Kilobyte for Windows (./build.sh --wsl): Kilobyte as a WSL system, started
+# in Windows Terminal by kb.exe (windows/). Windows brings the kernel,
+# drivers, network and screen: no kernel, firmware, X, Wine or boot loader.
+# Installed without "Recommends".
+bash sudo less nano procps iproute2 iputils-ping ca-certificates curl file locales
+dialog mc elinks sc-im calcurse htop bc bsdgames moon-buggy alpine weechat luit telnet openssh-client
+python3 python3-pyte poppler-utils unzip zip
+# Online videos and the Video Player (as text blocks in the terminal)
+mpv ffmpeg quickjs
+# News feeds, Sync, Chess, Sudoku, text adventures, dictionary. Offline
+# Wikipedia (kiwix-tools) is installed when first used.
+newsboat unison gnuchess nudoku frotz dict-wn

@@ -51,10 +51,18 @@ if [ -n "$KINDLE" ]; then
     [ "$ARCH" = armhf ] || { echo "KilobytEink is built for armhf" >&2; exit 2; }
     KIND=kindle KERNEL= EFI=
 fi
+# Kilobyte for Windows (WSL=1): a WSL system; Windows brings the kernel.
+WSL=${WSL:-}
+if [ -n "$WSL" ]; then
+    case $ARCH in amd64 | arm64) ;; *) echo "Kilobyte for Windows is built for amd64 or arm64" >&2; exit 2 ;; esac
+    KIND=wsl KERNEL= EFI= EFI32= FOREIGN= RPI_REPO=
+fi
 RPI_MIRROR=http://archive.raspberrypi.com/debian
 RPI_KEY=/usr/share/keyrings/raspberrypi-archive-keyring.pgp
 if [ $KIND = kindle ]; then
     NAME="kilobyteink-$VERSION"
+elif [ $KIND = wsl ]; then
+    NAME="kilobyte-$VERSION-wsl-$ARCH"
 elif [ $KIND = pc ]; then
     NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}${CD:+-cd}"
 else
@@ -186,7 +194,7 @@ CONTROL
 # The key of a base system: everything that decides what is in it.
 base_key() {
     {
-        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}${KINDLE:+ kindle}"
+        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}${KINDLE:+ kindle}${WSL:+ wsl}"
         echo "$1"                                   # the package list
         cat "$WORK/debs/.recipes" 2>/dev/null
         ls "$WORK/debs" 2>/dev/null
@@ -199,14 +207,18 @@ stage_base() {
     local lists=(/src/image/packages.txt "/src/image/packages-$KIND.txt")
     # KilobytEink: its own list and nothing else (no kernel, firmware or Wine).
     [ $KIND = kindle ] && lists=(/src/image/packages-kindle.txt)
+    # Kilobyte for Windows: the same, its own list.
+    [ $KIND = wsl ] && lists=(/src/image/packages-wsl.txt)
     # The CD version (CD=1) has its own list for the architecture, if there is one.
-    if [ -n "${CD:-}" ] && [ -f "/src/image/packages-$ARCH-cd.txt" ]; then
+    if [ $KIND = wsl ] || [ $KIND = kindle ]; then
+        :
+    elif [ -n "${CD:-}" ] && [ -f "/src/image/packages-$ARCH-cd.txt" ]; then
         lists+=("/src/image/packages-$ARCH-cd.txt")
     elif [ -f "/src/image/packages-$ARCH.txt" ]; then
         lists+=("/src/image/packages-$ARCH.txt")
     fi
     packages="$(pkgs "${lists[@]}")${KERNEL:+,$KERNEL}${EFI:+,$EFI}${EFI32:+,$EFI32}"
-    [ -n "${LITE:-}" ] || [ $KIND = kindle ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
+    [ -n "${LITE:-}" ] || [ $KIND = kindle ] || [ $KIND = wsl ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
 
     key=$(base_key "$packages")
     if [ -z "${FRESH:-}" ] && [ -d "$WORK/base" ] && [ "$(cat "$WORK/base.key" 2>/dev/null)" = "$key" ]; then
@@ -253,7 +265,7 @@ stage_base() {
     mkdir -p "$WORK/apt-cache"
 
     echo "==> Building the Debian $SUITE base system for $ARCH (kept for the next builds)"
-    export KERNEL_SUITE RPI_REPO RPI_KEY KINDLE
+    export KERNEL_SUITE RPI_REPO RPI_KEY KINDLE WSL
     # mmdebstrap gives apt hooks such as "cat >&13", which apt runs with
     # /bin/sh; dash only knows file descriptors up to 9, and under Rosetta
     # (amd64 on a Mac) the numbers are higher. Bash knows them all. (This
@@ -280,8 +292,8 @@ stage_base() {
         --setup-hook='mkdir -p "$1/var/cache/apt/archives" && { cp -n /work/apt-cache/*.deb "$1/var/cache/apt/archives/" 2>/dev/null || true; }' \
         --essential-hook='echo "debconf debconf/frontend select Noninteractive" | chroot "$1" debconf-set-selections' \
         --customize-hook='cp -n "$1"/var/cache/apt/archives/*.deb /work/apt-cache/ 2>/dev/null || true' \
-        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && for d in /work/debs/*.deb; do case $d in *box86*) [ -n "$KINDLE" ] && continue ;; esac; cp "$d" "$1/tmp/kb-debs/"; done && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
-        --customize-hook='mkdir -p "$1/usr/local/bin" && { [ -n "$KINDLE" ] || bash /src/image/wine-x86.sh "$1"; }' \
+        --customize-hook='if ls /work/debs/*.deb >/dev/null 2>&1; then mkdir -p "$1/tmp/kb-debs" && for d in /work/debs/*.deb; do case $d in *box86*) [ -n "$KINDLE$WSL" ] && continue ;; esac; cp "$d" "$1/tmp/kb-debs/"; done && chroot "$1" sh -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades /tmp/kb-debs/*.deb && for d in /tmp/kb-debs/*.deb; do apt-mark hold \$(dpkg-deb -f \$d Package); done && rm -r /tmp/kb-debs"; fi' \
+        --customize-hook='mkdir -p "$1/usr/local/bin" && { [ -n "$KINDLE$WSL" ] || bash /src/image/wine-x86.sh "$1"; }' \
         --customize-hook='rm -f "$1"/var/cache/apt/archives/*.deb' \
         "$SUITE" "$WORK/base" \
         "deb $MIRROR $SUITE main non-free-firmware" \
@@ -317,6 +329,7 @@ stage_rootfs() {
     mkdir -p "$r/etc/kilobyte"
     if [ -n "${CD:-}" ]; then echo cd > "$r/etc/kilobyte/variant"
     elif [ $KIND = kindle ]; then echo kindle > "$r/etc/kilobyte/variant"
+    elif [ $KIND = wsl ]; then echo wsl > "$r/etc/kilobyte/variant"
     else rm -f "$r/etc/kilobyte/variant"; fi
     cp /src/image/customize.sh "$r/tmp/customize.sh"
     # customize.sh runs in the system: it needs /proc, /sys and /dev there,
@@ -325,7 +338,7 @@ stage_rootfs() {
     chmod 755 "$r/usr/sbin/policy-rc.d"
     for m in proc sys dev; do mount --bind "/$m" "$r/$m"; done
     trap 'for m in dev sys proc; do umount -l "'"$r"'/$m" 2>/dev/null; done' EXIT
-    chroot "$r" bash /tmp/customize.sh "$(case $KIND in pc) echo live ;; kindle) echo kindle ;; *) echo pi ;; esac)"
+    chroot "$r" bash /tmp/customize.sh "$(case $KIND in pc) echo live ;; kindle) echo kindle ;; wsl) echo wsl ;; *) echo pi ;; esac)"
     for m in dev sys proc; do umount -l "$r/$m"; done
     trap - EXIT
     rm -f "$r/usr/sbin/policy-rc.d" "$r/tmp/customize.sh"
@@ -476,6 +489,20 @@ stage_kindlezip() {
     ls -lh "/out/$NAME.zip"
 }
 
+# Kilobyte for Windows: the system as a tarball for "wsl --import" (kb.exe
+# downloads and imports it), with its checksum.
+stage_wsltar() {
+    local r="$WORK/rootfs"
+    [ -d "$r" ] || { echo "no root file system: run the rootfs stage first" >&2; exit 1; }
+    echo "==> Writing /out/$NAME.tar.gz (a WSL system for Windows)"
+    tools pigz
+    mkdir -p /out
+    tar -C "$r" --numeric-owner --xattrs -cf - . | pigz -9 > "/out/$NAME.tar.gz.tmp"
+    mv "/out/$NAME.tar.gz.tmp" "/out/$NAME.tar.gz"
+    (cd /out && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+    ls -lh "/out/$NAME.tar.gz"
+}
+
 stage_clean() {
     rm -rf "$WORK/rootfs" "$WORK/iso" "$WORK/usb-grub" "$WORK"/*.img
     du -sh "$WORK" 2>/dev/null || true
@@ -492,5 +519,6 @@ case "${1:-}" in
     usbimg)  stage_usbimg ;;
     clean)   stage_clean ;;
     kindlezip) stage_kindlezip ;;
-    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage|kindlezip|clean" >&2; exit 2 ;;
+    wsltar)  stage_wsltar ;;
+    *) echo "usage: $0 debs|box86|base|rootfs|squash|iso|usbimg|piimage|kindlezip|wsltar|clean" >&2; exit 2 ;;
 esac

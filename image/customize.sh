@@ -41,6 +41,32 @@ kindle)
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin /var/log/*.log /tmp/* /root/.bash_history
     exit 0
     ;;
+wsl)
+    # Kilobyte for Windows: a WSL system, imported and started in Windows
+    # Terminal by kb.exe (windows/), which also makes the user (named after
+    # the Windows one, in the sudo group). Windows looks after the kernel,
+    # network, screen, sound and clock: no services here.
+    cat > /etc/wsl.conf <<'CONF'
+# Kilobyte for Windows. kb.exe adds the [user] section when it sets the system up.
+[boot]
+systemd=false
+
+[interop]
+appendWindowsPath=false
+
+[network]
+generateResolvConf=true
+CONF
+    echo '%sudo ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/kilobyte-wsl
+    chmod 0440 /etc/sudoers.d/kilobyte-wsl
+    # Kilobyte's own sounds play through the console's sound card: none here.
+    : > /etc/kilobyte/sounds-off
+    : > /etc/kilobyte/post-off
+    apt-get clean
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin /var/log/*.log /tmp/* /root/.bash_history
+    : > /etc/machine-id
+    exit 0
+    ;;
 live)
     # The live user: logs in automatically on tty1, sudo without password.
     # kilobyte-install removes all of this from an installed system.

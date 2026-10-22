@@ -200,16 +200,20 @@ apps_table() {
 # save videos and sound, and play as text blocks (silently) in the terminal.
 KINDLE_LEAVE_OUT=" BBS Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
 KINDLE_LEAVE_OUT+="Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
+# In Windows (WSL, Kilobyte for Windows): Windows has the hardware, the
+# users and the power button; Kilobyte's window simply closes.
+WSL_LEAVE_OUT=" Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network "
 apps_table_for_device() {
-    if [ "$KB_VARIANT" = kindle ]; then
-        local line
-        apps_table_now | while IFS= read -r line; do
-            case $KINDLE_LEAVE_OUT in *" ${line%%|*} "*) continue ;; esac
-            printf '%s\n' "$line"
-        done
-    else
-        apps_table_now
-    fi
+    local line leave=""
+    case $KB_VARIANT in
+        kindle) leave=$KINDLE_LEAVE_OUT ;;
+        wsl)    leave=$WSL_LEAVE_OUT ;;
+        *)      apps_table_now; return ;;
+    esac
+    apps_table_now | while IFS= read -r line; do
+        case $leave in *" ${line%%|*} "*) continue ;; esac
+        printf '%s\n' "$line"
+    done
 }
 
 apps_table_now() {
@@ -465,6 +469,10 @@ shut_down() {
         kb_yesno "Exit" "Leave KilobytEink and go back to the Kindle?" 7 50 && exit 0
         return
     fi
+    if [ "$KB_VARIANT" = wsl ]; then
+        kb_yesno "Exit" "Close Kilobyte? (kb open, or the Kilobyte entry of Windows Terminal, brings it back.)" 8 60 && exit 0
+        return
+    fi
     kb_yesno "Shut Down" "Turn off the computer now?" || return
     clear
     kb_sound shutdown wait
@@ -478,6 +486,10 @@ quit_menu() {
     local sel items=()
     if [ "$KB_VARIANT" = kindle ]; then
         kb_yesno "Exit" "Leave KilobytEink and go back to the Kindle?" 7 50 && return 10
+        return 0
+    fi
+    if [ "$KB_VARIANT" = wsl ]; then
+        kb_yesno "Exit" "Close Kilobyte? (kb open, or the Kilobyte entry of Windows Terminal, brings it back.)" 8 60 && return 10
         return 0
     fi
     [ -n "${KILOBYTE_DESK:-}" ] && items+=(Close "Close this window" "The other windows stay open")

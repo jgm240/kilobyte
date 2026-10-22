@@ -1128,6 +1128,14 @@ while true; do
                 [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
             done
             items=("${k[@]}")
+        elif [ "$KB_VARIANT" = wsl ]; then
+            # In Windows (WSL): Windows looks after the network, users, fonts,
+            # printers and power; Kilobyte Update keeps Kilobyte itself new.
+            keep=" Update Windows Appearance Wallpaper Desktop Defaults Saver Tiles Email Software Tasks About " k=()
+            for ((n = 0; n < ${#items[@]}; n += 3)); do
+                [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
+            done
+            items=("${k[@]}")
         elif [ "$KB_VARIANT" = transition ]; then
             # Next to a normal desktop: the computer's own settings look after
             # the network, login, fonts, printers, users and updates (apt).
