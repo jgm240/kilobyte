@@ -28,30 +28,6 @@ winget install Kilobyte.Transition
 ([more about it](#on-a-normal-debian-ubuntu-or-raspberry-pi-os); the whole
 system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 
-```
- ■ Kilobyte 1.5  │  user@kilobyte  │  Tue 29 Sep  14:02  │  Battery 87%
- ─────────────────────────────────────────────────────────────────────────
-
-         ┌──────────── Program Manager ────────────┐   ┌─── Weather ───────
-         │ Choose with the arrow keys or first      │   │ Vienna, Austria
-         │ letter, then Enter.                      │   │ Sunny        19°C
-         │ ┌──────────────────────────────────────┐ │   │ Tue  13°  23°
-         │ │ Editor       Text editor             │ │   └───────────────────
-         │ │ Spreadsheet  Spreadsheet             │ │   ┌─── News ──────────
-         │ │ Web          Web browser             │ │   │ · Headline one
-         │ │ Mail         Email                   │ │   │ · Headline two
-         │ │ Internet     Internet  »             │ │   └───────────────────
-         │ │ Files        File manager            │ │
-         │ │ Terminal     Terminal                │ │
-         │ │ Media        Media  »                │ │
-         │ │ Accessories  Accessories  »          │ │
-         │ │ Games        Games  »                │ │
-         │ │ Settings     Settings                │ │
-         │ └──────────────────────────────────────┘ │
-         │         <  Run  >      < Exit  >         │
-         └──────────────────────────────────────────┘▒▒
- Write and edit text files (mcedit, F9 opens its menus)
-```
 
 ## What's inside
 
