@@ -52,13 +52,12 @@ mkdir -p "$M"
     echo "PackageVersion: $PKGVER"
     echo "DefaultLocale: en-US"
     echo "ManifestType: version"
-    echo "ManifestVersion: 1.6.0"
+    echo "ManifestVersion: 1.12.0"
 } > "$M/Kilobyte.Transition.yaml"
 {
     echo "# Made by tools/make-windows.sh"
     echo "PackageIdentifier: Kilobyte.Transition"
     echo "PackageVersion: $PKGVER"
-    echo "MinimumOSVersion: 10.0.19041.0"
     echo "InstallerType: zip"
     echo "NestedInstallerType: portable"
     echo "NestedInstallerFiles:"
@@ -77,7 +76,7 @@ mkdir -p "$M"
         echo "  InstallerSha256: $(tr a-f A-F < "$OUT/$z.sha256")"
     done
     echo "ManifestType: installer"
-    echo "ManifestVersion: 1.6.0"
+    echo "ManifestVersion: 1.12.0"
 } > "$M/Kilobyte.Transition.installer.yaml"
 cat > "$M/Kilobyte.Transition.locale.en-US.yaml" <<YAML
 # Made by tools/make-windows.sh
@@ -109,6 +108,6 @@ Tags:
 - linux
 ReleaseNotesUrl: https://github.com/jgm240/kilobyte/releases/tag/$TAG
 ManifestType: defaultLocale
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0
 YAML
 ls -l "$OUT"/*.zip; find "$M" -type f
