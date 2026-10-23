@@ -47,6 +47,7 @@ done
 M=winget/manifests/k/Kilobyte/Transition/$PKGVER
 mkdir -p "$M"
 {
+    echo "# yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json"
     echo "# Made by tools/make-windows.sh"
     echo "PackageIdentifier: Kilobyte.Transition"
     echo "PackageVersion: $PKGVER"
@@ -55,6 +56,7 @@ mkdir -p "$M"
     echo "ManifestVersion: 1.12.0"
 } > "$M/Kilobyte.Transition.yaml"
 {
+    echo "# yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json"
     echo "# Made by tools/make-windows.sh"
     echo "PackageIdentifier: Kilobyte.Transition"
     echo "PackageVersion: $PKGVER"
@@ -79,6 +81,7 @@ mkdir -p "$M"
     echo "ManifestVersion: 1.12.0"
 } > "$M/Kilobyte.Transition.installer.yaml"
 cat > "$M/Kilobyte.Transition.locale.en-US.yaml" <<YAML
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 # Made by tools/make-windows.sh
 PackageIdentifier: Kilobyte.Transition
 PackageVersion: $PKGVER
