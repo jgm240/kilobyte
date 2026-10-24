@@ -46,11 +46,11 @@ if (!/[?&]graphical\b/.test(location.search) &&
       <li><a href="#programs" data-help="Web pages with CSS and JavaScript (ELinks)"><span><span class="k">W</span>eb</span><span class="d">Web browser</span></a></li>
       <li><a href="#programs" data-help="Read and write email (Alpine; a setup wizard knows the big providers)"><span><span class="k">M</span>ail</span><span class="d">Email</span></a></li>
       <li><a href="#programs" data-help="Two-panel file manager (Midnight Commander); F2 has Open with, Trash, Desktop"><span><span class="k">F</span>iles</span><span class="d">File manager</span></a></li>
-      <li><a href="#programs" data-help="News feeds, chat, BBS dialer, online videos, network drives, remote computers"><span><span class="k">I</span>nternet</span><span class="d">Internet  »</span></a></li>
-      <li><a href="#programs" data-help="Video player, music, pictures, discs"><span>M<span class="k">e</span>dia</span><span class="d">Media  »</span></a></li>
-      <li><a href="#programs" data-help="Today, notes, dictionary, encyclopedia, sync, paint, calculator, agenda"><span><span class="k">A</span>ccessories</span><span class="d">Accessories  »</span></a></li>
+      <li><a href="#programs" data-help="News feeds, chat, Messenger, BBS dialer, your own BBS, online videos, network drives"><span><span class="k">I</span>nternet</span><span class="d">Internet  »</span></a></li>
+      <li><a href="#programs" data-help="Video player, music, podcasts, pictures, discs"><span>M<span class="k">e</span>dia</span><span class="d">Media  »</span></a></li>
+      <li><a href="#programs" data-help="Today, notes, dictionary, encyclopedia, backup, typing tutor, sync, paint"><span><span class="k">A</span>ccessories</span><span class="d">Accessories  »</span></a></li>
       <li><a href="#programs" data-help="Chess, Sudoku, text adventures, Mines, Solitaire"><span><span class="k">G</span>ames</span><span class="d">Games  »</span></a></li>
-      <li><a href="#themes" data-help="Wi-Fi, theme, wallpaper, keyboard, date, software, users"><span>Se<span class="k">t</span>tings</span><span class="d">Settings</span></a></li>
+      <li><a href="#themes" data-help="Wi-Fi, theme editor, accessibility, wallpaper, keyboard, date, software, users"><span>Se<span class="k">t</span>tings</span><span class="d">Settings</span></a></li>
     </ul>
     <div class="buttons">
       <a class="btn primary" href="download.html" data-help="Get Kilobyte for a PC, a Raspberry Pi or a Kindle"><span><span class="k">D</span>ownload</span></a>
@@ -77,13 +77,13 @@ if (!/[?&]graphical\b/.test(location.search) &&
         <tr><th>Work</th></tr>
         <tr><td>Editor, Spreadsheet (also DOCX, ODT, XLSX, ODS), Email, Web browser, File manager, Terminal, Notes, Agenda, Cardfile, Calculator, Print</td></tr>
         <tr><th>Internet</th></tr>
-        <tr><td>News feeds, Online videos (watch, save, or read what is said), Chat, BBS dialer, Network drives, Remote Kilobyte, Company desktops</td></tr>
+        <tr><td>News feeds, Online videos (watch, save, or read what is said), Chat, Messenger (Kilobytes on the same network, no account), BBS dialer, Host your own BBS, Network drives, Remote Kilobyte, Company desktops</td></tr>
         <tr><th>Every day</th></tr>
-        <tr><td>Today (weather, appointments, headlines), Dictionary and translator, Encyclopedia (Wikipedia without the Internet), Sync between your computers</td></tr>
+        <tr><td>Today (weather, appointments, headlines), Dictionary and translator, Encyclopedia (Wikipedia without the Internet), Sync between your computers, encrypted Backups (any file back from any day), Typing tutor</td></tr>
       </table>
       <table>
         <tr><th>Media</th></tr>
-        <tr><td>Video player (as coloured blocks, or the real picture), Music player, Pictures, DVDs and CDs, Paint</td></tr>
+        <tr><td>Video player (as coloured blocks, or the real picture), Music player, Podcasts, Pictures, DVDs and CDs, Paint</td></tr>
         <tr><th>Games</th></tr>
         <tr><td>Chess, Sudoku, text adventures, Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure</td></tr>
         <tr><th>Old programs</th></tr>
@@ -103,9 +103,18 @@ if (!/[?&]graphical\b/.test(location.search) &&
     </table>
   </section>
 
+  <section class="box">
+    <h2>For everyone</h2>
+    <p>A desktop made of text suits a screen reader well: Settings › Accessibility
+      reads Kilobyte aloud (and the boot menu's <span class="k">S</span> key speaks
+      from the first screen on), drives braille displays, and has large letters and
+      high contrast. In the Terminal, <code>kbutils</code> changes any setting:
+      <code>kbutils settings chg theme mustard</code>.</p>
+  </section>
+
   <section class="box" id="themes">
     <h2>Appearance</h2>
-    <p>Kilobyte has ten colour themes. Try them on this page:</p>
+    <p>Kilobyte has ten colour themes, and a theme editor for your own. Try them on this page:</p>
     <div class="themes" role="group" aria-label="Colour theme"></div>
   </section>
 </main>
