@@ -234,11 +234,11 @@
                   network, while Messenger is open.
    Host a BBS     Internet > Host a BBS makes this computer a bulletin board
                   that friends dial into with the BBS Dialer (or any telnet
-                  BBS program): message boards, file areas they download
-                  from, games, apps and chat. You choose its name, greeting
-                  (text, or ANSI art from Paint), news, what callers can do,
-                  who may join, how long a call lasts, and the port; you can
-                  read and delete messages, see who called and chat with them.
+                  BBS program): chat rooms, message boards, private mail,
+                  file areas they download from, games and apps. Settings is
+                  hostbbs's own setup: name, banner, rooms, boards, features,
+                  games, port, callers, minutes per call. Log in to it as the
+                  sysop (Call) to kick callers, broadcast and delete messages.
                   Every folder in /srv/kilobyte-bbs/files is a file area.
                   Friends elsewhere need your router to forward the port.
 

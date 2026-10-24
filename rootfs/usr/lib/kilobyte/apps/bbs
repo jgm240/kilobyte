@@ -1,7 +1,8 @@
 #!/bin/bash
 # BBS Dialer: visit bulletin board systems that still run today, with the
 # sound of a dial-up modem. Boards speak the IBM PC character set (CP437):
-# Kilobyte's BBS terminal (py/bbsterm.py) shows it, and receives the files
+# Kilobyte's BBS terminal (py/bbsterm.py) shows it (and UTF-8, from newer
+# boards such as hostbbs), and receives the files
 # boards send (ZMODEM) into ~/Downloads. (Over SSH, luit translates.)
 . /usr/lib/kilobyte/lib.sh
 
@@ -54,9 +55,9 @@ while true; do
         items+=("$((i + 1))" "$(printf '%-20s %s' "$name" "$desc")")
     done
     # This computer's own BBS (Internet > Host a BBS), when it is on.
-    if systemctl -q is-active kilobyte-bbs.socket 2>/dev/null; then
-        own=$(sed -n 's/^name=//p' /etc/kilobyte/bbs/bbs.conf 2>/dev/null | tail -n 1)
-        own_port=$(sed -n 's/^port=//p' /etc/kilobyte/bbs/bbs.conf 2>/dev/null | tail -n 1)
+    if systemctl -q is-active kilobyte-bbs.service 2>/dev/null; then
+        IFS=$'\t' read -r own own_port < <(python3 -c 'import json
+c = json.load(open("/etc/kilobyte/bbs/hostbbs.json")); print("%s\t%s" % (c.get("name", ""), c.get("port", 2323)))' 2>/dev/null)
         items+=(Own "$(printf '%-20s %s' "${own:-Kilobyte BBS}" "Your own BBS, on this computer")")
     fi
     items+=(Other "Dial any address" Find "Find more boards (Telnet BBS Guide)")

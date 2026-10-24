@@ -201,42 +201,32 @@ case "${1:-} ${2:-}" in
             done
         fi
         ;;
-    # Kilobyte BBS (Internet > Host a BBS): only for administrators (the
-    # sudo group) or the sysop who set it up. Callers' sessions run as kbbs.
-    "bbs setup" | "bbs on" | "bbs off" | "bbs apply" | "bbs sysop")
+    # Kilobyte BBS (Internet > Host a BBS; the server is hostbbs, as the user
+    # kbbs): only for administrators (the sudo group) or the sysop who set it up.
+    "bbs setup" | "bbs on" | "bbs off" | "bbs restart" | "bbs passwd" | "bbs who")
         [ -n "$user" ] || { echo "run through sudo as the user" >&2; exit 1; }
         if ! id -nG "$user" | tr ' ' '\n' | grep -qx sudo &&
            [ "$(stat -c %U /etc/kilobyte/bbs 2>/dev/null)" != "$user" ]; then
             echo "only an administrator, or the BBS's sysop, may do that" >&2; exit 1
         fi
-        bbs_setup() {
-            id kbbs >/dev/null 2>&1 ||
-                useradd --system --home-dir /var/lib/kilobyte-bbs --no-create-home --shell /usr/sbin/nologin \
-                    --comment "Kilobyte BBS callers" kbbs
-            install -d -m 750 -o kbbs -g kbbs /var/lib/kilobyte-bbs
-            [ -d /etc/kilobyte/bbs ] || install -d -m 755 -o "$user" -g "$(id -gn "$user")" /etc/kilobyte/bbs
-            for d in /srv/kilobyte-bbs /srv/kilobyte-bbs/files /srv/kilobyte-bbs/stories; do
-                [ -d "$d" ] || install -d -m 755 -o "$user" -g "$(id -gn "$user")" "$d"
-            done
-            runuser -u kbbs -- python3 /usr/lib/kilobyte/py/bbs.py --sysop init
-        }
-        bbs_apply() {
-            port=$(sed -n 's/^port=\([0-9]*\)$/\1/p' /etc/kilobyte/bbs/bbs.conf 2>/dev/null | tail -n 1)
-            max=$(sed -n 's/^max=\([0-9]*\)$/\1/p' /etc/kilobyte/bbs/bbs.conf 2>/dev/null | tail -n 1)
-            [ -n "$port" ] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || port=2323
-            [ -n "$max" ] && [ "$max" -ge 1 ] && [ "$max" -le 50 ] || max=8
-            mkdir -p /etc/systemd/system/kilobyte-bbs.socket.d
-            printf '# Made by kb-root bbs apply, from /etc/kilobyte/bbs/bbs.conf\n[Socket]\nListenStream=\nListenStream=%s\nMaxConnections=%s\n' \
-                "$port" $((max + 4)) > /etc/systemd/system/kilobyte-bbs.socket.d/kilobyte.conf
-            systemctl daemon-reload
-        }
+        hostbbs="runuser -u kbbs -- python3 /usr/lib/kilobyte/py/hostbbs.py"
         case $2 in
-            setup) bbs_setup ;;
-            on)    bbs_setup; bbs_apply; systemctl enable kilobyte-bbs.socket >/dev/null 2>&1; systemctl restart kilobyte-bbs.socket ;;
-            off)   systemctl disable --now kilobyte-bbs.socket >/dev/null 2>&1 || true
-                   systemctl stop 'kilobyte-bbs@*.service' 2>/dev/null || true ;;
-            apply) bbs_apply; systemctl try-restart kilobyte-bbs.socket ;;
-            sysop) shift 2; exec runuser -u kbbs -- python3 /usr/lib/kilobyte/py/bbs.py --sysop "$@" ;;
+            setup)
+                id kbbs >/dev/null 2>&1 ||
+                    useradd --system --home-dir /var/lib/kilobyte-bbs --no-create-home --shell /usr/sbin/nologin \
+                        --comment "Kilobyte BBS callers" kbbs
+                install -d -m 750 -o kbbs -g kbbs /var/lib/kilobyte-bbs
+                # Its settings and files belong to the sysop, who changes them.
+                for d in /etc/kilobyte/bbs /srv/kilobyte-bbs /srv/kilobyte-bbs/files /srv/kilobyte-bbs/stories; do
+                    [ -d "$d" ] || install -d -m 755 -o "$user" -g "$(id -gn "$user")" "$d"
+                done ;;
+            on)      systemctl enable kilobyte-bbs.service >/dev/null 2>&1; systemctl restart kilobyte-bbs.service ;;
+            off)     systemctl disable --now kilobyte-bbs.service >/dev/null 2>&1 || true ;;
+            restart) systemctl try-restart kilobyte-bbs.service ;;
+            # The password on standard input; the user's handle, or the sysop's.
+            passwd)  case ${3:-} in *[!A-Za-z0-9_-]*) echo "not a handle: $3" >&2; exit 2 ;; esac
+                     exec $hostbbs passwd -c /etc/kilobyte/bbs/hostbbs.json --data-dir /var/lib/kilobyte-bbs ${3:+"$3"} ;;
+            who)     cat /var/lib/kilobyte-bbs/online.json 2>/dev/null || echo "[]" ;;
         esac
         ;;
     "power reboot")   systemctl reboot ;;
@@ -244,6 +234,6 @@ case "${1:-} ${2:-}" in
     *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2
        echo "       autologin on|off | sounds on|off | post on|off | usb mount|eject DEV | usb format DISK fat32|exfat LABEL" >&2
        echo "       speech on|off | speech voice LANG | speech rate 0-9 | braille on|off | access boot" >&2
-       echo "       bbs setup|on|off|apply | bbs sysop ARGS" >&2
+       echo "       bbs setup|on|off|restart|who | bbs passwd [USER]" >&2
        exit 2 ;;
 esac

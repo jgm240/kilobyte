@@ -109,8 +109,7 @@ OWN_FILES="usr/bin/kilobyte usr/bin/kbutils usr/sbin/kilobyte-install usr/sbin/k
     etc/systemd/system/kilobyte-resize.service etc/systemd/system/kilobyte-bootlogo.service
     etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service
     etc/systemd/system/kilobyte-backup.service etc/systemd/system/kilobyte-backup.timer
-    etc/systemd/system/kilobyte-access.service etc/systemd/system/kilobyte-bbs.socket
-    etc/systemd/system/kilobyte-bbs@.service
+    etc/systemd/system/kilobyte-access.service etc/systemd/system/kilobyte-bbs.service
     etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage etc/initramfs-tools/hooks/zz-kilobyte-slim
     etc/initramfs-tools/scripts/init-top/kilobyte-logo etc/initramfs-tools/scripts/init-bottom/kilobyte-logo"
 PREV=/var/lib/kilobyte/previous
@@ -214,8 +213,7 @@ install_tree() {
              etc/systemd/network/25-wireless.network etc/systemd/system/kilobyte-bootlogo.service \
              etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service \
              etc/systemd/system/kilobyte-backup.service etc/systemd/system/kilobyte-backup.timer \
-             etc/systemd/system/kilobyte-access.service etc/systemd/system/kilobyte-bbs.socket \
-             etc/systemd/system/kilobyte-bbs@.service \
+             etc/systemd/system/kilobyte-access.service etc/systemd/system/kilobyte-bbs.service \
              etc/X11/Xwrapper.config etc/X11/xorg.conf.d/10-kilobyte.conf; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
     done
@@ -246,6 +244,12 @@ install_tree() {
         [ -f "$note" ] && echo "$sha" > "$note"     # (keeps the file's owner)
     done
     printf '%s\n' "$new_pkgs" > "$SHARE/packages.txt"
+    # The first BBS server (one process per caller) is hostbbs now.
+    if [ -f /etc/systemd/system/kilobyte-bbs.socket ]; then
+        systemctl disable --now kilobyte-bbs.socket >/dev/null 2>&1 || true
+        rm -rf /etc/systemd/system/kilobyte-bbs.socket /etc/systemd/system/kilobyte-bbs@.service \
+            /etc/systemd/system/kilobyte-bbs.socket.d
+    fi
     systemctl daemon-reload 2>/dev/null || true
 
     # Programs added to the image since this system was built. Only new

@@ -2,14 +2,16 @@
 """Kilobyte's BBS terminal: telnet to a bulletin board system, the way BBS
 programs do it.
 
-    bbsterm.py HOST [PORT] [--utf8]
+    bbsterm.py HOST [PORT] [--utf8 | --cp437]
 
-The board's IBM PC characters (CP437) are shown as they were meant to look
-(--utf8 for the few boards that send UTF-8). The window's size is sent to the
+Most boards send the IBM PC's characters (CP437), newer ones (such as hostbbs)
+UTF-8: which it is, is told from the first letters beyond plain ASCII, and
+shown as it was meant to look (--utf8 or --cp437 decide it beforehand). The window's size is sent to the
 board. A file the board sends with ZMODEM is received by itself, into
 ~/Downloads (with lrzsz's rz). Ctrl+] then Q hangs up (in Kilobyte, Ctrl+C
 does too).
 """
+import codecs
 import os
 import select
 import signal
@@ -28,10 +30,11 @@ DOWNLOADS = os.path.expanduser("~/Downloads")
 
 
 class Term:
-    def __init__(self, host, port, utf8=False):
+    def __init__(self, host, port, charset=None):
         self.sock = socket.create_connection((host, port), timeout=20)
         self.sock.settimeout(None)
-        self.utf8 = utf8
+        self.charset = charset               # "utf-8", "cp437", or None: not known yet
+        self.utf8 = codecs.getincrementaldecoder("utf-8")("replace")
         self.raw = b""
         self.naws = False
         self.tail = b""                      # the last bytes shown, to spot ZMODEM across reads
@@ -102,7 +105,13 @@ class Term:
         return bytes(out)
 
     def show(self, data):
-        text = data.decode("utf-8", "replace") if self.utf8 else data.decode("cp437")
+        if self.charset is None and any(b >= 0x80 for b in data):
+            try:                             # valid UTF-8 (perhaps cut off at the end)?
+                codecs.getincrementaldecoder("utf-8")().decode(data, False)
+                self.charset = "utf-8"
+            except UnicodeDecodeError:
+                self.charset = "cp437"
+        text = self.utf8.decode(data) if self.charset == "utf-8" else data.decode("cp437")
         os.write(1, text.encode("utf-8", "replace"))
 
     def zmodem(self, first):
@@ -202,14 +211,14 @@ def fcntl_ioctl():
 
 
 def main(args):
-    utf8 = "--utf8" in args
-    args = [a for a in args if a != "--utf8"]
+    charset = "utf-8" if "--utf8" in args else "cp437" if "--cp437" in args else None
+    args = [a for a in args if a not in ("--utf8", "--cp437")]
     if not args:
         sys.exit(__doc__)
     host = args[0]
     port = int(args[1]) if len(args) > 1 else 23
     try:
-        t = Term(host, port, utf8)
+        t = Term(host, port, charset)
     except OSError as e:
         sys.exit(f"{host} did not answer: {e}")
     t.run()

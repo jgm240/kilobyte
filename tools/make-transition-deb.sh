@@ -25,7 +25,7 @@ docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" debian:trixie bash -c '
     install -m 644 /src/transition/kilobyte-autolaunch.service $p/usr/lib/systemd/system/
     # Automatic backups (Accessories > Backup) and the BBS (Internet > Host a BBS).
     install -m 644 /src/rootfs/etc/systemd/system/kilobyte-backup.service /src/rootfs/etc/systemd/system/kilobyte-backup.timer \
-        /src/rootfs/etc/systemd/system/kilobyte-bbs.socket /src/rootfs/etc/systemd/system/kilobyte-bbs@.service \
+        /src/rootfs/etc/systemd/system/kilobyte-bbs.service \
         $p/usr/lib/systemd/system/
     install -m 644 /src/transition/copyright $p/usr/share/doc/kilobyte-transition/copyright
     # Its own APT repository: installing this one file also brings the updates.
