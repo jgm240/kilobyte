@@ -195,13 +195,88 @@
                   both, the newer one wins.
 
 
+ ACCESSIBILITY
+ ─────────────
+   Screen reader  Settings > Accessibility switches on speech: what is chosen
+                  in the menus and what programs write is read aloud. In the
+                  boot menu of the ISO, S starts Kilobyte with speech (B also
+                  with a braille display); on a Raspberry Pi, add
+                  kilobyte.speech=1 to cmdline.txt on its memory card.
+                  Number pad (Num Lock off): 7 8 9 line above / this / below,
+                  4 5 6 words, 1 2 3 letters; Insert+F1 the reader's own help.
+                  The CD version has no room for it: kbutils dl accessibility
+                  downloads it.
+   Braille        Settings > Accessibility > Braille display, then plug in
+                  the display (USB).
+   Large letters  Settings > Accessibility > Large letters (also Settings >
+                  Console font), and High contrast for black and white.
+
+
+ BACKUPS
+ ───────
+   Accessories > Backup keeps encrypted backups of your documents, pictures,
+   music and settings on a USB stick, a server (over SSH) or a network drive.
+   Automatic backups happen every day or week in the background; a USB stick
+   gets them when it is plugged in. "Bring back files" picks a day and a
+   file (or Find by its name), and puts it next to the old one, in
+   Documents/Restored, or in its place. Only the changes are copied each
+   time; a backup of each of the last 7 days, 5 weeks and 12 months is kept.
+   Write the backup password down: on another computer it is the only way in.
+
+
+ OTHER KILOBYTES NEARBY
+ ──────────────────────
+   Messenger      Internet > Messenger: everyone on this network who has
+                  Messenger open shows up. Type and Enter sends, ↑ ↓ choose
+                  a person or Everyone, F2 sends a file (they are asked
+                  first; files go to Documents/Received), F3 your name.
+                  No account and no server: it only works on the same
+                  network, while Messenger is open.
+   Host a BBS     Internet > Host a BBS makes this computer a bulletin board
+                  that friends dial into with the BBS Dialer (or any telnet
+                  BBS program): message boards, file areas they download
+                  from, games, apps and chat. You choose its name, greeting
+                  (text, or ANSI art from Paint), news, what callers can do,
+                  who may join, how long a call lasts, and the port; you can
+                  read and delete messages, see who called and chat with them.
+                  Every folder in /srv/kilobyte-bbs/files is a file area.
+                  Friends elsewhere need your router to forward the port.
+
+
+ YOUR OWN COLOUR THEME
+ ─────────────────────
+   Settings > Colour theme > Theme editor makes a theme from any other: the
+   desk, windows, menus, buttons and fields, each in its colours, and on the
+   console even the exact colours themselves. The editor's own screens show
+   the changes at once. Export saves the theme as a .kbtheme file to give
+   away; Import adds one.
+
+
+ KBUTILS (THE COMMAND LINE)
+ ──────────────────────────
+   In the Terminal, kbutils does what Settings does:
+     kbutils settings list              every setting, and what it is
+     kbutils settings chg theme mustard change one (vals NAME: its values)
+     kbutils settings wifi disp         show one
+     kbutils settings chg wifi connect NETWORK
+     kbutils dl list                    extras (the screen reader, backups,
+     kbutils dl accessibility           the typing tutor...): download one
+     kbutils del typing                 remove one; kbutils dl brings it back
+
+
  MORE PROGRAMS
  ─────────────
    Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem
-                  sounds), Online videos.
+                  sounds; files they send arrive in ~/Downloads), Online videos.
+   Media          Podcasts: Find searches the podcasts of the world, or Add
+                  takes a podcast's address. Episodes download into
+                  Music/Podcasts and play in the Music Player; Newest shows
+                  what is new in all of them.
    Accessories    Paint: arrows move, Space draws, , and . change colour,
                   P L B X C O F E K choose the tool, S saves, U undoes.
                   Print, USB sticks, Backup, Screen saver and more.
+                  Typing tutor: learn to type with ten fingers, in many
+                  languages; Esc leaves a lesson.
    Games          Mines, Solitaire, Reversi, Moon Buggy, Snake and others.
                   Each shows its keys on the bottom line.
                   Chess: pick a piece with Space and put it down with Space,

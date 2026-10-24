@@ -1,81 +1,376 @@
 #!/bin/bash
-# Backup: copy your files and settings to a USB stick, and bring them back.
-#   backup [PARTITION]
+# Backup: encrypted backups of your files and settings to a USB stick, a
+# server or a folder (a network drive), by hand or automatically, and any
+# file brought back as it was on a day of your choosing. The work is done by
+# kb-backup, with restic.
 . /usr/lib/kilobyte/lib.sh
 
-part=${1:-}
-if [ -z "$part" ]; then
-    items=()
-    while IFS='|' read -r p desc; do items+=("$p" "$desc"); done < <(kb_usb_list)
-    if [ ${#items[@]} -eq 0 ]; then
-        kb_msg "Backup" "Plug in a USB stick to back up to, then try again." 7 56
-        exit 0
-    fi
-    part=$(kb_dialog --title " Backup " --ok-label "Use" --cancel-label "Close" \
-        --menu "Which USB stick?" 14 74 6 "${items[@]}") || exit 0
-fi
-mnt=$(kb_usb_mount "$part") || { kb_msg "Backup" "The stick could not be opened." 7 50; exit 0; }
-DEST="$mnt/Kilobyte-Backups"
+T="Backup"
+KB="$KB_LIB/kb-backup"
+DIR="$KB_CONF/backup"
+CONF="$DIR/conf"
+PY="$KB_LIB/py/backup.py"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$DIR"
+chmod 700 "$DIR"
 
-# progress_gauge TITLE TOTAL: turns lines on stdin into a progress bar
-progress_gauge() {
-    local n=0 total=$2
-    while read -r _; do
-        n=$((n + 1))
-        (( n % 20 == 0 )) && printf '%d\n' $(( n * 100 / (total > 0 ? total : 1) ))
-    done | kb_dialog --title " $1 " --gauge "\nPlease wait..." 8 60 0
+conf() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null | tail -n 1; }
+conf_set() { # conf_set KEY VALUE [KEY VALUE ...]
+    local k
+    touch "$CONF"
+    while [ $# -ge 2 ]; do
+        k=$1
+        { grep -v "^$k=" "$CONF"; printf '%s=%s\n' "$k" "$2"; } > "$CONF.new" && mv "$CONF.new" "$CONF"
+        shift 2
+    done
 }
 
-do_backup() {
-    local choices items=() what=() name total
-    choices=$(kb_dialog --title " Back Up " --ok-label "Back up" --cancel-label "Back" --checklist \
-        "What to copy to the stick:" 16 64 7 \
-        Documents "Documents"                    on \
-        Pictures  "Pictures"                     on \
-        Music     "Music"                        on \
-        Videos    "Videos (can be very big)"     off \
-        Cardfile  "Cardfile index cards"         on \
-        Settings  "Kilobyte, email, chat and agenda settings" on) || return
-    for c in $choices; do
-        case $c in
-            Settings) for f in .config/kilobyte .pinerc .config/mc .config/weechat .local/share/calcurse .config/calcurse; do
-                          [ -e "$HOME/$f" ] && what+=("$f"); done ;;
-            *) [ -e "$HOME/$c" ] && what+=("$c") ;;
+# restic is missing on KilobytEink (and on computers with only kilobyte-transition).
+if ! command -v restic >/dev/null; then
+    kb_yesno "$T" "Backups need restic, which is not installed.\n\nInstall it now? (About 25 MB; needs the Internet.)" 9 60 || exit 0
+    kb_sudo || exit 0
+    sudo apt-get install -y --no-install-recommends restic ||
+        { sudo apt-get update && sudo apt-get install -y --no-install-recommends restic; }
+    command -v restic >/dev/null || { kb_msg "$T" "restic could not be installed." 7 50; exit 0; }
+fi
+
+where_text() {
+    case $(conf where) in
+        usb)    echo "USB stick $(conf label)" ;;
+        server) echo "server $(conf server)" ;;
+        folder) echo "folder $(conf folder)" ;;
+        *)      echo "nowhere yet" ;;
+    esac
+}
+
+last_text() {
+    local ok failed
+    ok=$(cat "$DIR/last-ok" 2>/dev/null) failed=$(cat "$DIR/last-failed" 2>/dev/null)
+    if [ -n "$failed" ]; then
+        echo "\Z1The last backup ($failed) did not work.\Zn"
+    elif [ -n "$ok" ]; then
+        echo "Last backup: $ok"
+    else
+        echo "No backup made yet."
+    fi
+}
+
+# --- where the backup goes ----------------------------------------------------
+
+choose_usb() {
+    local items=() p desc part mnt uuid label old=() d
+    while IFS='|' read -r p desc; do items+=("$p" "$desc"); done < <(kb_usb_list)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "Plug in a USB stick, then try again." 7 50; return 1; }
+    part=$(kb_dialog --title " Back Up to a USB Stick " --ok-label "Use" --cancel-label "Back" \
+        --menu "Which stick? Only the new and changed files are copied each time,\nso a stick with some room to spare is enough." 15 74 6 "${items[@]}") || return 1
+    uuid=$(lsblk -no UUID "$part" | head -n 1)
+    [ -n "$uuid" ] || { kb_msg "$T" "That stick cannot be told apart from others. Format it first (Accessories > USB sticks)." 8 60; return 1; }
+    mnt=$(kb_usb_mount "$part") || { kb_msg "$T" "The stick could not be opened." 7 50; return 1; }
+    label=$(lsblk -no LABEL "$part" | head -n 1)
+    conf_set where usb usb "$uuid" label "${label:-$(basename "$part")}"
+    # Backups of other computers (or of this one before it was set up again).
+    for d in "$mnt"/Kilobyte-Backups/*/; do
+        [ -f "$d/config" ] && old+=("$(basename "$d")" "")
+    done
+    if [ ${#old[@]} -gt 0 ]; then
+        d=$(kb_dialog --title " Backups on the Stick " --ok-label "Use it" --cancel-label "A new one" --menu \
+            "This stick has Kilobyte backups already. Carry on with one of them\n(you need its password), or start a new one for this computer?" 14 70 5 "${old[@]}") &&
+            conf_set name "$d"
+    fi
+    return 0
+}
+
+ssh_key_setup() { # ssh_key_setup USER@HOST: log in once with the password, then never again
+    mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+    [ -f "$HOME/.ssh/id_ed25519" ] || ssh-keygen -q -t ed25519 -N '' -f "$HOME/.ssh/id_ed25519" -C "$USER@$(hostname) (Kilobyte Backup)"
+    clear
+    printf '\n  \033[1mThe server asks for your password there, once.\033[0m\n  After that, backups log in with a key that Kilobyte just made.\n\n'
+    ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" -o ConnectTimeout=15 "$1"
+}
+
+choose_server() {
+    local s host
+    s=$(kb_input "Back Up to a Server" "The server over SSH (SFTP), as USER@SERVER:FOLDER\n(for example anna@nas.local:/backups):" "$(conf server)") || return 1
+    [[ $s =~ ^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:.+ ]] || { kb_msg "$T" "Write it as USER@SERVER:FOLDER." 7 50; return 1; }
+    host=${s%%:*}
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" true 2>/dev/null; then
+        kb_yesno "$T" "Kilobyte cannot log in to $host by itself yet, which automatic backups need.\n\nSet that up now? (You type your password there once.)" 10 64 || return 1
+        ssh_key_setup "$host"
+        ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" true 2>/dev/null ||
+            { kb_msg "$T" "\Z1Logging in to $host did not work.\Zn" 7 56; return 1; }
+    fi
+    conf_set where server server "$s"
+}
+
+choose_folder() {
+    local f
+    f=$(kb_dialog --title " Back Up to a Folder " --dselect "$HOME/Network/" 14 64) || return 1
+    f=${f%/}
+    [ -d "$f" ] || { kb_msg "$T" "\"$f\" is not a folder." 7 50; return 1; }
+    case $f/ in
+        "$HOME"/Network/* | /media/* | /mnt/* | /srv/*) ;;
+        *) kb_yesno "$T" "That folder is on this computer itself: a backup there is lost with the computer.\n\nUse it anyway?" 9 60 || return 1 ;;
+    esac
+    conf_set where folder folder "$f"
+}
+
+choose_where() {
+    local sel
+    sel=$(kb_dialog --title " Where to Back Up " --ok-label "Select" --cancel-label "Back" --menu \
+        "Where should the backups be kept?" 12 70 3 \
+        USB    "A USB stick or disk" \
+        Server "A server, over SSH (a NAS, another Kilobyte)" \
+        Folder "A folder, such as a network drive (Internet > Network drives)") || return 1
+    case $sel in
+        USB)    choose_usb ;;
+        Server) choose_server ;;
+        Folder) choose_folder ;;
+    esac
+}
+
+choose_what() {
+    local w choices
+    w=" $(conf what) "
+    on() { [[ $w == *" $1 "* ]] && echo on || echo off; }
+    choices=$(kb_dialog --title " What to Back Up " --ok-label "Use" --cancel-label "Back" --checklist \
+        "What the backups keep (Space ticks):" 17 74 7 \
+        Documents "Documents"                 "$(on Documents)" \
+        Pictures  "Pictures"                  "$(on Pictures)" \
+        Music     "Music (and podcasts)"      "$(on Music)" \
+        Videos    "Videos (can be very big)"  "$(on Videos)" \
+        Desktop   "The desktop's files"       "$(on Desktop)" \
+        Cardfile  "Cardfile index cards"      "$(on Cardfile)" \
+        Settings  "Settings: Kilobyte, email, chat, feeds, agenda" "$(on Settings)") || return 1
+    [ -n "$choices" ] || { kb_msg "$T" "Choose at least one." 7 40; return 1; }
+    conf_set what "$choices"
+}
+
+choose_auto() {
+    local a
+    a=$(kb_dialog --title " Automatic Backups " --no-tags --default-item "$(conf auto)" --ok-label "Use" --cancel-label "Back" --menu \
+        "Kilobyte can back up by itself, in the background. A USB stick is\nbacked up to when it is plugged in, once a backup is due." 12 70 3 \
+        daily  "Every day" \
+        weekly "Every week" \
+        off    "Only when I choose Back up now") || return 1
+    conf_set auto "$a"
+}
+
+choose_password() {
+    local p1 p2
+    while true; do
+        p1=$(kb_password "Backup Password" "The backups are encrypted with a password. Choose one\n(at least 8 characters):") || return 1
+        [ ${#p1} -ge 8 ] || { kb_msg "$T" "At least 8 characters, please." 7 44; continue; }
+        p2=$(kb_password "Backup Password" "The same password again:") || return 1
+        [ "$p1" = "$p2" ] && break
+        kb_msg "$T" "The two were not the same. Once more." 7 44
+    done
+    (umask 077; printf '%s' "$p1" > "$DIR/password")
+    kb_msg "Backup Password" "\ZbWrite this password down and keep it somewhere safe.\Zn\n\nThis computer remembers it, so backups need nothing from you. But to bring files back on another computer (when this one is lost or broken), the password is the only way into them." 12 66
+}
+
+setup() {
+    kb_msg "$T" "Let's set up your backups: where they go, what they keep, and when.\n\nThey are encrypted, and each one keeps your files as they were that day: a file you changed or deleted can come back as it was before." 11 66
+    choose_where || return 1
+    [ -n "$(conf what)" ] || conf_set what "Documents Pictures Music Desktop Cardfile Settings"
+    choose_what || return 1
+    if [ "$KB_VARIANT" = kindle ]; then
+        conf_set auto off                       # (no background jobs on a Kindle)
+    else
+        [ -n "$(conf auto)" ] || conf_set auto daily
+        choose_auto || return 1
+    fi
+    [ -s "$DIR/password" ] || choose_password || return 1
+    kb_yesno "$T" "All set. Make the first backup now?" 7 50 && back_up_now
+    return 0
+}
+
+# --- backing up and bringing back -----------------------------------------------
+
+back_up_now() {
+    local rc
+    kb_info "Backing up... (the first time takes a while; later only the changes)"
+    "$KB" run
+    rc=$?
+    case $rc in
+        0) kb_msg "$T" "\ZbThe backup is done.\Zn\n\n$(grep -E 'Added to the repository|processed' "$DIR/log" | tail -n 2)" 10 74 ;;
+        3) kb_msg "$T" "The backup's $(where_text) is not there.\n\nPlug it in, or connect to its network, and try again." 9 64 ;;
+        *) { echo "The backup did not work. What restic said:"; echo; tail -n 25 "$DIR/log"; } > "$TMP/failed"
+           kb_textfile "Backup Failed" "$TMP/failed" ;;
+    esac
+}
+
+# browse SNAPSHOT DAY: choose files of that backup and bring them back
+browse() {
+    local snap=$1 day=$2 list="$TMP/ls-$1" dir=$HOME sel kind name size changed items
+    kb_info "Reading the backup of $day..."
+    "$KB" restic ls --json "$snap" > "$list" 2>"$TMP/err" ||
+        { kb_msg "$T" "\Z1The backup could not be read.\Zn\n\n$(tail -n 2 "$TMP/err")" 9 66; return; }
+    while true; do
+        items=(Find "» Find a file by its name")
+        [ "$dir" != / ] && items+=(.. "» Up a folder")
+        while IFS=$'\t' read -r kind name size changed; do
+            [ -n "$name" ] || continue
+            if [ "$kind" = d ]; then
+                items+=("d/$name" "${name:0:37}/")
+            else
+                items+=("f/$name" "$(printf '%-38s %9s  %s' "${name:0:37}" "$size" "$changed")")
+            fi
+        done < <(python3 "$PY" ls "$list" "$dir")
+        sel=$(kb_dialog --title " $day: ${dir/#$HOME/\~} " --no-tags --ok-label "Open" --extra-button --extra-label "Bring back" \
+            --cancel-label "Back" --menu "Enter opens a folder or file; Bring back restores the chosen one." 0 78 0 "${items[@]}")
+        case $? in
+            "$DIALOG_OK")
+                case $sel in
+                    Find) find_files "$snap" "$day" "$list" ;;
+                    ..)   dir=$(dirname "$dir") ;;
+                    d/*)  dir="${dir%/}/${sel#d/}" ;;
+                    f/*)  bring_back "$snap" "$day" "${dir%/}/${sel#f/}" ;;
+                esac ;;
+            "$DIALOG_EXTRA")
+                case $sel in
+                    d/* | f/*) bring_back "$snap" "$day" "${dir%/}/${sel#?/}" ;;
+                    *)         bring_back "$snap" "$day" "$dir" ;;
+                esac ;;
+            *) return ;;
         esac
     done
-    [ ${#what[@]} -gt 0 ] || { kb_msg "Backup" "Nothing to back up." 7 40; return; }
-    mkdir -p "$DEST" || { kb_msg "Backup" "Cannot write to the stick." 7 40; return; }
-    name="$DEST/$(hostname)-$USER-$(date +%Y-%m-%d-%H%M).tar.gz"
-    total=$(cd "$HOME" && find "${what[@]}" | wc -l)
-    (cd "$HOME" && tar -czvf "$name" "${what[@]}" 2>/dev/null) | progress_gauge "Backing up" "$total"
-    sync
-    if tar -tzf "$name" >/dev/null 2>&1; then
-        kb_msg "Backup" "\ZbBackup finished.\Zn\n\n$(basename "$name")\n$(du -h "$name" | cut -f1) on the stick" 10 64
+}
+
+find_files() { # find_files SNAPSHOT DAY LIST
+    local words items=() path size changed sel
+    words=$(kb_input "Find a File" "Part of the file's name:" "") || return
+    [ -n "$words" ] || return
+    while IFS=$'\t' read -r path size changed; do
+        items+=("$path" "$(printf '%-50s %9s  %s' "${path/#$HOME/\~}" "$size" "${changed%%,*}")")
+    done < <(python3 "$PY" find "$3" "$words")
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "No file called \"$words\" in the backup of $2." 7 64; return; }
+    sel=$(kb_dialog --title " Found in $2 " --no-tags --ok-label "Bring back" --cancel-label "Back" \
+        --menu "Files with \"$words\" in their name:" 0 78 0 "${items[@]}") || return
+    bring_back "$1" "$2" "$sel"
+}
+
+bring_back() { # bring_back SNAPSHOT DAY PATH
+    local snap=$1 day=$2 path=$3 how out dest
+    how=$(kb_dialog --title " Bring Back " --ok-label "Bring back" --cancel-label "Back" --menu \
+        "${path/#$HOME/\~}\nas it was on $day." 12 70 2 \
+        Copy  "Next to it: in Documents/Restored, changing nothing" \
+        Place "In its place: what is there now is replaced") || return
+    out="$TMP/restore"
+    rm -rf "$out"
+    kb_info "Bringing it back..."
+    if ! "$KB" restic restore "$snap" --target "$out" --include "$path" > "$TMP/err" 2>&1 || [ ! -e "$out$path" ]; then
+        kb_msg "$T" "\Z1It could not be brought back.\Zn\n\n$(tail -n 2 "$TMP/err")" 9 66
+        return
+    fi
+    if [ "$how" = Place ]; then
+        kb_yesno "$T" "Replace ${path/#$HOME/\~} with the one from $day?" 7 74 || return
+        mkdir -p "$(dirname "$path")"
+        rm -rf "$path"
+        mv "$out$path" "$path"
+        dest=$path
     else
-        kb_msg "Backup" "\Z1The backup failed.\Zn Is the stick full?" 7 50
+        dest=${day#* }                              # "Tue 21 Oct 2026, 14:05" -> 2026-10-21
+        dest="$KB_DOCS/Restored/$(date -d "${dest%%,*}" +%F 2>/dev/null || echo backup)"
+        mkdir -p "$dest"
+        dest="$dest/$(basename "$path")"
+        [ -e "$dest" ] && dest="$dest.$(date +%H%M%S)"
+        mv "$out$path" "$dest"
+    fi
+    kb_msg "$T" "\ZbIt is back:\Zn\n\n  ${dest/#$HOME/\~}" 9 74
+}
+
+restore() {
+    local out items=() id day sel
+    kb_info "Looking at the backups..."
+    out=$("$KB" restic snapshots --json --tag kilobyte 2>"$TMP/err")
+    case $? in
+        0) ;;
+        3) kb_msg "$T" "The backup's $(where_text) is not there. Plug it in and try again." 8 64; return ;;
+        *) kb_msg "$T" "\Z1The backups could not be read.\Zn\n\n$(tail -n 2 "$TMP/err")" 9 66; return ;;
+    esac
+    python3 "$PY" snapshots <<< "$out" > "$TMP/snapshots"
+    while IFS=$'\t' read -r id day; do
+        [ -n "$id" ] && items+=("$id" "$day")
+    done < "$TMP/snapshots"
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "There are no backups yet." 7 40; return; }
+    while sel=$(kb_dialog --title " Bring Back Files " --no-tags --ok-label "Open" --cancel-label "Back" --menu \
+            "Which day? Each backup has your files as they were then." 0 60 0 "${items[@]}"); do
+        browse "$sel" "$(awk -F'\t' -v i="$sel" '$1 == i { print $2 }' "$TMP/snapshots")"
+    done
+}
+
+check() {
+    kb_info "Checking the backup... (this reads a tenth of it and takes a while)"
+    if "$KB" restic check --read-data-subset=10% > "$TMP/check" 2>&1; then
+        kb_msg "$T" "\ZbThe backup is sound.\Zn" 7 40
+    else
+        kb_textfile "Backup Check" "$TMP/check"
     fi
 }
 
-do_restore() {
-    local items=() f file total
-    while IFS= read -r f; do items+=("$(basename "$f")" "$(du -h "$f" | cut -f1)"); done \
-        < <(ls -1t "$DEST"/*.tar.gz 2>/dev/null)
-    [ ${#items[@]} -gt 0 ] || { kb_msg "Restore" "There are no Kilobyte backups on this stick." 7 56; return; }
-    file=$(kb_dialog --title " Restore " --ok-label "Restore" --cancel-label "Back" \
-        --menu "Backups on the stick, newest first:" 16 70 8 "${items[@]}") || return
-    kb_dialog --title " Restore " --defaultno --yes-label "Restore" --no-label "Cancel" --yesno \
-        "\nRestore $file?\n\nFiles with the same name in your home folder are replaced." 10 64 || return
-    total=$(tar -tzf "$DEST/$file" | wc -l)
-    tar -xzvf "$DEST/$file" -C "$HOME" 2>/dev/null | progress_gauge "Restoring" "$total"
-    kb_msg "Restore" "\ZbYour files are back.\Zn" 7 40
+change_password() {
+    local p
+    p=$(kb_password "Backup Password" "A new password for the backup (at least 8 characters):") || return
+    [ ${#p} -ge 8 ] || { kb_msg "$T" "At least 8 characters, please." 7 44; return; }
+    (umask 077; printf '%s' "$p" > "$TMP/new")
+    if "$KB" restic key passwd --new-password-file "$TMP/new" > "$TMP/err" 2>&1; then
+        mv "$TMP/new" "$DIR/password"
+        kb_msg "$T" "The password is changed. Write the new one down." 7 56
+    else
+        kb_msg "$T" "\Z1The password could not be changed.\Zn\n\n$(tail -n 2 "$TMP/err")" 9 66
+    fi
+    rm -f "$TMP/new"
 }
 
-while sel=$(kb_dialog --title " Backup: $(lsblk -no LABEL "$part" | xargs) " --ok-label "Select" --cancel-label "Close" \
-    --menu "Backups are kept in Kilobyte-Backups on the stick." 12 60 2 \
-    Backup  "Back up my files to the stick" \
-    Restore "Bring files back from the stick"); do
+# Backups made before Kilobyte 1.5 (copies, in Kilobyte-Backups/*.tar.gz on a stick).
+old_backups() {
+    local items=() p desc part mnt f file
+    while IFS='|' read -r p desc; do items+=("$p" "$desc"); done < <(kb_usb_list)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "Plug in the USB stick with the old backups." 7 56; return; }
+    part=$(kb_dialog --title " Older Backups " --ok-label "Use" --cancel-label "Back" \
+        --menu "Which USB stick?" 14 74 6 "${items[@]}") || return
+    mnt=$(kb_usb_mount "$part") || { kb_msg "$T" "The stick could not be opened." 7 50; return; }
+    items=()
+    while IFS= read -r f; do items+=("$(basename "$f")" "$(du -h "$f" | cut -f1)"); done \
+        < <(ls -1t "$mnt"/Kilobyte-Backups/*.tar.gz 2>/dev/null)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "There are no older Kilobyte backups on this stick." 7 60; return; }
+    file=$(kb_dialog --title " Older Backups " --ok-label "Restore" --cancel-label "Back" \
+        --menu "Copies made by Kilobyte 1.4 and older, newest first:" 16 70 8 "${items[@]}") || return
+    kb_dialog --title " Restore " --defaultno --yes-label "Restore" --no-label "Cancel" --yesno \
+        "\nRestore $file?\n\nFiles with the same name in your home folder are replaced." 10 64 || return
+    kb_info "Restoring..."
+    tar -xzf "$mnt/Kilobyte-Backups/$file" -C "$HOME" 2>/dev/null &&
+        kb_msg "$T" "\ZbYour files are back.\Zn" 7 40
+}
+
+{ [ -s "$CONF" ] && [ -s "$DIR/password" ]; } || setup || exit 0
+
+sel=Now
+while true; do
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+"Encrypted backups to the $(where_text).
+$(last_text)" 0 74 0 \
+        Now      "Back up now" \
+        Restore  "Bring back files, as they were on a day" \
+        Auto     "Automatic backups: $(conf auto)" \
+        What     "What is backed up: $(conf what)" \
+        Where    "Where the backups go" \
+        Password "Change the backup password" \
+        Check    "Check that the backup is sound" \
+        Older    "Backups from Kilobyte 1.4 and older") || exit 0
     case $sel in
-        Backup)  do_backup ;;
-        Restore) do_restore ;;
+        Now)      back_up_now ;;
+        Restore)  restore ;;
+        Auto)     if [ "$KB_VARIANT" = kindle ]; then
+                      kb_msg "$T" "On a Kindle, back up with Back up now." 7 50
+                  else
+                      choose_auto
+                  fi ;;
+        What)     choose_what ;;
+        Where)    choose_where && kb_msg "$T" "The next backup goes there. (The first one there copies everything.)" 8 60 ;;
+        Password) change_password ;;
+        Check)    check ;;
+        Older)    old_backups ;;
     esac
 done

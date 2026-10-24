@@ -217,6 +217,8 @@ stage_base() {
     elif [ -f "/src/image/packages-$ARCH.txt" ]; then
         lists+=("/src/image/packages-$ARCH.txt")
     fi
+    # The screen reader: not on the CD version (no room), see packages-accessibility.txt.
+    [ $KIND = wsl ] || [ $KIND = kindle ] || [ -n "${CD:-}" ] || lists+=(/src/image/packages-accessibility.txt)
     packages="$(pkgs "${lists[@]}")${KERNEL:+,$KERNEL}${EFI:+,$EFI}${EFI32:+,$EFI32}"
     [ -n "${LITE:-}" ] || [ $KIND = kindle ] || [ $KIND = wsl ] || packages="$packages,$(pkgs /src/image/packages-wifi.txt)"
 

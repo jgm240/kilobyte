@@ -17,12 +17,16 @@ docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" debian:trixie bash -c '
     cp -a /src/rootfs/usr/lib/kilobyte $p/usr/lib/kilobyte
     cp -a /src/rootfs/usr/share/kilobyte $p/usr/share/kilobyte
     find $p -name .DS_Store -delete
-    install -m 755 /src/rootfs/usr/bin/kilobyte /src/transition/kb $p/usr/bin/
+    install -m 755 /src/rootfs/usr/bin/kilobyte /src/rootfs/usr/bin/kbutils /src/transition/kb $p/usr/bin/
     install -m 755 /src/transition/kb-transition $p/usr/lib/kilobyte/
     install -m 644 /src/rootfs/usr/share/consolefonts/Kilobyte-* $p/usr/share/consolefonts/
     install -m 644 /src/rootfs/etc/profile.d/kilobyte.sh $p/etc/profile.d/
     install -m 440 /src/transition/sudoers $p/etc/sudoers.d/kilobyte-transition
     install -m 644 /src/transition/kilobyte-autolaunch.service $p/usr/lib/systemd/system/
+    # Automatic backups (Accessories > Backup) and the BBS (Internet > Host a BBS).
+    install -m 644 /src/rootfs/etc/systemd/system/kilobyte-backup.service /src/rootfs/etc/systemd/system/kilobyte-backup.timer \
+        /src/rootfs/etc/systemd/system/kilobyte-bbs.socket /src/rootfs/etc/systemd/system/kilobyte-bbs@.service \
+        $p/usr/lib/systemd/system/
     install -m 644 /src/transition/copyright $p/usr/share/doc/kilobyte-transition/copyright
     # Its own APT repository: installing this one file also brings the updates.
     # Both are settings files: removing the package keeps the repository

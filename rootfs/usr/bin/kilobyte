@@ -198,11 +198,12 @@ apps_table() {
 # turn off: those programs are left out, and so are animations, which an
 # e-ink screen cannot keep up with. YouTube and the Video Player stay: they
 # save videos and sound, and play as text blocks (silently) in the terminal.
-KINDLE_LEAVE_OUT=" BBS Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
+KINDLE_LEAVE_OUT=" BBS BBSHost Podcasts Typing Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
 KINDLE_LEAVE_OUT+="Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
 # In Windows (WSL, Kilobyte for Windows): Windows has the hardware, the
 # users and the power button; Kilobyte's window simply closes.
-WSL_LEAVE_OUT=" Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network "
+# Windows' own network is in the way of finding others (Messenger) and of being called (Host a BBS).
+WSL_LEAVE_OUT=" Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network Messenger BBSHost "
 apps_table_for_device() {
     local line leave=""
     case $KB_VARIANT in
@@ -229,6 +230,8 @@ Mail|internet|Email|Read and write email (Alpine)|M@|L
 Feeds|internet|News feeds|News sites, blogs and YouTube channels in one list (RSS)|≡»|L
 Chat|internet|Chat|Talk in chat rooms (IRC with WeeChat)|☺☺|L
 BBS|internet|BBS Dialer|Call bulletin board systems that still run today|BB|M
+BBSHost|internet|Host a BBS|Make this computer a BBS that friends dial into: boards, files, games, chat|BH|M
+Messenger|internet|Messenger|Talk to Kilobyte computers on this network, and send them files|☺»|M
 YouTube|internet|Online videos|Search YouTube and other video sites; watch, read (as text) or save|Vd|M
 Network|internet|Network drives|Shared folders of Windows PCs and servers (SMB, SFTP)|⌂⌂|M
 Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡→|L
@@ -236,6 +239,7 @@ Citrix|internet|Company desktops|Remote desktops and apps of a company or school
 Video|media|Video Player|Videos and music as coloured blocks or the real picture|Tv|M
 Pictures|media|Pictures|Photos and drawings, shown with coloured blocks|▒▓|M
 Music|media|Music Player|Songs and playlists with dancing bars|♫ |M
+Podcasts|media|Podcasts|Find and follow podcasts; episodes play in the Music Player|((|M
 YouTube|media|Online videos|Search YouTube and other video sites; watch, read (as text) or save|Vd|M
 Disc|media|Disc Player|DVD films, audio CDs and data discs|◘ |M
 Sound|media|Sound volume|alsamixer: arrows change, M mutes, Esc closes|♪ |M
@@ -253,7 +257,8 @@ Battery|accessories|Battery meter|Charge, time left and battery health (laptops)
 Charmap|accessories|Character Map|Box drawing and block characters for your own text art|Ω |M
 Print|accessories|Print|Send a file to the printer|Pr|M
 USB|accessories|USB sticks|Open, safely remove or format a USB stick|↔ |M
-Backup|accessories|Backup|Copy documents and settings to a USB stick|»»|M
+Backup|accessories|Backup|Encrypted backups (USB stick, server, network drive); bring back any file|»»|M
+Typing|accessories|Typing tutor|Learn to type with ten fingers, in many languages (GNU Typist)|Ty|L
 Sync|accessories|Sync|Keep Documents the same on your computers and Kindle (network or USB stick)|«»|M
 Trash|accessories|Trash|Files you threw away: put them back or delete them for good|▄▄|M
 DOS|accessories|DOS programs|Run DOS programs and games in DOSBox, an emulated DOS PC|C:|M
@@ -304,6 +309,8 @@ run_app() {
         Feeds)       "$APPS/feeds" ;;
         Chat)        "$APPS/chat" ;;
         BBS)         "$APPS/bbs" ;;
+        BBSHost)     "$APPS/bbshost" ;;
+        Messenger)   kb_run python3 "$KB_LIB/py/messenger.py" ;;
         YouTube)     "$APPS/youtube" ;;
         Network)     "$APPS/netdrives" ;;
         Remote)      "$APPS/remote" ;;
@@ -311,6 +318,7 @@ run_app() {
         Video)       "$APPS/player" "$@" ;;
         Pictures)    "$APPS/pictures" "$@" ;;
         Music)       run_music "$@" ;;
+        Podcasts)    "$APPS/podcasts" "$@" ;;
         Disc)        "$APPS/disc" ;;
         Sound)       kb_guarded '\e' alsamixer ;;
         Paint)       kb_run "$APPS/paint" "$@" ;;
@@ -328,6 +336,7 @@ run_app() {
         Print)       "$APPS/print" "$@" ;;
         USB)         "$APPS/usb" ;;
         Backup)      "$APPS/backup" ;;
+        Typing)      "$APPS/typing" ;;
         Sync)        "$APPS/sync" ;;
         Trash)       "$APPS/trash" ;;
         Wine)        "$APPS/wine" "$@" ;;
@@ -537,9 +546,9 @@ program_manager() {
             cats+="$cat "
         done < <(apps_table)
         # Categories with nothing in them (on a Kindle: Media) are left out.
-        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "News feeds, chat, BBS dialer, online videos, network drives, remote computers...")
-        [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, pictures, discs")
-        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, encyclopedia, sync, paint, calculator, agenda...")
+        [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "News feeds, chat, Messenger, BBSes, online videos, network drives...")
+        [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, podcasts, pictures, discs")
+        [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, encyclopedia, backup, typing tutor, paint...")
         [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Chess, Sudoku, text adventures, Mines, Solitaire...")
         [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")
         items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
@@ -610,6 +619,14 @@ command -v dialog >/dev/null || { echo "kilobyte: dialog is not installed" >&2; 
 kb_setup_home
 kb_export_editor
 
+# The CD version has no room for the screen reader: say how to get it, the
+# first time (and each time Kilobyte was started "with speech" without it).
+if [ "$KB_VARIANT" = cd ] && ! command -v espeakup >/dev/null &&
+   { [ ! -e "$KB_CONF/accessibility-told" ] || grep -qw 'kilobyte.speech=1' /proc/cmdline 2>/dev/null; }; then
+    kb_msg "Accessibility" "To use accessibility features, you need to download them. Make sure you have an internet connection and run 'kbutils dl accessibility'." 9 66
+    : > "$KB_CONF/accessibility-told"
+fi
+
 # A Raspberry Pi 1 or Zero (one slow ARMv6 core) and the CD version (made for
 # PCs from the 1990s, often with 128 MB) start without windows: every window
 # is a terminal emulator of its own, which is too much for them. Once;
@@ -624,8 +641,12 @@ if [ ! -e "$KB_CONF/windows-asked" ]; then
 fi
 
 # Windows (movable windows, several programs at once) unless switched off in
-# Settings > Login and startup. If the window system fails, carry on without.
-if [ -z "${KILOBYTE_DESK:-}" ] && [ ! -e "$KB_CONF/windows-off" ] && [ -t 0 ] &&
+# Settings > Login and startup, or speech was asked for at start-up (a screen
+# reader follows one program at a time best). If the window system fails,
+# carry on without.
+kb_speech_boot=""
+grep -qw 'kilobyte.speech=1' /proc/cmdline 2>/dev/null && kb_speech_boot=1
+if [ -z "${KILOBYTE_DESK:-}" ] && [ ! -e "$KB_CONF/windows-off" ] && [ -z "$kb_speech_boot" ] && [ -t 0 ] &&
    python3 -c 'import pyte' 2>/dev/null; then
     kb_sound startup
     if "$KB_LIB/apps/desk" kilobyte; then

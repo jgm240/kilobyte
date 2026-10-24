@@ -1,0 +1,123 @@
+#!/bin/bash
+# Kilobyte's backups, made with restic: encrypted, and each one a snapshot of
+# the chosen folders on that day, so a file can come back as it was then.
+# Only what changed since the last backup is copied.
+#
+#   kb-backup run [--auto]    back up now (--auto: only when one is due, and
+#                             quietly when the stick or server is not there)
+#   kb-backup repo            where the backup is, as restic names it
+#   kb-backup restic ARGS...  restic, on that backup
+#   kb-backup all-users       (root, from kilobyte-backup.timer) the backups
+#                             that are due, of every user
+#
+# The settings are in ~/.config/kilobyte/backup/: "conf" (KEY=VALUE) and
+# "password" (only for this user; restic needs it to open the backup).
+#   where=usb|server|folder   usb=FILESYSTEM-UUID  server=USER@HOST:PATH  folder=PATH
+#   name=FOLDER-NAME          the backup's folder there (default HOST-USER)
+#   what=Documents Pictures   what to back up (see apps/backup)
+#   auto=daily|weekly|off
+. /usr/lib/kilobyte/lib.sh
+
+DIR="$KB_CONF/backup"
+CONF="$DIR/conf"
+LOG="$DIR/log"
+
+conf() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null | tail -n 1; }
+
+# The paths that "what" stands for.
+backup_paths() {
+    local w f
+    for w in $(conf what); do
+        case $w in
+            Settings) for f in .config/kilobyte .pinerc .config/mc .config/weechat .config/newsboat \
+                               .local/share/newsboat .config/calcurse .local/share/calcurse .gtypist .ssh/config; do
+                          [ -e "$HOME/$f" ] && printf '%s\n' "$HOME/$f"
+                      done ;;
+            *)        [ -e "$HOME/$w" ] && printf '%s\n' "$HOME/$w" ;;
+        esac
+    done
+}
+
+# Where the backup is, for restic. A USB stick is found by its filesystem's
+# id (and opened, if need be); exit 3 when it is not plugged in.
+repo() {
+    local name dev mnt
+    name=$(conf name)
+    name=${name:-$(hostname)-$USER}
+    case $(conf where) in
+        usb)
+            dev=$(lsblk -pno NAME,UUID 2>/dev/null | awk -v u="$(conf usb)" '$2 == u { print $1; exit }')
+            [ -n "$dev" ] || return 3
+            mnt=$(kb_usb_mount "$dev") || return 3
+            printf '%s/Kilobyte-Backups/%s\n' "$mnt" "$name" ;;
+        server) printf 'sftp:%s/%s\n' "$(conf server)" "$name" ;;
+        folder)
+            [ -d "$(conf folder)" ] || return 3
+            printf '%s/%s\n' "$(conf folder)" "$name" ;;
+        *) return 2 ;;
+    esac
+}
+
+restic_on() { # restic_on ARGS...: restic on this user's backup
+    local r
+    r=$(repo) || return $?
+    RESTIC_REPOSITORY="$r" RESTIC_PASSWORD_FILE="$DIR/password" \
+        restic -o sftp.args="-o BatchMode=yes -o ConnectTimeout=15" "$@"
+}
+
+# Is a backup due? (auto=daily: a day since the last one, weekly: a week.)
+due() {
+    local days
+    case $(conf auto) in daily) days=1 ;; weekly) days=7 ;; *) return 1 ;; esac
+    [ -z "$(find "$DIR/last-ok" -mmin -$(( days * 1440 - 60 )) 2>/dev/null)" ]
+}
+
+run() {
+    local auto=${1:-} paths rc
+    [ -f "$CONF" ] && [ -f "$DIR/password" ] || { echo "Backups are not set up (Accessories > Backup)." >&2; return 2; }
+    [ "$auto" = --auto ] && ! due && return 0
+    mapfile -t paths < <(backup_paths)
+    [ ${#paths[@]} -gt 0 ] || { echo "There is nothing to back up." >&2; return 2; }
+    repo >/dev/null
+    rc=$?
+    if [ $rc -eq 3 ]; then
+        [ "$auto" = --auto ] && return 0          # not plugged in: next time
+        echo "The backup's USB stick or folder is not there." >&2
+        return 3
+    fi
+    {
+        echo "=== $(date '+%Y-%m-%d %H:%M') ${auto:+(automatic)}"
+        # A new backup place is made ready first.
+        restic_on cat config >/dev/null 2>&1 || restic_on init
+        restic_on backup --tag kilobyte --exclude-caches --exclude "$HOME/.config/kilobyte/backup/password" \
+            --exclude "*.part" "${paths[@]}" &&
+        # Kept: a backup of each of the last 7 days, 5 weeks and 12 months.
+        restic_on forget --tag kilobyte --keep-daily 7 --keep-weekly 5 --keep-monthly 12 --prune
+    } >> "$LOG" 2>&1
+    rc=$?
+    tail -n 400 "$LOG" > "$LOG.new" 2>/dev/null && mv "$LOG.new" "$LOG"
+    if [ $rc -eq 0 ]; then
+        date '+%Y-%m-%d %H:%M' > "$DIR/last-ok"
+        rm -f "$DIR/last-failed"
+    else
+        date '+%Y-%m-%d %H:%M' > "$DIR/last-failed"
+    fi
+    return $rc
+}
+
+case ${1:-} in
+    run)    shift; run "$@" ;;
+    repo)   repo ;;
+    restic) shift; restic_on "$@" ;;
+    all-users)
+        # (As root, from kilobyte-backup.timer: each user's backup as that user.)
+        [ "$(id -u)" = 0 ] || { echo "kb-backup all-users: for root" >&2; exit 1; }
+        for home in /home/* /root; do
+            [ -f "$home/.config/kilobyte/backup/conf" ] || continue
+            u=$(stat -c %U "$home/.config/kilobyte/backup/conf")
+            [ "$u" = UNKNOWN ] && continue
+            grep -q '^auto=\(daily\|weekly\)' "$home/.config/kilobyte/backup/conf" || continue
+            runuser -u "$u" -- env HOME="$home" /usr/lib/kilobyte/kb-backup run --auto || true
+        done ;;
+    *) echo "usage: kb-backup run [--auto] | repo | restic ARGS... | all-users" >&2; exit 2 ;;
+esac

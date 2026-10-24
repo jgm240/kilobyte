@@ -1,0 +1,382 @@
+#!/bin/bash
+# kbutils: Kilobyte's settings and extras from the command line.
+#
+#   kbutils settings list                    every setting, and what it is now
+#   kbutils settings disp NAME               one setting (also: settings NAME disp)
+#   kbutils settings chg NAME VALUE...       change it (also: settings NAME chg VALUE)
+#   kbutils settings vals NAME               the values it takes
+#   kbutils dl list                          extras to download
+#   kbutils dl NAME                          download and install one (again)
+#   kbutils del NAME                         remove one (its settings stay)
+#   kbutils version
+#
+# The settings are the same as in Settings, kept in the same places: what
+# kbutils changes, Settings shows, and the other way round.
+. /usr/lib/kilobyte/lib.sh
+
+ROOT="sudo -n /usr/lib/kilobyte/kb-root"
+ME=kbutils
+B=$(tput bold 2>/dev/null) N=$(tput sgr0 2>/dev/null)
+
+die() { echo "$ME: $*" >&2; exit 1; }
+usage() { sed -n '2,15s/^# \{0,1\}//p' "$0"; }
+onoff() { [ "$1" = on ] || [ "$1" = off ] || die "$2 is on or off, not \"$1\""; }
+flag_off() { [ -e "$1" ] && echo off || echo on; }    # flag_off FILE: a file that means "off"
+
+# --- the settings ----------------------------------------------------------------
+#   NAME|what it is|values|not on (variants)
+SETTINGS="theme|Colour theme|a theme's name (vals theme)|
+wifi|Wi-Fi|on, off, scan, connect NETWORK [PASSWORD], forget NETWORK|kindle wsl transition
+windows|Movable windows and multitasking|on, off|kindle
+sounds|Start-up and shut-down sounds|on, off|kindle
+volume|Sound volume|0 to 100, mute|kindle wsl
+saver|Screen saver|random, starfield, lines, floppies, off|kindle
+saver-minutes|Minutes before the screen saver starts|1 to 120|kindle
+saver-lock|Password after the screen saver|on, off|kindle
+tiles|Weather and news tiles|on, off|kindle
+tiles-city|City of the weather|a city, or \"\" to guess|kindle
+tiles-units|Temperatures|C, F|kindle
+speech|Screen reader (speech)|on, off|kindle wsl transition
+voice|Language of the screen reader|en, de, fr, es... (vals voice)|kindle wsl transition
+speech-rate|Speed of speech|1 (slow) to 9 (fast)|kindle wsl transition
+braille|Braille display|on, off|kindle wsl transition
+font|Console font|VGA16, VGA32, Term16, Term24, Term32|kindle wsl transition
+keyboard|Keyboard layout|us, gb, de, at, fr... (vals keyboard)|kindle wsl transition
+timezone|Time zone|Region/City, such as Europe/Vienna|kindle wsl transition
+clock-sync|Set the clock from the Internet|on, off|kindle wsl transition
+autologin|Log in automatically|on, off|kindle wsl transition
+autostart|Start Kilobyte after login|on, off|kindle wsl transition
+startup-screen|The start-up screen|on, off|kindle wsl transition
+remote-login|Remote login (SSH)|on, off|kindle wsl transition"
+
+setting_line() { awk -F'|' -v n="$1" '$1 == n' <<< "$SETTINGS"; }
+
+available() { # available NAME: is this setting there on this computer?
+    local not
+    not=$(setting_line "$1" | cut -d'|' -f4)
+    [[ " $not " != *" ${KB_VARIANT:-pc} "* ]]
+}
+
+wifi_iface() {
+    local d
+    for d in /sys/class/net/*/wireless; do
+        [ -d "$d" ] && { basename "$(dirname "$d")"; return 0; }
+    done
+    return 1
+}
+
+# disp NAME: what it is now
+disp() {
+    local IF st
+    case $1 in
+        theme)          kb_theme_find; echo "$KB_T ($(cat "$KB_TD/name" 2>/dev/null))" ;;
+        wifi)
+            IF=$(wifi_iface) || { echo "no Wi-Fi adapter"; return; }
+            [ -e /etc/kilobyte/wifi-off ] && { echo off; return; }
+            st=$(wpa_cli -i "$IF" status 2>/dev/null)
+            if grep -q '^wpa_state=COMPLETED' <<< "$st"; then
+                echo "on, connected to $(sed -n 's/^ssid=//p' <<< "$st") ($(sed -n 's/^ip_address=//p' <<< "$st"); $(kb_network))"
+            else
+                echo "on, not connected"
+            fi ;;
+        windows)        flag_off "$KB_CONF/windows-off" ;;
+        sounds)         flag_off /etc/kilobyte/sounds-off ;;
+        volume)         kb_volume get || echo "no sound card" ;;
+        saver)          cat "$KB_CONF/saver-mode" 2>/dev/null || echo random ;;
+        saver-minutes)  cat "$KB_CONF/saver-minutes" 2>/dev/null || echo 5 ;;
+        saver-lock)     [ -e "$KB_CONF/saver-lock" ] && echo on || echo off ;;
+        tiles)          flag_off "$KB_CONF/tiles-off" ;;
+        tiles-city)     st=$(cat "$KB_CONF/tiles-city" 2>/dev/null); echo "${st:-(guessed from the Internet address)}" ;;
+        tiles-units)    [ -e "$KB_CONF/tiles-fahrenheit" ] && echo F || echo C ;;
+        speech)         if [ -e /etc/kilobyte/speech-on ]; then echo on
+                        elif systemctl -q is-active espeakup.service 2>/dev/null; then echo "on for now (from the boot menu)"
+                        elif ! command -v espeakup >/dev/null; then echo "off (not installed: kbutils dl accessibility)"
+                        else echo off; fi ;;
+        voice)          st=$(sed -n 's/^default_voice=//p' /etc/default/espeakup 2>/dev/null); echo "${st:-en}" ;;
+        speech-rate)    cat /etc/kilobyte/speech-rate 2>/dev/null || echo 5 ;;
+        braille)        [ -e /etc/kilobyte/braille-on ] && echo on || echo off ;;
+        font)           . /etc/default/console-setup 2>/dev/null
+                        case ${FONT:-} in *VGA32*) echo VGA32 ;; *VGA16*) echo VGA16 ;;
+                            *) echo "Term${FONTSIZE#*x}" ;; esac ;;
+        keyboard)       st=$(sed -n 's/^XKBLAYOUT="\?\([^"]*\)"\?/\1/p' /etc/default/keyboard 2>/dev/null); echo "${st:-us}" ;;
+        timezone)       readlink /etc/localtime | sed 's|.*/zoneinfo/||' ;;
+        clock-sync)     [ "$(timedatectl show -p NTP --value 2>/dev/null)" = yes ] && echo on || echo off ;;
+        autologin)      grep -qs -- "--autologin $USER " /etc/systemd/system/getty@tty1.service.d/autologin.conf && echo on || echo off ;;
+        autostart)      flag_off "$KB_CONF/noautostart" ;;
+        startup-screen) flag_off /etc/kilobyte/post-off ;;
+        remote-login)   [ "$(systemctl is-active ssh 2>/dev/null)" = active ] && echo on || echo off ;;
+    esac
+}
+
+vals() {
+    local d
+    case $1 in
+        theme)
+            for d in "$KB_SHARE"/themes/*/ "$KB_CONF"/themes/my-*/; do
+                [ -f "$d/dialogrc" ] && printf '%-14s %s\n' "$(basename "$d")" "$(cat "$d/name" 2>/dev/null)"
+            done ;;
+        voice)    echo "en en-US de fr es es-419 it nl pt pt-BR pl cs sk hu ro hr sl sv da nb fi el tr ru uk bg"
+                  echo "(and any other voice of espeak-ng)" ;;
+        keyboard) echo "us gb de at ch fr be es pt br it nl dk no se fi pl cz hu tr ru ua gr jp latam ca" ;;
+        timezone) (cd /usr/share/zoneinfo && find Africa America Antarctica Arctic Asia Atlantic Australia Europe Indian Pacific -type f | sort; echo UTC) ;;
+        *)        setting_line "$1" | cut -d'|' -f3 | tr -d '\\' ;;
+    esac
+}
+
+need_sudo() { sudo -v || die "this needs administrator rights"; }
+
+chg() {
+    local name=$1 v=${2:-} IF id hex pw
+    [ $# -ge 2 ] || [ "$name" = tiles-city ] || die "kbutils settings chg $name VALUE (values: $(vals "$name" | head -n 1))"
+    case $name in
+        theme)
+            kb_theme_alias "$v"; v=$KB_T
+            case $v in
+                my-*) [ -f "$KB_CONF/themes/$v/dialogrc" ] ;;
+                *)    [ -n "$v" ] && [ -f "$KB_SHARE/themes/$v/dialogrc" ] ;;
+            esac || die "there is no theme \"$v\" (kbutils settings vals theme)"
+            echo "$v" > "$KB_CONF/theme" ;;
+        wifi)
+            IF=$(wifi_iface) || die "this computer has no Wi-Fi adapter"
+            case $v in
+                on | off) $ROOT wifi "$v" ;;
+                scan)
+                    wpa_cli -i "$IF" scan >/dev/null 2>&1; sleep 4
+                    wpa_cli -i "$IF" scan_results 2>/dev/null | tail -n +2 | sort -t$'\t' -k3,3 -nr |
+                        awk -F'\t' '$5 != "" && !seen[$5]++ { printf "%-32s %s dBm  %s\n", $5, $3, ($4 ~ /WPA|RSN|SAE|WEP/ ? "secured" : "open") }' ;;
+                connect)
+                    [ -n "${3:-}" ] || die "kbutils settings chg wifi connect NETWORK [PASSWORD]"
+                    [ ! -e /etc/kilobyte/wifi-off ] || { $ROOT wifi on; sleep 2; }
+                    pw=${4:-}
+                    if [ -z "$pw" ] && [ -t 0 ]; then read -r -s -p "Password for \"$3\" (Enter for an open network): " pw; echo; fi
+                    id=$(wpa_cli -i "$IF" add_network | tail -n 1)
+                    hex=$(printf '%s' "$3" | od -An -tx1 | tr -d ' \n')
+                    wpa_cli -i "$IF" set_network "$id" ssid "$hex" >/dev/null
+                    if [ -n "$pw" ]; then
+                        wpa_cli -i "$IF" set_network "$id" psk "\"$pw\"" >/dev/null
+                        wpa_cli -i "$IF" set_network "$id" key_mgmt "WPA-PSK WPA-PSK-SHA256 SAE" >/dev/null
+                        wpa_cli -i "$IF" set_network "$id" ieee80211w 1 >/dev/null
+                    else
+                        wpa_cli -i "$IF" set_network "$id" key_mgmt NONE >/dev/null
+                    fi
+                    wpa_cli -i "$IF" set_network "$id" scan_ssid 1 >/dev/null
+                    wpa_cli -i "$IF" enable_network "$id" >/dev/null
+                    wpa_cli -i "$IF" select_network "$id" >/dev/null
+                    wpa_cli -i "$IF" save_config >/dev/null
+                    for _ in $(seq 20); do
+                        wpa_cli -i "$IF" status 2>/dev/null | grep -q '^ip_address=' && { echo "Connected to \"$3\"."; return 0; }
+                        sleep 1
+                    done
+                    wpa_cli -i "$IF" remove_network "$id" >/dev/null; wpa_cli -i "$IF" save_config >/dev/null
+                    die "could not connect to \"$3\" (is the password right?)" ;;
+                forget)
+                    [ -n "${3:-}" ] || die "kbutils settings chg wifi forget NETWORK"
+                    id=$(wpa_cli -i "$IF" list_networks | awk -F'\t' -v s="$3" '$2 == s { print $1; exit }')
+                    [ -n "$id" ] || die "no saved network \"$3\""
+                    wpa_cli -i "$IF" remove_network "$id" >/dev/null && wpa_cli -i "$IF" save_config >/dev/null ;;
+                *) die "wifi: on, off, scan, connect NETWORK [PASSWORD] or forget NETWORK" ;;
+            esac ;;
+        windows)
+            onoff "$v" windows
+            if [ "$v" = on ]; then rm -f "$KB_CONF/windows-off"; else : > "$KB_CONF/windows-off"; fi
+            echo "(The next time Kilobyte starts.)" ;;
+        sounds)         onoff "$v" sounds; $ROOT sounds "$v" ;;
+        volume)
+            case $v in mute) kb_volume mute ;; *[!0-9]* | "") die "volume: 0 to 100, or mute" ;;
+                *) [ "$v" -le 100 ] || die "volume: 0 to 100"; kb_volume set "$v" ;; esac ;;
+        saver)
+            case $v in random | starfield | lines | floppies | off) echo "$v" > "$KB_CONF/saver-mode" ;;
+                *) die "saver: random, starfield, lines, floppies or off" ;; esac ;;
+        saver-minutes)
+            [[ $v =~ ^[0-9]+$ ]] && [ "$v" -ge 1 ] && [ "$v" -le 120 ] || die "saver-minutes: 1 to 120"
+            echo "$v" > "$KB_CONF/saver-minutes" ;;
+        saver-lock)     onoff "$v" saver-lock
+                        if [ "$v" = on ]; then : > "$KB_CONF/saver-lock"; else rm -f "$KB_CONF/saver-lock"; fi ;;
+        tiles)          onoff "$v" tiles
+                        if [ "$v" = on ]; then rm -f "$KB_CONF/tiles-off"; else : > "$KB_CONF/tiles-off"; fi ;;
+        tiles-city)     printf '%s\n' "$v" > "$KB_CONF/tiles-city"; rm -f "$KB_CONF/tiles/weather" "$KB_CONF/tiles/attempt" ;;
+        tiles-units)
+            case ${v^^} in C) rm -f "$KB_CONF/tiles-fahrenheit" ;; F) : > "$KB_CONF/tiles-fahrenheit" ;;
+                *) die "tiles-units: C or F" ;; esac
+            rm -f "$KB_CONF/tiles/weather" "$KB_CONF/tiles/attempt" ;;
+        speech)
+            onoff "$v" speech
+            command -v espeakup >/dev/null || die "the screen reader is not installed: kbutils dl accessibility"
+            $ROOT speech "$v" || exit 1
+            if [ "$v" = on ]; then
+                sleep 2
+                systemctl -q is-active espeakup.service || { $ROOT speech off; die "speech could not start (no sound card, or no Speakup in this kernel)"; }
+                : > "$KB_CONF/windows-off"
+                echo "Speech is on. (Kilobyte starts without windows from now on.)"
+            fi ;;
+        voice)          [[ $v =~ ^[A-Za-z-]+$ ]] || die "voice: a language code such as en or de"; $ROOT speech voice "$v" ;;
+        speech-rate)    [[ $v =~ ^[1-9]$ ]] || die "speech-rate: 1 to 9"; $ROOT speech rate "$v" ;;
+        braille)
+            onoff "$v" braille
+            command -v brltty >/dev/null || die "braille support is not installed: kbutils dl accessibility"
+            $ROOT braille "$v" ;;
+        font)
+            local face size font=""
+            case $v in
+                VGA16)  font=Kilobyte-VGA16.psf.gz face=VGA size=8x16 ;;
+                VGA32)  font=Kilobyte-VGA32x16.psf.gz face=VGA size=16x32 ;;
+                Term16) face=Terminus size=8x16 ;;
+                Term24) face=Terminus size=12x24 ;;
+                Term32) face=Terminus size=16x32 ;;
+                *) die "font: VGA16, VGA32, Term16, Term24 or Term32" ;;
+            esac
+            need_sudo
+            sudo sed -i -e "s/^FONT=.*/FONT=\"$font\"/" -e "s/^CODESET=.*/CODESET=\"Uni2\"/" \
+                -e "s/^FONTFACE=.*/FONTFACE=\"$face\"/" -e "s/^FONTSIZE=.*/FONTSIZE=\"$size\"/" /etc/default/console-setup
+            grep -q '^FONT=' /etc/default/console-setup || echo "FONT=\"$font\"" | sudo tee -a /etc/default/console-setup >/dev/null
+            sudo setupcon --save-only --force 2>/dev/null
+            [ "$TERM" = linux ] && sudo setupcon --force --font-only 2>/dev/null
+            true ;;
+        keyboard)
+            [[ $v =~ ^[a-z]{2,5}$ ]] || die "keyboard: a layout such as us, de or fr (kbutils settings vals keyboard)"
+            need_sudo
+            sudo sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$v\"/" /etc/default/keyboard
+            sudo setupcon --save-only --force 2>/dev/null
+            [ "$TERM" = linux ] && sudo setupcon --force --keyboard-only 2>/dev/null
+            true ;;
+        timezone)
+            [ -f "/usr/share/zoneinfo/$v" ] && [[ $v != *..* ]] || die "there is no time zone \"$v\" (kbutils settings vals timezone)"
+            need_sudo; sudo timedatectl set-timezone "$v" ;;
+        clock-sync)     onoff "$v" clock-sync; need_sudo; sudo timedatectl set-ntp "$([ "$v" = on ] && echo true || echo false)" ;;
+        autologin)      onoff "$v" autologin; $ROOT autologin "$v" ;;
+        autostart)      onoff "$v" autostart
+                        if [ "$v" = on ]; then rm -f "$KB_CONF/noautostart"; else : > "$KB_CONF/noautostart"; fi ;;
+        startup-screen) onoff "$v" startup-screen; $ROOT post "$v" ;;
+        remote-login)
+            onoff "$v" remote-login; need_sudo
+            if [ "$v" = on ]; then
+                sudo ssh-keygen -A >/dev/null 2>&1
+                sudo systemctl enable --now ssh.service >/dev/null 2>&1 || die "remote login could not be switched on"
+            else
+                sudo systemctl disable --now ssh.service >/dev/null 2>&1
+            fi ;;
+    esac
+}
+
+settings() {
+    local action=${1:-list} name
+    # Both "settings chg NAME VALUE" and "settings NAME chg VALUE".
+    if [ $# -ge 2 ] && setting_line "$1" | grep -q . && [[ $2 =~ ^(disp|chg|vals)$ ]]; then
+        name=$1 action=$2
+        shift 2
+        set -- "$action" "$name" "$@"
+    elif [ $# -eq 1 ] && setting_line "$1" | grep -q .; then
+        set -- disp "$1"
+    fi
+    action=${1:-list}
+    [ $# -gt 0 ] && shift
+    case $action in
+        list)
+            while IFS='|' read -r name what _ _; do
+                available "$name" || continue
+                printf '  %s%-15s%s %-40s %s\n' "$B" "$name" "$N" "$what" "$(disp "$name")"
+            done <<< "$SETTINGS" ;;
+        disp | chg | vals)
+            name=${1:-}
+            [ -n "$name" ] || die "kbutils settings $action NAME (kbutils settings list shows them)"
+            setting_line "$name" | grep -q . || die "there is no setting \"$name\" (kbutils settings list shows them)"
+            available "$name" || die "$name is not set in Kilobyte on this computer (its own settings look after it)"
+            case $action in
+                disp) disp "$name" ;;
+                vals) vals "$name" ;;
+                chg)
+                    shift
+                    chg "$name" "$@" || exit 1
+                    [ "$name" = wifi ] || echo "$name: $(disp "$name")" ;;
+            esac ;;
+        *) die "settings: list, disp NAME, chg NAME VALUE or vals NAME" ;;
+    esac
+}
+
+# --- extras: in the images (all but the CD version's screen reader), to remove
+# with kbutils del and bring back with kbutils dl ---------------------------------
+#   NAME|Debian packages|what for
+DOWNLOADS="accessibility|espeakup brltty|The screen reader (speech) and braille displays, about 36 MB
+backup|restic|Encrypted backups (Accessories > Backup), about 25 MB
+typing|gtypist|The typing tutor, under 1 MB
+bbs|lrzsz|BBS file downloads and the BBS host (Internet > Host a BBS)
+encyclopedia|kiwix-tools|Reading Wikipedia offline, about 50 MB
+dictionary|dict-wn|The English dictionary without the Internet, about 40 MB
+games|gnuchess nudoku frotz bsdgames moon-buggy|Chess, Sudoku, text adventures and the classic games
+feeds|newsboat|News feeds (Internet > News feeds), about 3 MB
+sync|unison|Sync between computers, about 5 MB"
+# (accessibility: the same packages as image/packages-accessibility.txt.)
+
+dl() {
+    local name=${1:-list} pkgs missing=() p
+    if [ "$name" = list ]; then
+        while IFS='|' read -r name pkgs what; do
+            missing=()
+            for p in $pkgs; do dpkg-query -W -f '${Status}' "$p" 2>/dev/null | grep -q 'ok installed' || missing+=("$p"); done
+            printf '  %s%-14s%s %-58s %s\n' "$B" "$name" "$N" "$what" "$([ ${#missing[@]} -eq 0 ] && echo installed || echo "")"
+        done <<< "$DOWNLOADS"
+        return
+    fi
+    pkgs=$(awk -F'|' -v n="$name" '$1 == n { print $2 }' <<< "$DOWNLOADS")
+    [ -n "$pkgs" ] || die "nothing called \"$name\" to download (kbutils dl list)"
+    for p in $pkgs; do dpkg-query -W -f '${Status}' "$p" 2>/dev/null | grep -q 'ok installed' || missing+=("$p"); done
+    [ ${#missing[@]} -gt 0 ] || { echo "$name is installed already."; return 0; }
+    getent hosts deb.debian.org >/dev/null 2>&1 || die "not connected to the Internet (Settings > Wi-Fi, or kbutils settings chg wifi connect NETWORK)"
+    echo "Downloading and installing: ${missing[*]}"
+    need_sudo
+    sudo apt-get update -q || true
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${missing[@]}" || die "the download did not work"
+    if [ "$name" = accessibility ]; then
+        # (Debian starts them at once; Kilobyte only when switched on.)
+        [ -e /etc/kilobyte/speech-on ] || sudo systemctl disable --now espeakup.service >/dev/null 2>&1 || true
+        [ -e /etc/kilobyte/braille-on ] || sudo systemctl disable --now brltty.service >/dev/null 2>&1 || true
+        echo
+        echo "${B}The screen reader is installed.${N} Switch it on with"
+        echo "    kbutils settings chg speech on"
+        echo "or in Settings > Accessibility (braille: kbutils settings chg braille on)."
+        kb_is_live && echo "On the live system it lasts until the computer restarts: install Kilobyte to keep it."
+    else
+        echo "${B}$name is installed.${N}"
+    fi
+    rm -f "${XDG_RUNTIME_DIR:-/tmp}/kilobyte-apps-${UID:-0}"        # the Program Manager's list of programs
+    return 0
+}
+
+# del NAME: remove an extra (or one of its packages), to make room. Kilobyte
+# Update does not bring it back; kbutils dl does.
+del() {
+    local name=${1:-} pkgs p installed=()
+    [ -n "$name" ] || die "kbutils del NAME (kbutils dl list shows them)"
+    pkgs=$(awk -F'|' -v n="$name" '$1 == n { print $2 }' <<< "$DOWNLOADS")
+    if [ -z "$pkgs" ]; then
+        # One package of an extra (only those: the rest of the system stays whole).
+        awk -F'|' '{ print $2 }' <<< "$DOWNLOADS" | tr ' ' '\n' | grep -qxF -- "$name" ||
+            die "\"$name\" is not one of the extras (kbutils dl list); other programs: Settings > Add or remove programs"
+        pkgs=$name
+        name=$(awk -F'|' -v p="$name" '(" " $2 " ") ~ (" " p " ") { print $1; exit }' <<< "$DOWNLOADS")
+    fi
+    for p in $pkgs; do dpkg-query -W -f '${Status}' "$p" 2>/dev/null | grep -q 'ok installed' && installed+=("$p"); done
+    [ ${#installed[@]} -gt 0 ] || { echo "$name is not installed."; return 0; }
+    if [ -t 0 ]; then
+        read -r -p "Remove ${installed[*]}? (kbutils dl $name brings it back) [y/N] " p
+        [[ $p =~ ^[yYjJ] ]] || { echo "Nothing removed."; return 0; }
+    fi
+    if [ "$name" = accessibility ] || [ "$name" = espeakup ] || [ "$name" = brltty ]; then
+        $ROOT speech off >/dev/null 2>&1 || true
+        $ROOT braille off >/dev/null 2>&1 || true
+    fi
+    need_sudo
+    sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -q "${installed[@]}" || die "they could not be removed"
+    sudo apt-get autoremove -y -q >/dev/null 2>&1 || true
+    rm -f "${XDG_RUNTIME_DIR:-/tmp}/kilobyte-apps-${UID:-0}"
+    echo "${B}Removed:${N} ${installed[*]}  (kbutils dl $name brings it back)"
+}
+
+case ${1:-} in
+    settings)          shift; settings "$@" ;;
+    dl | download)     shift; dl "$@" ;;
+    del | delete | remove) shift; del "$@" ;;
+    version | --version) echo "Kilobyte $KB_VERSION ($(cut -c1-7 "$KB_SHARE/commit" 2>/dev/null || echo "?"))${KB_VARIANT:+, $KB_VARIANT}" ;;
+    "" | help | -h | --help) usage ;;
+    *) die "no such command: $1 (kbutils help)" ;;
+esac

@@ -38,7 +38,9 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Web | `elinks` | web browser with CSS and JavaScript, menus on Esc |
 | Email | `alpine` | Pine's successor; a setup wizard knows Gmail, Outlook, iCloud, Yahoo, GMX, WEB.DE, Posteo, mailbox.org |
 | Internet › Chat | `weechat` | IRC: pick a network and a room |
-| Internet › BBS Dialer | `telnet`, `ssh`, `luit` | bulletin boards that still run today, with modem sounds and CP437 ANSI art |
+| Internet › BBS Dialer | Kilobyte (`py/bbsterm.py`), `lrzsz`, `ssh`, `luit` | bulletin boards that still run today, with modem sounds and CP437 ANSI art; files they send (ZMODEM) land in `~/Downloads` |
+| Internet › Host a BBS | Kilobyte (`py/bbs.py`), `lrzsz` | this computer as a BBS friends dial into: message boards, file areas, games, apps (weather, dictionary, calculator, calendar), chat with each other and the sysop; its name, greeting (text or ANSI art), news, features, games, who may join, minutes per call and port are the sysop's to choose |
+| Internet › Messenger | Kilobyte (`py/messenger.py`) | talk to the people on Kilobyte computers on the same network, and send them files: they find each other by themselves, no account, no server |
 | Internet › News feeds | `newsboat` | news sites, blogs and YouTube channels in one list; finds a site's feed by itself; videos open in the Online videos program |
 | Internet › Online videos | `yt-dlp` + QuickJS | search, watch, read (the subtitles or automatic captions as text, with times), save video (MP4) or sound (MP3) |
 | Files | `mc` | Midnight Commander, a two-panel file manager |
@@ -50,21 +52,25 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
 | Internet › Company desktops | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
 | Media › Music Player | Kilobyte (`ffmpeg`, `aplay`) | songs and playlists with spectrum bars |
+| Media › Podcasts | Kilobyte, fyyd | find podcasts (the fyyd directory) or add one by its address; episodes download into `~/Music/Podcasts` and play in the Music Player |
 | Accessories › Today | Kilobyte, `calcurse`, wttr.in | the date, weather, appointments, to-dos, headlines and unread feeds on one screen; can open at start-up |
 | Accessories › Notes | Kilobyte | quick notes as text files in `~/Documents/Notes`, with search and `#tags`; opens them in the chosen editor |
 | Accessories › Dictionary | WordNet (`dict-wn`), dict.org, MyMemory | English words without the Internet (WordNet), translation of words and sentences on-line |
 | Accessories › Encyclopedia | `kiwix-tools` | downloads a Wikipedia from Kiwix (130 MB to 50 GB, many languages) and reads it in the web browser without the Internet |
 | Accessories › Sync | `unison` | keeps `~/Documents` the same on several Kilobyte computers and a Kindle, over SSH or through a USB stick; deletions sync too, the newer change wins |
+| Accessories › Backup | Kilobyte, `restic` | encrypted backups to a USB stick, an SSH server or a network drive, by hand or every day or week by themselves; any file comes back as it was on a chosen day |
+| Accessories › Typing tutor | `gtypist` | learn to type with ten fingers: courses in English and 20 other languages |
 | Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
 | Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |
 | Accessories › Lock the screen | Kilobyte | hides everything until the user's password is typed |
 | Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
-| Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, backup, screen saver |
+| Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, screen saver |
 | Games | Kilobyte, bsdgames, moon-buggy | Mines, Solitaire, Reversi, Moon Buggy, Snake, Robots, Hangman, Adventure |
 | Games › Chess | Kilobyte, `gnuchess` | chess against GNU Chess (three strengths): arrows and Space, the mouse, or typed moves; the game is kept |
 | Games › Sudoku | `nudoku` | Sudoku in three difficulties |
 | Games › Text adventures | `frotz` | interactive fiction: free classics (9:05, Lost Pig, Bronze, Spider and Web, Anchorhead...) download from the IF Archive with a keypress; own story files in `~/Documents/Stories` |
-| Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme, wallpaper, default programs, font, swap, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
+| Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme and theme editor, wallpaper, default programs, font, accessibility, swap, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
+| `kbutils` (Terminal) | Kilobyte | the settings from the command line (`kbutils settings chg theme mustard`, `kbutils settings wifi disp`), and extras to download or remove (`kbutils dl accessibility`, `kbutils del typing`) |
 | Install | `kilobyte-install` | installs the live system to disk (PC live medium only) |
 
 **Swap** (Settings › Swap, `kb-swap`): compressed memory (zram, a quarter to
@@ -86,7 +92,20 @@ installed when chosen. The editor is also `$EDITOR`, and mc's F4 opens it.
 Light Blue (8-bit), Blue and Orange (16-bit), Black and White (1984), Green
 Screen, Amber Screen, Ketchup and Mustard, and E-ink. On the Linux console the
 themes reprogram the 16-colour palette, so the phosphor, 8-bit, 16-bit and
-black-and-white themes recolour every program.
+black-and-white themes recolour every program. The **theme editor** makes
+themes of your own from any of them (in `~/.config/kilobyte/themes/my-NAME`):
+every part of the screen in its colours, and on the console the 16 exact
+colours too; the editor's own screens show each change at once. A theme is
+shared as a small `.kbtheme` file (Export, Import).
+
+**Accessibility** (Settings › Accessibility): a screen reader (Speakup with
+`espeakup`; the voice's language and speed), braille displays (`brltty`),
+large letters and high contrast. The live ISO's boot menu beeps; **S** there
+starts Kilobyte with speech, **B** also with braille (kernel options
+`kilobyte.speech=1`, `kilobyte.braille=1`, which work in a Raspberry Pi's
+`cmdline.txt` too), and installing from it keeps speech on. The CD version
+has no room for them: it says so at the first start, and
+`kbutils dl accessibility` downloads them.
 
 **Kilobyte Desktop** (`py/desk.py`, `py/deskbg.py`) is a desktop in text
 mode. Every program runs in a window of its own: a pseudo terminal emulated

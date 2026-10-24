@@ -1,0 +1,54 @@
+#!/bin/bash
+# Typing Tutor: learn to type with ten fingers, with GNU Typist's courses in
+# many languages. Your best speeds are kept (in ~/.gtypist).
+. /usr/lib/kilobyte/lib.sh
+
+T="Typing Tutor"
+DIR=/usr/share/gtypist
+command -v gtypist >/dev/null || {
+    kb_msg "$T" "GNU Typist is not installed (Settings > Add or remove programs: gtypist)." 8 60
+    exit 0
+}
+
+# file|course: those that are there are offered.
+COURSES=(
+    "gtypist.typ|English: the full course (touch typing, speed, numbers)"
+    "kten.typ|English: short lessons"
+    "ktdvorak.typ|English on a Dvorak keyboard"
+    "ktde.typ|German (Deutsch)"
+    "ttde.typ|German: a second course (Deutsch)"
+    "ktde_neo.typ|German on a Neo keyboard"
+    "ktfr.typ|French (Français)"
+    "ktes.typ|Spanish (Español)"
+    "esp.typ|Spanish: a second course (Español)"
+    "ktes_cat.typ|Catalan (Català)"
+    "ktit.typ|Italian (Italiano)"
+    "ktnl.typ|Dutch (Nederlands)"
+    "ktnl_junior.typ|Dutch for children (Nederlands junior)"
+    "ktdk.typ|Danish (Dansk)"
+    "ktno.typ|Norwegian (Norsk)"
+    "ktfi.typ|Finnish (Suomi)"
+    "ktfi_kids.typ|Finnish for children (Suomi)"
+    "ktpl.typ|Polish (Polski)"
+    "cs.typ|Czech (Čeština)"
+    "kthu.typ|Hungarian (Magyar)"
+    "ktsi.typ|Slovenian (Slovenščina)"
+    "kttr.typ|Turkish (Türkçe)"
+    "ktru.typ|Russian (Русский)"
+    "ktbg.typ|Bulgarian (Български)"
+)
+
+course=$(cat "$KB_CONF/typing-course" 2>/dev/null)
+[ -f "$DIR/$course" ] || course=gtypist.typ
+while true; do
+    items=()
+    for c in "${COURSES[@]}"; do
+        [ -f "$DIR/${c%%|*}" ] && items+=("${c%%|*}" "${c#*|}")
+    done
+    course=$(kb_dialog --title " $T " --no-tags --default-item "$course" --ok-label "Start" --cancel-label "Close" \
+        --menu "Learn to type without looking at the keys. Choose a course,
+then a lesson; Esc leaves a lesson, and the course's menu has Quit." 0 70 0 "${items[@]}") || exit 0
+    echo "$course" > "$KB_CONF/typing-course"
+    # -b: keep your best speeds, -S: no "are you sure?" on leaving.
+    kb_guarded '' gtypist -b -S "$DIR/$course"
+done

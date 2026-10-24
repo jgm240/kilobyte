@@ -14,6 +14,9 @@ if [ "$1" = configure ]; then
             > /etc/kilobyte/transition
     fi
     [ -d /run/systemd/system ] && systemctl daemon-reload || true
+    # Backups that are switched on (Accessories > Backup) run by themselves.
+    systemctl enable kilobyte-backup.timer >/dev/null 2>&1 || true
+    [ -d /run/systemd/system ] && systemctl start kilobyte-backup.timer >/dev/null 2>&1 || true
     if [ -z "$2" ]; then
         echo
         echo "Kilobyte is installed. Type  kb open  to go to Kilobyte, and  kb close  to come back."

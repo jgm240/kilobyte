@@ -147,9 +147,103 @@ case "${1:-} ${2:-}" in
         fi
         /usr/local/bin/yt-dlp --update
         ;;
+    # Accessibility (Settings > Accessibility): speech (Speakup, with
+    # espeakup) and braille displays (brltty). Off unless switched on here,
+    # or asked for on the kernel command line: kilobyte.speech=1,
+    # kilobyte.braille=1 (the boot menu's "with speech" entry).
+    "speech on")
+        mkdir -p /etc/kilobyte
+        : > /etc/kilobyte/speech-on
+        systemctl enable espeakup.service >/dev/null 2>&1 || true
+        systemctl restart espeakup.service
+        ;;
+    "speech off")
+        rm -f /etc/kilobyte/speech-on
+        systemctl disable --now espeakup.service >/dev/null 2>&1 || true
+        ;;
+    "speech voice")
+        case ${3:-} in "" | *[!A-Za-z-]*) echo "not a voice: ${3:-}" >&2; exit 2 ;; esac
+        if grep -q '^default_voice=' /etc/default/espeakup 2>/dev/null; then
+            sed -i "s/^default_voice=.*/default_voice=$3/" /etc/default/espeakup
+        else
+            echo "default_voice=$3" >> /etc/default/espeakup
+        fi
+        systemctl try-restart espeakup.service
+        ;;
+    "speech rate")
+        case ${3:-} in [0-9]) ;; *) echo "usage: kb-root speech rate 0-9" >&2; exit 2 ;; esac
+        mkdir -p /etc/kilobyte
+        echo "$3" > /etc/kilobyte/speech-rate
+        [ ! -w /sys/accessibility/speakup/soft/rate ] || echo "$3" > /sys/accessibility/speakup/soft/rate
+        ;;
+    "braille on")
+        mkdir -p /etc/kilobyte
+        : > /etc/kilobyte/braille-on
+        systemctl enable brltty.service >/dev/null 2>&1 || true
+        systemctl restart brltty.service
+        ;;
+    "braille off")
+        rm -f /etc/kilobyte/braille-on
+        systemctl disable --now brltty.service >/dev/null 2>&1 || true
+        ;;
+    "access boot")
+        # (kilobyte-access.service, at start-up.)
+        if grep -qw 'kilobyte.speech=1' /proc/cmdline && ! systemctl -q is-active espeakup.service; then
+            systemctl start espeakup.service || true
+        fi
+        if grep -qw 'kilobyte.braille=1' /proc/cmdline && ! systemctl -q is-active brltty.service; then
+            systemctl start brltty.service || true
+        fi
+        if [ -s /etc/kilobyte/speech-rate ]; then
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+                [ -w /sys/accessibility/speakup/soft/rate ] && { cat /etc/kilobyte/speech-rate > /sys/accessibility/speakup/soft/rate; break; }
+                sleep 1
+            done
+        fi
+        ;;
+    # Kilobyte BBS (Internet > Host a BBS): only for administrators (the
+    # sudo group) or the sysop who set it up. Callers' sessions run as kbbs.
+    "bbs setup" | "bbs on" | "bbs off" | "bbs apply" | "bbs sysop")
+        [ -n "$user" ] || { echo "run through sudo as the user" >&2; exit 1; }
+        if ! id -nG "$user" | tr ' ' '\n' | grep -qx sudo &&
+           [ "$(stat -c %U /etc/kilobyte/bbs 2>/dev/null)" != "$user" ]; then
+            echo "only an administrator, or the BBS's sysop, may do that" >&2; exit 1
+        fi
+        bbs_setup() {
+            id kbbs >/dev/null 2>&1 ||
+                useradd --system --home-dir /var/lib/kilobyte-bbs --no-create-home --shell /usr/sbin/nologin \
+                    --comment "Kilobyte BBS callers" kbbs
+            install -d -m 750 -o kbbs -g kbbs /var/lib/kilobyte-bbs
+            [ -d /etc/kilobyte/bbs ] || install -d -m 755 -o "$user" -g "$(id -gn "$user")" /etc/kilobyte/bbs
+            for d in /srv/kilobyte-bbs /srv/kilobyte-bbs/files /srv/kilobyte-bbs/stories; do
+                [ -d "$d" ] || install -d -m 755 -o "$user" -g "$(id -gn "$user")" "$d"
+            done
+            runuser -u kbbs -- python3 /usr/lib/kilobyte/py/bbs.py --sysop init
+        }
+        bbs_apply() {
+            port=$(sed -n 's/^port=\([0-9]*\)$/\1/p' /etc/kilobyte/bbs/bbs.conf 2>/dev/null | tail -n 1)
+            max=$(sed -n 's/^max=\([0-9]*\)$/\1/p' /etc/kilobyte/bbs/bbs.conf 2>/dev/null | tail -n 1)
+            [ -n "$port" ] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || port=2323
+            [ -n "$max" ] && [ "$max" -ge 1 ] && [ "$max" -le 50 ] || max=8
+            mkdir -p /etc/systemd/system/kilobyte-bbs.socket.d
+            printf '# Made by kb-root bbs apply, from /etc/kilobyte/bbs/bbs.conf\n[Socket]\nListenStream=\nListenStream=%s\nMaxConnections=%s\n' \
+                "$port" $((max + 4)) > /etc/systemd/system/kilobyte-bbs.socket.d/kilobyte.conf
+            systemctl daemon-reload
+        }
+        case $2 in
+            setup) bbs_setup ;;
+            on)    bbs_setup; bbs_apply; systemctl enable kilobyte-bbs.socket >/dev/null 2>&1; systemctl restart kilobyte-bbs.socket ;;
+            off)   systemctl disable --now kilobyte-bbs.socket >/dev/null 2>&1 || true
+                   systemctl stop 'kilobyte-bbs@*.service' 2>/dev/null || true ;;
+            apply) bbs_apply; systemctl try-restart kilobyte-bbs.socket ;;
+            sysop) shift 2; exec runuser -u kbbs -- python3 /usr/lib/kilobyte/py/bbs.py --sysop "$@" ;;
+        esac
+        ;;
     "power reboot")   systemctl reboot ;;
     "power poweroff") systemctl poweroff ;;
     *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2
        echo "       autologin on|off | sounds on|off | post on|off | usb mount|eject DEV | usb format DISK fat32|exfat LABEL" >&2
+       echo "       speech on|off | speech voice LANG | speech rate 0-9 | braille on|off | access boot" >&2
+       echo "       bbs setup|on|off|apply | bbs sysop ARGS" >&2
        exit 2 ;;
 esac

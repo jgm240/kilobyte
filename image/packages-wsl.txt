@@ -10,3 +10,5 @@ mpv ffmpeg quickjs
 # News feeds, Sync, Chess, Sudoku, text adventures, dictionary. Offline
 # Wikipedia (kiwix-tools) is installed when first used.
 newsboat unison gnuchess nudoku frotz dict-wn
+# backups, typing tutor, BBS file transfers
+restic gtypist lrzsz

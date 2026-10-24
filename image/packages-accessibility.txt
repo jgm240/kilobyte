@@ -1,0 +1,6 @@
+# The screen reader (Speakup with espeakup) and braille displays (brltty):
+# in every image but the CD version, which has no room for them (about 36 MB;
+# "kbutils dl accessibility" installs them there), KilobytEink and Kilobyte
+# for Windows. Off until switched on in Settings > Accessibility or from the
+# boot menu (kilobyte.speech=1).
+espeakup brltty

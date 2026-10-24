@@ -1,0 +1,14 @@
+[Unit]
+Description=Kilobyte: speech and braille asked for at start-up, and the speed of speech
+# kilobyte.speech=1 or kilobyte.braille=1 on the kernel command line start
+# them for this time (the boot menu's "with speech" entry; on a Raspberry Pi,
+# in cmdline.txt). Settings > Accessibility switches them on for good.
+After=sound.target systemd-udev-settle.service espeakup.service brltty.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/kb-root access boot
+TimeoutSec=60
+
+[Install]
+WantedBy=multi-user.target

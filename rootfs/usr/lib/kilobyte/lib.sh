@@ -37,12 +37,24 @@ kb_theme_alias() {
     esac
 }
 
-kb_theme_name() {
+# The theme in use: its name in KB_T and its folder in KB_TD. Themes made in
+# the theme editor are called my-NAME and are kept in $KB_CONF/themes.
+kb_theme_find() {
     local t="${KB_THEME:-}"
     [ -n "$t" ] || { read -r t < "$KB_CONF/theme"; } 2>/dev/null
     kb_theme_alias "$t"; t=$KB_T
-    [ -n "$t" ] && [ -d "$KB_SHARE/themes/$t" ] || t=classic
-    echo "$t"
+    case $t in
+        my-*/* | */*) t="" ;;
+        my-*) KB_TD="$KB_CONF/themes/$t"; [ -f "$KB_TD/dialogrc" ] || t="" ;;
+        *)    KB_TD="$KB_SHARE/themes/$t"; [ -n "$t" ] && [ -d "$KB_TD" ] || t="" ;;
+    esac
+    [ -n "$t" ] || { t=classic; KB_TD="$KB_SHARE/themes/classic"; }
+    KB_T=$t
+}
+
+kb_theme_name() {
+    kb_theme_find
+    echo "$KB_T"
 }
 
 # Recolour the Linux console's 16-entry palette from a file of 16 rrggbb
@@ -65,11 +77,8 @@ kb_palette() {
 
 kb_load_theme() {
     # (Every Kilobyte script loads this file and so runs this: no programs.)
-    local t="${KB_THEME:-}"
-    [ -n "$t" ] || { read -r t < "$KB_CONF/theme"; } 2>/dev/null
-    kb_theme_alias "$t"; t=$KB_T
-    [ -n "$t" ] && [ -d "$KB_SHARE/themes/$t" ] || t=classic
-    local dir="$KB_SHARE/themes/$t"
+    kb_theme_find
+    local dir=$KB_TD
     export DIALOGRC="$dir/dialogrc"
     MC_SKIN=""
     { read -r MC_SKIN < "$dir/mc-skin"; } 2>/dev/null
@@ -339,7 +348,8 @@ kb_program_title() {
         alpine) echo Email ;;       mc) echo Files ;;           weechat) echo Chat ;;
         calcurse) echo Agenda ;;    htop) echo Tasks ;;         mpv | kb-play) echo Player ;;
         paint) echo Paint ;;        mines) echo Mines ;;        solitaire) echo Solitaire ;;
-        reversi) echo Reversi ;;    alsamixer) echo Sound ;;    *) basename "$p" ;;
+        reversi) echo Reversi ;;    alsamixer) echo Sound ;;    gtypist) echo "Typing tutor" ;;
+        *) basename "$p" ;;
     esac
 }
 

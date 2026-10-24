@@ -1,0 +1,215 @@
+#!/bin/bash
+# Podcasts: find and follow podcasts; episodes download to Music/Podcasts and
+# play in the Music Player.
+#   podcasts [--new]      --new: the newest episodes of every podcast
+. /usr/lib/kilobyte/lib.sh
+
+T="Podcasts"
+PY="$KB_LIB/py/podcasts.py"
+LIST="$KB_CONF/podcasts"                 # FEED<TAB>TITLE, one per line
+PLAYED="$KB_CONF/podcasts-played"        # the episodes listened to
+DL="$HOME/Music/Podcasts"
+touch "$LIST" "$PLAYED"
+
+online() {
+    getent hosts api.fyyd.de >/dev/null 2>&1 || getent hosts debian.org >/dev/null 2>&1 && return 0
+    kb_msg "$T" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
+    return 1
+}
+
+# The file an episode is (or will be) downloaded to.
+episode_file() { # episode_file PODCAST DATE TITLE AUDIO-URL
+    local dir name ext
+    dir=$(printf '%s' "$1" | tr -d '/\\:*?"<>|' | cut -c1-60)
+    name=$(printf '%s %s' "$2" "$3" | tr -d '/\\:*?"<>|' | cut -c1-90)
+    ext=${4%%\?*}; ext=${ext##*.}
+    [[ $ext =~ ^[A-Za-z0-9]{2,4}$ ]] || ext=mp3
+    printf '%s/%s/%s.%s' "$DL" "${dir:-Podcast}" "$name" "${ext,,}"
+}
+
+get_episode() { # get_episode URL FILE: download with a progress bar
+    mkdir -p "$(dirname "$2")"
+    python3 "$PY" download "$1" "$2" 2>/dev/null |
+        kb_dialog --title " Downloading " --gauge "\n$(basename "$2" | cut -c1-60)" 9 70 0
+    [ -s "$2" ] && return 0
+    kb_msg "$T" "\Z1The episode could not be downloaded.\Zn" 7 50
+    return 1
+}
+
+follow() { # follow FEED TITLE
+    if grep -qF -- "$1"$'\t' "$LIST"; then
+        kb_msg "$T" "You follow \"$2\" already." 7 64
+        return
+    fi
+    printf '%s\t%s\n' "$1" "${2//$'\t'/ }" >> "$LIST"
+    kb_msg "$T" "You follow\n\n  \Zb$2\Zn\n\nnow. Its episodes are under Podcasts." 10 66
+}
+
+find_podcast() {
+    local words out items=() url title author pick
+    words=$(kb_input "Find a Podcast" "Words to look for (a name, a subject, a host):" "") || return
+    [ -n "$words" ] && online || return
+    kb_info "Looking for podcasts..."
+    out=$(python3 "$PY" search "$words" 2>&1) || { kb_msg "$T" "\Z1$(tail -n 1 <<< "$out")\Zn" 8 64; return; }
+    while IFS=$'\t' read -r url title author; do
+        [ -n "$url" ] && items+=("$url" "$(printf '%-44s %s' "${title:0:44}" "${author:0:24}")")
+    done <<< "$out"
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "No podcast found for \"$words\"." 7 60; return; }
+    pick=$(kb_dialog --title " Podcasts: $words " --no-tags --ok-label "Follow" --cancel-label "Back" \
+        --menu "Found in the fyyd podcast directory:" 0 76 0 "${items[@]}") || return
+    title=$(awk -F'\t' -v u="$pick" '$1 == u { print $2; exit }' <<< "$out")
+    follow "$pick" "$title"
+}
+
+add_address() {
+    local url out feed title
+    url=$(kb_input "Add a Podcast" "The podcast's feed address, or its web site:" "") || return
+    url=$(printf '%s' "$url" | tr -d '[:space:]')
+    [ -n "$url" ] && online || return
+    kb_info "Looking for the podcast..."
+    if out=$(python3 "$PY" find "$url" 2>&1); then
+        IFS=$'\t' read -r feed title <<< "$out"
+        follow "$feed" "$title"
+    else
+        kb_msg "$T" "\Z1$(tail -n 1 <<< "$out")\Zn\n\nTry Find instead, with the podcast's name." 9 66
+    fi
+}
+
+unfollow() {
+    local items=() url title chosen
+    while IFS=$'\t' read -r url title; do
+        [ -n "$url" ] && items+=("$url" "$title" off)
+    done < "$LIST"
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "You follow no podcasts." 7 40; return; }
+    chosen=$(kb_dialog --title " Stop Following " --no-tags --separate-output --ok-label "Remove" --cancel-label "Back" \
+        --checklist "Tick the podcasts to stop following (Space ticks).\nEpisodes you downloaded stay in Music/Podcasts." 0 70 0 "${items[@]}") || return
+    while IFS= read -r url; do
+        [ -n "$url" ] || continue
+        awk -F'\t' -v u="$url" '$1 != u' "$LIST" > "$LIST.new" && mv "$LIST.new" "$LIST"
+    done <<< "$chosen"
+}
+
+# episode_menu PODCAST FEED AUDIO DATE MINUTES TITLE
+episode_menu() {
+    local podcast=$1 feed=$2 url=$3 day=$4 mins=$5 title=$6 file sel
+    file=$(episode_file "$podcast" "$day" "$title" "$url")
+    while true; do
+        local items=(Play "Listen to it$([ -s "$file" ] || echo " (downloads it first)")")
+        [ -s "$file" ] || items+=(Download "Download it for later")
+        items+=(Notes "What the episode is about")
+        [ -s "$file" ] && items+=(Delete "Delete the download")
+        if grep -qxF -- "$url" "$PLAYED"; then
+            items+=(Unplayed "Mark as not listened to")
+        else
+            items+=(Played "Mark as listened to")
+        fi
+        sel=$(kb_dialog --title " ${title:0:60} " --ok-label "Select" --cancel-label "Back" --menu \
+            "$podcast\n$day${mins:+, $mins minutes}" 0 70 0 "${items[@]}") || return
+        case $sel in
+            Play)
+                [ -s "$file" ] || { online && get_episode "$url" "$file"; } || continue
+                grep -qxF -- "$url" "$PLAYED" || echo "$url" >> "$PLAYED"
+                kb_run "$KB_LIB/apps/music" "$file"
+                return ;;
+            Download) online && get_episode "$url" "$file" ;;
+            Notes)
+                python3 "$PY" notes "$feed" "$url" 2>&1 | fold -s -w 76 > "${XDG_RUNTIME_DIR:-/tmp}/kb-podcast-notes.$$"
+                kb_textfile "Notes" "${XDG_RUNTIME_DIR:-/tmp}/kb-podcast-notes.$$"
+                rm -f "${XDG_RUNTIME_DIR:-/tmp}/kb-podcast-notes.$$" ;;
+            Delete)   rm -f "$file"; rmdir "$(dirname "$file")" 2>/dev/null ;;
+            Played)   echo "$url" >> "$PLAYED" ;;
+            Unplayed) grep -vxF -- "$url" "$PLAYED" > "$PLAYED.new"; mv "$PLAYED.new" "$PLAYED" ;;
+        esac
+    done
+}
+
+# episode_line DATE MINUTES TITLE AUDIO FILE: how an episode shows in a list
+episode_line() {
+    local mark=" "
+    grep -qxF -- "$4" "$PLAYED" && mark="✓"
+    [ -s "$5" ] && mark="${mark/ /↓}"
+    printf '%s %s %-5s %s' "$mark" "$1" "${2:+${2}m}" "${3:0:56}"
+}
+
+podcast_menu() { # podcast_menu FEED TITLE
+    local feed=$1 podcast=$2 out again="" items=() url day mins title sel=""
+    while true; do
+        kb_info "Reading the episodes..."
+        if ! out=$(python3 "$PY" episodes "$feed" $again 2>&1); then
+            kb_msg "$T" "\Z1$(tail -n 1 <<< "$out")\Zn" 8 64
+            return
+        fi
+        again=""
+        items=()
+        while IFS=$'\t' read -r url day mins title; do
+            [ -n "$url" ] && items+=("$url" "$(episode_line "$day" "$mins" "$title" "$url" "$(episode_file "$podcast" "$day" "$title" "$url")")")
+        done <<< "$out"
+        [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "This podcast has no episodes yet." 7 50; return; }
+        sel=$(kb_dialog --title " ${podcast:0:60} " --no-tags --default-item "$sel" --ok-label "Open" \
+            --extra-button --extra-label "Refresh" --cancel-label "Back" --menu \
+            "Newest first.  ✓ listened to   ↓ downloaded" 0 76 0 "${items[@]}")
+        case $? in
+            "$DIALOG_OK")    IFS=$'\t' read -r url day mins title < <(awk -F'\t' -v u="$sel" '$1 == u' <<< "$out")
+                             episode_menu "$podcast" "$feed" "$url" "$day" "$mins" "$title" ;;
+            "$DIALOG_EXTRA") online && again=new ;;
+            *)               return ;;
+        esac
+    done
+}
+
+# The newest episode or two of every podcast, together.
+newest() {
+    local feed podcast url day mins title all="" items=() sel n
+    [ -s "$LIST" ] || { kb_msg "$T" "Follow a podcast first: Find or Add." 7 50; return; }
+    kb_info "Reading every podcast..."
+    while IFS=$'\t' read -r feed podcast; do
+        [ -n "$feed" ] || continue
+        n=0
+        while IFS=$'\t' read -r url day mins title; do
+            [ -n "$url" ] || continue
+            all+="$day"$'\t'"$url"$'\t'"$mins"$'\t'"$title"$'\t'"$podcast"$'\t'"$feed"$'\n'
+            n=$((n + 1)); [ $n -ge 3 ] && break
+        done < <(python3 "$PY" episodes "$feed" 2>/dev/null)
+    done < "$LIST"
+    all=$(sort -r <<< "$all" | head -n 40)
+    while true; do
+        items=()
+        while IFS=$'\t' read -r day url mins title podcast feed; do
+            [ -n "$url" ] && items+=("$url" "$(episode_line "$day" "$mins" "${podcast:0:16}: $title" "$url" "$(episode_file "$podcast" "$day" "$title" "$url")")")
+        done <<< "$all"
+        [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "No episodes found. Are you online?" 7 50; return; }
+        sel=$(kb_dialog --title " Newest Episodes " --no-tags --default-item "${sel:-}" --ok-label "Open" --cancel-label "Back" \
+            --menu "Of every podcast you follow.  ✓ listened to   ↓ downloaded" 0 78 0 "${items[@]}") || return
+        IFS=$'\t' read -r day url mins title podcast feed < <(awk -F'\t' -v u="$sel" '$2 == u' <<< "$all")
+        episode_menu "$podcast" "$feed" "$url" "$day" "$mins" "$title"
+    done
+}
+
+[ "${1:-}" = --new ] && { newest; exit 0; }
+
+sel=Newest
+while true; do
+    items=()
+    n=0
+    while IFS=$'\t' read -r feed title; do
+        [ -n "$feed" ] || continue
+        n=$((n + 1))
+        items+=("$n" "$title")
+    done < "$LIST"
+    items+=(Newest "» The newest episodes of all of them"
+            Find   "» Find a podcast (search)"
+            Add    "» Add a podcast by its address"
+            Remove "» Stop following podcasts"
+            Files  "» Downloaded episodes, in the file manager")
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Open" --cancel-label "Close" --menu \
+        "You follow $n podcast$([ "$n" = 1 ] || echo s). Episodes play in the Music Player." 0 70 0 "${items[@]}") || exit 0
+    case $sel in
+        Newest) newest ;;
+        Find)   find_podcast ;;
+        Add)    add_address ;;
+        Remove) unfollow ;;
+        Files)  mkdir -p "$DL"; kb_guarded '\e[21~' mc "$DL" ;;
+        *)      IFS=$'\t' read -r feed title < <(grep -v '^$' "$LIST" | sed -n "${sel}p")
+                [ -n "$feed" ] && podcast_menu "$feed" "$title" ;;
+    esac
+done

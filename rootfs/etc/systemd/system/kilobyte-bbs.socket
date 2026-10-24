@@ -1,0 +1,15 @@
+[Unit]
+Description=Kilobyte BBS: where callers dial in (telnet)
+# Switched on in Internet > Host a BBS (kb-root bbs on). The port and the
+# number of lines come from /etc/kilobyte/bbs/bbs.conf, in
+# kilobyte-bbs.socket.d/kilobyte.conf.
+
+[Socket]
+ListenStream=2323
+Accept=yes
+# (A few more than the BBS lets in, so that a caller can be told it is full.)
+MaxConnections=12
+MaxConnectionsPerSource=3
+
+[Install]
+WantedBy=sockets.target

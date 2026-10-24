@@ -162,20 +162,200 @@ network_panel() {
     fi
 }
 
-# --- Appearance -----------------------------------------------------------
+# --- Appearance: colour themes, and your own (the theme editor) -----------
+# Your themes are made by py/themes.py, in $KB_CONF/themes/my-NAME.
+
+THEMES_PY="$KB_LIB/py/themes.py"
+MY_THEMES="$KB_CONF/themes"
+COLOUR_NAMES=(black red green brown blue magenta cyan lightgrey
+              darkgrey lightred lightgreen yellow lightblue lightmagenta lightcyan white)
+COLOUR_BASE=(BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE)
+
+theme_title() { cat "$1/name" 2>/dev/null || basename "$1"; }
+
+# colour_words FG,BG,BRIGHT: "lightcyan on blue"
+colour_words() {
+    local fg bg on i f=0 b=0
+    IFS=, read -r fg bg on <<< "$1"
+    for i in "${!COLOUR_BASE[@]}"; do
+        [ "${COLOUR_BASE[i]}" = "$fg" ] && f=$i
+        [ "${COLOUR_BASE[i]}" = "$bg" ] && b=$i
+    done
+    [ "$on" = ON ] && f=$(( f + 8 ))
+    echo "${COLOUR_NAMES[f]} on ${COLOUR_NAMES[b]}"
+}
+
+# colour_pick TITLE FG,BG,BRIGHT: prints the new FG,BG,BRIGHT
+colour_pick() {
+    local title=$1 fg bg on f=0 b=0 i items=()
+    IFS=, read -r fg bg on <<< "$2"
+    for i in "${!COLOUR_BASE[@]}"; do
+        [ "${COLOUR_BASE[i]}" = "$fg" ] && f=$i
+        [ "${COLOUR_BASE[i]}" = "$bg" ] && b=$i
+    done
+    [ "$on" = ON ] && f=$(( f + 8 ))
+    for i in "${!COLOUR_NAMES[@]}"; do
+        items+=("$i" "${COLOUR_NAMES[i]}" "$([ "$i" = "$f" ] && echo on || echo off)")
+    done
+    f=$(kb_dialog --title " $title: text " --no-tags --ok-label "Next" --cancel-label "Back" \
+        --radiolist "The colour of the text (Space selects):" 0 46 0 "${items[@]}") || return 1
+    items=()
+    for i in 0 1 2 3 4 5 6 7; do
+        items+=("$i" "${COLOUR_NAMES[i]}" "$([ "$i" = "$b" ] && echo on || echo off)")
+    done
+    b=$(kb_dialog --title " $title: background " --no-tags --ok-label "Use" --cancel-label "Back" \
+        --radiolist "The colour behind it (8 to choose from, as on a DOS screen):" 0 46 0 "${items[@]}") || return 1
+    printf '%s,%s,%s\n' "${COLOUR_BASE[f & 7]}" "${COLOUR_BASE[b]}" "$([ "$f" -ge 8 ] && echo ON || echo OFF)"
+}
+
+theme_set() { # theme_set ID KEY VALUE
+    python3 "$THEMES_PY" set "$MY_THEMES/$1" "$2" "$3" 2>/dev/null ||
+        kb_msg "Theme Editor" "That could not be changed." 7 44
+}
+
+# palette_edit ID: the 16 exact colours of the Linux console
+palette_edit() {
+    local id=$1 p sel items i c
+    while true; do
+        p=$(python3 "$THEMES_PY" get "$MY_THEMES/$id" | sed -n 's/^palette=//p')
+        [ -n "$p" ] || p=$(tr '\n' ' ' < "$KB_SHARE/themes/classic/palette" | xargs)
+        read -ra c <<< "$p"
+        items=()
+        for i in "${!COLOUR_NAMES[@]}"; do items+=("$i" "$(printf '%-14s #%s' "${COLOUR_NAMES[i]}" "${c[i]}")"); done
+        items+=(Standard "Back to the standard colours")
+        sel=$(kb_dialog --title " Exact Colours " --no-tags --ok-label "Change" --cancel-label "Back" --menu \
+"What each of the 16 colours really looks like, as hex RGB (ff8800 is orange).
+Only the Linux console can change them; other terminals keep their own." 0 60 0 "${items[@]}") || return
+        if [ "$sel" = Standard ]; then
+            theme_set "$id" palette ""
+            kb_palette ""
+            continue
+        fi
+        i=$(kb_input "Exact Colours" "${COLOUR_NAMES[sel]}: six hex digits, red green blue (00 to ff each):" "${c[sel]}") || continue
+        i=${i#\#}
+        [[ $i =~ ^[0-9a-fA-F]{6}$ ]] || { kb_msg "Exact Colours" "Six hex digits, such as ff8800." 7 44; continue; }
+        c[sel]=$i
+        theme_set "$id" palette "${c[*]}"
+        kb_palette "$MY_THEMES/$id/palette"
+    done
+}
+
+# theme_edit ID: change a theme of your own. The editor's screens use that
+# theme, so every change shows at once.
+theme_edit() {
+    local id=$1 d="$MY_THEMES/$1" sel=dialog items k v label skins s
+    local -A val
+    while true; do
+        val=()
+        while IFS='=' read -r k v; do val[$k]=$v; done < <(python3 "$THEMES_PY" get "$d")
+        export DIALOGRC="$d/dialogrc"
+        kb_palette "$d/palette"
+        items=(Name "Name: ${val[name]}")
+        while IFS='|' read -r k label; do
+            items+=("$k" "$(printf '%-28s %s' "$label" "$(colour_words "${val[$k]}")")")
+        done < <(python3 "$THEMES_PY" roles)
+        items+=(Shadow "Shadows under windows: ${val[shadow]}"
+                Files  "File manager look: ${val[mc]}"
+                Exact  "Exact colours: $([ -n "${val[palette]:-}" ] && [ "${val[palette]}" != "$(tr '\n' ' ' < "$KB_SHARE/themes/classic/palette" | xargs)" ] && echo "your own" || echo standard)"
+                Use    "Use this theme")
+        sel=$(kb_dialog --title " Theme Editor: ${val[name]} " --no-tags --default-item "$sel" \
+            --ok-label "Change" --cancel-label "Done" --menu \
+            "Choose a part to colour. This screen shows the theme as it is now." 0 72 0 "${items[@]}") || break
+        case $sel in
+            Name)   v=$(kb_input "Theme Name" "Name of the theme:" "${val[name]}") && [ -n "$v" ] && theme_set "$id" name "$v" ;;
+            Shadow) theme_set "$id" shadow "$([ "${val[shadow]}" = ON ] && echo OFF || echo ON)" ;;
+            Files)
+                skins=()
+                for s in default dark darkfar double-lines gotar mc46 nicedark; do
+                    skins+=("$s" "" "$([ "$s" = "${val[mc]}" ] && echo on || echo off)")
+                done
+                v=$(kb_dialog --title " File Manager Look " --ok-label "Use" --cancel-label "Back" --radiolist \
+                    "The colours of the file manager (mc skins):" 0 50 0 "${skins[@]}") && theme_set "$id" mc "$v" ;;
+            Exact)  palette_edit "$id" ;;
+            Use)    echo "$id" > "$KB_CONF/theme"; break ;;
+            *)      v=$(colour_pick "$(python3 "$THEMES_PY" roles | sed -n "s/^$sel|//p")" "${val[$sel]}") &&
+                        theme_set "$id" "$sel" "$v" ;;
+        esac
+    done
+    kb_load_theme                                   # back to the theme in use
+}
+
+# my_theme_pick TITLE: one of your own themes, or nothing
+my_theme_pick() {
+    local items=() d
+    for d in "$MY_THEMES"/my-*/; do
+        [ -f "$d/theme.conf" ] && items+=("$(basename "$d")" "$(theme_title "$d")")
+    done
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$1" "You have not made a theme yet. Choose New." 7 50; return 1; }
+    kb_dialog --title " $1 " --no-tags --ok-label "Select" --cancel-label "Back" \
+        --menu "Your themes:" 0 50 0 "${items[@]}"
+}
+
+theme_editor() { # theme_editor BASE: the theme to start a new one from
+    local base=$1 sel name id f bd
+    case $base in my-*) bd="$MY_THEMES/$base" ;; *) bd="$KB_SHARE/themes/$base" ;; esac
+    [ -f "$bd/dialogrc" ] || bd="$KB_SHARE/themes/classic"
+    while true; do
+        sel=$(kb_dialog --title " Theme Editor " --ok-label "Select" --cancel-label "Back" --menu \
+"Make colour themes of your own, and share them as small files." 14 66 5 \
+            New    "A new theme, starting from $(theme_title "$bd")" \
+            Edit   "Change one of your themes" \
+            Import "Add a theme someone gave you (a .kbtheme file)" \
+            Export "Save one of yours in Documents, to give away" \
+            Delete "Delete one of your themes") || return
+        case $sel in
+            New)
+                name=$(kb_input "New Theme" "Name of your theme:" "My $(theme_title "$bd")") && [ -n "$name" ] || continue
+                mkdir -p "$MY_THEMES"
+                id=$(python3 "$THEMES_PY" folder "$name" "$MY_THEMES")
+                python3 "$THEMES_PY" new "$bd" "$MY_THEMES/$id" "$name" && theme_edit "$id" ;;
+            Edit)   id=$(my_theme_pick "Edit a Theme") && theme_edit "$id" ;;
+            Import)
+                f=$(kb_dialog --title " Import a Theme " --fselect "$KB_DOCS/" 14 64) || continue
+                [ -f "$f" ] || { kb_msg "Import" "\"$f\" is not a file."; continue; }
+                mkdir -p "$MY_THEMES"
+                if id=$(python3 "$THEMES_PY" import "$f" "$MY_THEMES" 2>&1); then
+                    kb_yesno "Import" "\Zb$(theme_title "$MY_THEMES/$id")\Zn is one of your themes now.\n\nUse it?" 9 56 &&
+                        { echo "$id" > "$KB_CONF/theme"; kb_load_theme; }
+                else
+                    kb_msg "Import" "\Z1$(tail -n 1 <<< "$id")\Zn" 7 50
+                fi ;;
+            Export)
+                id=$(my_theme_pick "Export a Theme") || continue
+                mkdir -p "$KB_DOCS"
+                name=$(theme_title "$MY_THEMES/$id" | tr -cd 'A-Za-z0-9 ._-')
+                f="$KB_DOCS/${name:-$id}.kbtheme"
+                python3 "$THEMES_PY" export "$MY_THEMES/$id" "$f" &&
+                    kb_msg "Export" "Saved as\n\n  \Zb${f#"$HOME"/}\Zn\n\nGive this file to someone: they choose Import in their theme editor." 11 64 ;;
+            Delete)
+                id=$(my_theme_pick "Delete a Theme") || continue
+                kb_yesno "Delete" "Delete the theme \Zb$(theme_title "$MY_THEMES/$id")\Zn?" 7 56 || continue
+                rm -rf "${MY_THEMES:?}/$id"
+                [ "$(kb_theme_name)" = classic ] && [ "$(cat "$KB_CONF/theme" 2>/dev/null)" = "$id" ] && echo classic > "$KB_CONF/theme"
+                kb_load_theme ;;
+        esac
+    done
+}
 
 appearance_panel() {
-    local cur items=() d name t
-    cur=$(kb_theme_name)
-    for d in "$KB_SHARE"/themes/*/; do
-        t=$(basename "$d")
-        name=$(cat "$d/name" 2>/dev/null || echo "$t")
-        items+=("$t" "$name" "$([ "$t" = "$cur" ] && echo on || echo off)")
+    local cur items d t rc
+    while true; do
+        cur=$(kb_theme_name)
+        items=()
+        for d in "$KB_SHARE"/themes/*/ "$MY_THEMES"/my-*/; do
+            [ -f "$d/dialogrc" ] || continue
+            t=$(basename "$d")
+            items+=("$t" "$(theme_title "$d")$([[ $t == my-* ]] && echo "  (yours)")" "$([ "$t" = "$cur" ] && echo on || echo off)")
+        done
+        t=$(kb_dialog --title " Appearance " --no-tags --ok-label "Apply" --extra-button --extra-label "Theme editor" \
+            --cancel-label "Back" --radiolist "Colour theme (Space selects):" 18 64 10 "${items[@]}")
+        rc=$?
+        case $rc in
+            "$DIALOG_OK")    [ -n "$t" ] && echo "$t" > "$KB_CONF/theme"; kb_load_theme; return ;;
+            "$DIALOG_EXTRA") theme_editor "${t:-$cur}" ;;
+            *)               return ;;
+        esac
     done
-    t=$(kb_dialog --title " Appearance " --ok-label "Apply" --cancel-label "Back" \
-        --radiolist "Colour theme (Space selects):" 16 60 8 "${items[@]}") || return
-    echo "$t" > "$KB_CONF/theme"
-    kb_load_theme
 }
 
 # --- Display --------------------------------------------------------------
@@ -378,6 +558,96 @@ display_panel() {
     sudo setupcon --save-only --force 2>/dev/null   # keep it after a restart
     [ "$TERM" = linux ] && sudo setupcon --force --font-only 2>/dev/null
     kb_msg "Display" "The console font is now $face $size."
+}
+
+# --- Accessibility: a screen reader (Speakup with espeakup), braille
+# displays (brltty), large letters and high contrast --------------------------
+
+VOICES=(en "English" en-US "English (American)" de "Deutsch" fr "Français" es "Español"
+        es-419 "Español (Latinoamérica)" it "Italiano" nl "Nederlands" pt "Português"
+        pt-BR "Português (Brasil)" pl "Polski" cs "Čeština" sk "Slovenčina" hu "Magyar"
+        ro "Română" hr "Hrvatski" sl "Slovenščina" sv "Svenska" da "Dansk" nb "Norsk"
+        fi "Suomi" el "Ελληνικά" tr "Türkçe" ru "Русский" uk "Українська" bg "Български")
+
+access_panel() {
+    local sel speech braille rate voice
+    while true; do
+        speech=OFF braille=OFF
+        [ -e /etc/kilobyte/speech-on ] && speech=ON
+        [ -e /etc/kilobyte/braille-on ] && braille=ON
+        systemctl -q is-active espeakup.service 2>/dev/null && [ $speech = OFF ] && speech="on for now"
+        systemctl -q is-active brltty.service 2>/dev/null && [ $braille = OFF ] && braille="on for now"
+        rate=$(cat /etc/kilobyte/speech-rate 2>/dev/null || echo 5)
+        voice=$(sed -n 's/^default_voice=//p' /etc/default/espeakup 2>/dev/null)
+        sel=$(kb_dialog --title " Accessibility " --default-item "${sel:-Speech}" --ok-label "Select" --cancel-label "Back" --menu \
+"For people who cannot see the screen well, or at all. At start-up,
+\"Kilobyte with speech\" in the boot menu (or the S key there) speaks
+from the first screen on." 0 70 0 \
+            Speech   "Screen reader (speech): $speech" \
+            Voice    "Language of the voice: ${voice:-en}" \
+            Speed    "Speed of speech: $rate (1 slow, 9 fast)" \
+            Braille  "Braille display: $braille" \
+            Letters  "Large letters" \
+            Contrast "High contrast (black and white)" \
+            Keys     "How to use the screen reader") || return
+        # (Not on the CD version: downloaded with kbutils dl accessibility.)
+        if [[ $sel == Speech || $sel == Voice || $sel == Speed || $sel == Braille ]] && ! command -v espeakup >/dev/null; then
+            kb_yesno "Accessibility" "The screen reader is not installed on this computer.\n\nDownload it now? (About 36 MB; needs the Internet.)" 9 60 &&
+                kb_run_pause /usr/bin/kbutils dl accessibility
+            continue
+        fi
+        case $sel in
+            Speech)
+                if [ "$speech" = ON ]; then
+                    sudo -n "$KB_LIB/kb-root" speech off
+                    continue
+                fi
+                kb_info "Starting speech..."
+                sudo -n "$KB_LIB/kb-root" speech on >/dev/null 2>&1
+                sleep 2
+                if ! systemctl -q is-active espeakup.service; then
+                    sudo -n "$KB_LIB/kb-root" speech off
+                    kb_msg "Accessibility" "\Z1Speech could not start.\Zn\n\nIt needs a sound card (or headphones), and Speakup in the computer's Linux kernel." 10 64
+                elif [ ! -e "$KB_CONF/windows-off" ]; then
+                    : > "$KB_CONF/windows-off"
+                    kb_msg "Accessibility" "Speech is on.\n\nKilobyte starts without windows from now on: a screen reader follows one program at a time best. (Settings > Windows can turn them on again.)" 11 64
+                fi ;;
+            Voice)
+                local items=() i
+                for ((i = 0; i < ${#VOICES[@]}; i += 2)); do
+                    items+=("${VOICES[i]}" "${VOICES[i+1]}" "$([ "${VOICES[i]}" = "${voice:-en}" ] && echo on || echo off)")
+                done
+                voice=$(kb_dialog --title " Voice " --ok-label "Use" --cancel-label "Back" --radiolist \
+                    "The language the screen reader speaks (Space selects):" 0 50 0 "${items[@]}") &&
+                    sudo -n "$KB_LIB/kb-root" speech voice "$voice" ;;
+            Speed)
+                rate=$(kb_dialog --title " Speed of Speech " --ok-label "Use" --cancel-label "Back" \
+                    --rangebox "From 1 (slow) to 9 (fast); the arrow keys change it:" 7 60 1 9 "$rate") &&
+                    sudo -n "$KB_LIB/kb-root" speech rate "$rate" ;;
+            Braille)
+                if [ "$braille" = ON ]; then
+                    sudo -n "$KB_LIB/kb-root" braille off
+                else
+                    sudo -n "$KB_LIB/kb-root" braille on >/dev/null 2>&1
+                    kb_msg "Accessibility" "Braille is on: plug in a braille display (USB). brltty finds most of them by itself, and shows the line the cursor is on." 9 64
+                fi ;;
+            Letters)  display_panel ;;
+            Contrast) echo mono > "$KB_CONF/theme"; kb_load_theme
+                      kb_msg "Accessibility" "The colours are black and white now. Settings > Colour theme brings others back." 8 60 ;;
+            Keys)     kb_msg "The Screen Reader" "Kilobyte reads what is chosen in its menus aloud, and what programs write.
+
+On the number pad (with Num Lock off):
+  7  8  9    the line above, this line, the line below
+  4  5  6    the word before, this word, the next word
+  1  2  3    the letter before, this letter, the next one
+
+Insert on the number pad is the screen reader's own key:
+  Insert + F1   its help, with all of its keys
+
+The arrow keys and the first letters choose in the menus,
+Enter opens, Esc goes back." 20 66 ;;
+        esac
+    done
 }
 
 # --- Keyboard -------------------------------------------------------------
@@ -1098,11 +1368,12 @@ while true; do
             Hotspot    "Wi-Fi hotspot"                 "Share this computer's Internet connection over Wi-Fi" \
             Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
-            Appearance "Colour theme"                  "Classic blue, panels, 8-bit, 16-bit, 1984, green and amber screens..." \
+            Appearance "Colour theme"                  "Classic blue, panels, 8-bit, 16-bit, 1984... or make your own" \
             Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
             Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
             Defaults   "Default programs"              "Text editor, web browser, file manager, email, music..." \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
+            Access     "Accessibility"                 "Screen reader (speech), braille display, large letters" \
             Swap       "Swap and memory"               "Compressed memory (zram), a swap file, how readily to swap" \
             Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
             Tiles      "Desktop tiles"                 "Weather and news beside the Program Manager" \
@@ -1161,6 +1432,7 @@ while true; do
         Appearance) appearance_panel ;;
         Wallpaper)  wallpaper_panel ;;
         Display)    display_panel ;;
+        Access)     access_panel ;;
         Swap)       swap_panel ;;
         Saver)      saver_panel ;;
         Tiles)      tiles_panel ;;

@@ -1,0 +1,9 @@
+[Unit]
+Description=Kilobyte's automatic backups (of the users who switched them on)
+After=network-online.target local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/kb-backup all-users
+Nice=15
+IOSchedulingClass=idle

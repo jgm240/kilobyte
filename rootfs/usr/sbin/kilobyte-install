@@ -318,6 +318,18 @@ EOF
     cp /etc/default/console-setup "$TARGET/etc/default/console-setup"
     cp -a /etc/wpa_supplicant/wpa_supplicant-*.conf "$TARGET/etc/wpa_supplicant/" 2>/dev/null || true
     [ -e /etc/kilobyte/wifi-off ] && { mkdir -p "$TARGET/etc/kilobyte"; cp /etc/kilobyte/wifi-off "$TARGET/etc/kilobyte/"; }
+    # Speech and braille that are on now (in Settings, or from the boot
+    # menu's "with speech") stay on in the installed system.
+    for a in speech:espeakup braille:brltty; do
+        if [ -e "/etc/kilobyte/${a%%:*}-on" ] || grep -qw "kilobyte.${a%%:*}=1" /proc/cmdline; then
+            mkdir -p "$TARGET/etc/kilobyte"
+            : > "$TARGET/etc/kilobyte/${a%%:*}-on"
+            in_target systemctl enable "${a#*:}.service" || true
+        fi
+    done
+    for f in /etc/kilobyte/speech-rate /etc/default/espeakup; do
+        [ -f "$f" ] && cp "$f" "$TARGET$f"
+    done
 
     progress 84 "Creating your account..."
     # Remove everything that only makes sense on the live medium.
@@ -332,6 +344,8 @@ EOF
     local theme_dir="$TARGET/home/$NAME/.config/kilobyte"
     mkdir -p "$theme_dir"
     kb_theme_name > "$theme_dir/theme"
+    # With speech, Kilobyte starts without windows (see Settings > Accessibility).
+    [ -e "$TARGET/etc/kilobyte/speech-on" ] && : > "$theme_dir/windows-off" && : > "$theme_dir/windows-asked"
     in_target chown -R "$NAME:$NAME" "/home/$NAME"
     if [ $MODE = alongside ]; then
         # Windows' drive, readable and writable by the new user.

@@ -1,0 +1,12 @@
+[Unit]
+Description=Kilobyte's automatic backups, when they are due
+
+# Every hour: a backup that is due (daily or weekly, see kb-backup) happens
+# then, or as soon as its USB stick is plugged in.
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

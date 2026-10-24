@@ -6,7 +6,7 @@ set -euo pipefail
 VARIANT=${1:-live}
 
 # Everything Kilobyte ships must be owned by root.
-chown -R root:root /usr/bin/kilobyte /usr/sbin/kilobyte-install /usr/sbin/kilobyte-firstboot \
+chown -R root:root /usr/bin/kilobyte /usr/bin/kbutils /usr/sbin/kilobyte-install /usr/sbin/kilobyte-firstboot \
     /usr/lib/kilobyte /usr/share/kilobyte /usr/share/consolefonts/Kilobyte-*
 chmod 0440 /etc/sudoers.d/kilobyte
 groupadd -f netdev
@@ -149,6 +149,12 @@ chmod 644 /etc/X11/Xwrapper.config 2>/dev/null || true
 
 # --- services
 systemctl enable systemd-networkd systemd-resolved systemd-timesyncd gpm kilobyte-wifi kilobyte-post kilobyte-bootlogo kilobyte-swap kilobyte-undo
+# Automatic backups (for those who switch them on in Backup), and speech or
+# braille asked for at start-up (kilobyte.speech=1).
+systemctl enable kilobyte-backup.timer kilobyte-access.service 2>/dev/null || true
+# Speech and braille are off until Settings > Accessibility switches them on
+# (Debian would start them as soon as they are installed).
+systemctl disable espeakup.service brltty.service 2>/dev/null || true
 systemctl disable wpa_supplicant.service hostapd.service 2>/dev/null || true   # started on demand
 # Remote login is off until Settings > Remote login switches it on; every
 # computer makes its own host keys then (none are in the image).

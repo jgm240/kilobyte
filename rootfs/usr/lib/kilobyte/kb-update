@@ -103,11 +103,14 @@ cmd_apply_from() {
 }
 
 # The files of Kilobyte outside its two directories.
-OWN_FILES="usr/bin/kilobyte usr/sbin/kilobyte-install usr/sbin/kilobyte-firstboot etc/profile.d/kilobyte.sh
+OWN_FILES="usr/bin/kilobyte usr/bin/kbutils usr/sbin/kilobyte-install usr/sbin/kilobyte-firstboot etc/profile.d/kilobyte.sh
     etc/sudoers.d/kilobyte etc/gpm.conf etc/elinks/elinks.conf etc/default/grub etc/grub.d/11_kilobyte_undo
     etc/systemd/system/kilobyte-wifi.service etc/systemd/system/kilobyte-post.service
     etc/systemd/system/kilobyte-resize.service etc/systemd/system/kilobyte-bootlogo.service
     etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service
+    etc/systemd/system/kilobyte-backup.service etc/systemd/system/kilobyte-backup.timer
+    etc/systemd/system/kilobyte-access.service etc/systemd/system/kilobyte-bbs.socket
+    etc/systemd/system/kilobyte-bbs@.service
     etc/initramfs-tools/hooks/kilobyte-logo etc/initramfs-tools/hooks/kilobyte-storage etc/initramfs-tools/hooks/zz-kilobyte-slim
     etc/initramfs-tools/scripts/init-top/kilobyte-logo etc/initramfs-tools/scripts/init-bottom/kilobyte-logo"
 PREV=/var/lib/kilobyte/previous
@@ -175,6 +178,8 @@ install_tree() {
     # their own lists and nothing else.
     case $variant in
         kindle | wsl) new_pkgs=$(package_list "$src/../image/packages-$variant.txt") ;;
+        cd)           ;;   # (the screen reader: "kbutils dl accessibility")
+        *)            new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-accessibility.txt")" | sort -u) ;;
     esac
     grep -qx firmware-iwlwifi <<< "$old_pkgs" &&   # not a --lite image
         new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-wifi.txt")" | sort -u)
@@ -194,6 +199,7 @@ install_tree() {
         /usr/lib/kilobyte/resize-root /usr/lib/kilobyte/apps/*
     [ -f /usr/lib/kilobyte/bootlogo ] && chmod 755 /usr/lib/kilobyte/bootlogo
     install -m 755 "$src/usr/bin/kilobyte" /usr/bin/kilobyte
+    [ -f "$src/usr/bin/kbutils" ] && install -m 755 "$src/usr/bin/kbutils" /usr/bin/kbutils
     install -m 755 "$src/usr/sbin/kilobyte-install" /usr/sbin/kilobyte-install
     install -m 755 "$src/usr/sbin/kilobyte-firstboot" /usr/sbin/kilobyte-firstboot
     install -D -m 644 -t /usr/share/consolefonts "$src"/usr/share/consolefonts/Kilobyte-*
@@ -207,6 +213,9 @@ install_tree() {
              etc/systemd/system/kilobyte-post.service etc/systemd/system/kilobyte-resize.service \
              etc/systemd/network/25-wireless.network etc/systemd/system/kilobyte-bootlogo.service \
              etc/systemd/system/kilobyte-swap.service etc/systemd/system/kilobyte-undo.service \
+             etc/systemd/system/kilobyte-backup.service etc/systemd/system/kilobyte-backup.timer \
+             etc/systemd/system/kilobyte-access.service etc/systemd/system/kilobyte-bbs.socket \
+             etc/systemd/system/kilobyte-bbs@.service \
              etc/X11/Xwrapper.config etc/X11/xorg.conf.d/10-kilobyte.conf; do
         [ -f "$src/$f" ] && install -D -m 644 "$src/$f" "/$f"
     done
@@ -271,6 +280,10 @@ install_tree() {
     if [ -z "$had_ssh" ] && dpkg-query -W -f '${Status}' openssh-server 2>/dev/null | grep -q 'ok installed'; then
         systemctl disable --now ssh.service ssh.socket >/dev/null 2>&1 || true
     fi
+    # Speech and braille stay off until switched on (Debian starts them as
+    # soon as they are installed).
+    [ -e /etc/kilobyte/speech-on ] || systemctl disable --now espeakup.service >/dev/null 2>&1 || true
+    [ -e /etc/kilobyte/braille-on ] || systemctl disable --now brltty.service >/dev/null 2>&1 || true
 
     # yt-dlp comes from its makers, not from Debian (YouTube changes too fast
     # for Debian): a system built without it gets it now.
@@ -288,7 +301,8 @@ install_tree() {
 
     # New services and groups that came with the update.
     systemctl enable kilobyte-post.service kilobyte-bootlogo.service kilobyte-swap.service \
-        kilobyte-undo.service 2>/dev/null || true
+        kilobyte-undo.service kilobyte-access.service 2>/dev/null || true
+    [ "$variant" = kindle ] || systemctl enable --now kilobyte-backup.timer 2>/dev/null || true
     # The boot menu gets its "undo the last update" entry.
     if [ ! -d /run/live/medium ] && command -v update-grub >/dev/null; then
         update-grub >/dev/null 2>&1 || true

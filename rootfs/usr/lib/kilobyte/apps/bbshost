@@ -1,0 +1,302 @@
+#!/bin/bash
+# Host a BBS: this computer as a bulletin board system that friends dial into
+# with a BBS dialer (Kilobyte's, or any telnet BBS program). Message boards,
+# file areas, games, apps and chat; its name, greeting and what callers can
+# do are yours to choose. The board itself is py/bbs.py; kb-root switches it
+# on and off.
+. /usr/lib/kilobyte/lib.sh
+
+T="Host a BBS"
+ETC=/etc/kilobyte/bbs
+CONF="$ETC/bbs.conf"
+FILES=/srv/kilobyte-bbs/files
+STORIES=/srv/kilobyte-bbs/stories
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+conf() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null | tail -n 1; }
+conf_or() { local v; v=$(conf "$1"); printf '%s' "${v:-$2}"; }
+conf_set() { # conf_set KEY VALUE [KEY VALUE ...]
+    local k
+    while [ $# -ge 2 ]; do
+        k=$1
+        { grep -v "^$k=" "$CONF" 2>/dev/null; printf '%s=%s\n' "$k" "${2//$'\n'/ }"; } > "$TMP/conf" &&
+            cat "$TMP/conf" > "$CONF"
+        shift 2
+    done
+}
+has() { [[ " $(conf_or "$1" "$3") " == *" $2 "* ]]; }   # has KEY WORD DEFAULT
+
+bbs_root() { # bbs_root ACTION [ARGS]: kb-root bbs, without a password where allowed
+    sudo -n "$KB_LIB/kb-root" bbs "$@" 2>"$TMP/err" && return 0
+    grep -q "password is required\|a terminal is required" "$TMP/err" || { cat "$TMP/err" >&2; return 1; }
+    kb_sudo && sudo "$KB_LIB/kb-root" bbs "$@"
+}
+
+running() { systemctl -q is-active kilobyte-bbs.socket 2>/dev/null; }
+addresses() { ip -4 -o addr show scope global 2>/dev/null | awk '{ sub("/.*", "", $4); print $4 }' | xargs; }
+
+FEATURES="boards files games apps chat who callers"
+GAMES="adventure hangman robots snake sudoku chess stories"
+APPS="weather dictionary calculator calendar"
+
+first_time() {
+    kb_msg "$T" "Your computer can be a BBS, a bulletin board system as in the 1980s and 90s: friends dial in with a BBS dialer, leave messages, download files, play games and chat with each other, and with you, the sysop.
+
+Next: a name for your board. You can change everything later." 13 68
+    if ! bbs_root setup 2>"$TMP/err"; then
+        kb_msg "$T" "\Z1The BBS could not be set up.\Zn\n\n$(tail -n 2 "$TMP/err")" 9 66
+        exit 0
+    fi
+    local name
+    name=$(kb_input "$T" "The name of your BBS:" "$(hostname | sed 's/./\U&/') BBS") || name="Kilobyte BBS"
+    cat > "$CONF" <<EOF
+# Kilobyte BBS (Internet > Host a BBS)
+name=${name:-Kilobyte BBS}
+sysop=$( (getent passwd "$USER" | cut -d: -f5 | cut -d, -f1) 2>/dev/null | grep . || echo "$USER")
+tagline=A small board on a small computer
+hosted=on
+newusers=on
+guests=on
+features=$FEATURES
+games=$GAMES
+apps=$APPS
+boards=General|Computers|Games|Swap and sell
+minutes=60
+max=8
+port=2323
+city=$(cat "$KB_CONF/tiles-city" 2>/dev/null)
+EOF
+    cat > "$ETC/greeting.txt" <<EOF
+Welcome to ${name:-Kilobyte BBS}!
+
+Be kind, have fun, and leave a message on the boards.
+EOF
+    mkdir -p "$FILES/General" 2>/dev/null
+    [ -e "$FILES/General/descriptions.txt" ] || printf '%s\n' "# One line per file: its name, then what it is." > "$FILES/General/descriptions.txt"
+}
+
+switch() {
+    if running; then
+        kb_yesno "$T" "Switch the BBS off? Callers on it now are hung up." 7 60 || return
+        bbs_root off
+    else
+        kb_yesno "$T" "Switch the BBS on?\n\nAnyone who can reach this computer on port $(conf_or port 2323) can call it: everyone on this network, and the whole Internet if your router forwards that port here." 11 66 || return
+        if bbs_root on 2>"$TMP/err"; then
+            kb_msg "$T" "\ZbYour BBS is on.\Zn\n\nFriends on this network dial:\n  $(for a in $(addresses); do printf '%s:%s  ' "$a" "$(conf_or port 2323)"; done)\n\nFrom the Internet, forward port $(conf_or port 2323) on your router to this computer, and give out your Internet address." 14 70
+        else
+            kb_msg "$T" "\Z1It could not be switched on.\Zn\n\n$(tail -n 2 "$TMP/err")" 9 66
+        fi
+    fi
+}
+
+names_panel() {
+    local sel v
+    while true; do
+        sel=$(kb_dialog --title " Name and Welcome " --ok-label "Change" --cancel-label "Back" --menu \
+            "What callers see when they arrive." 0 72 0 \
+            Name     "Name: $(conf name)" \
+            Sysop    "Sysop: $(conf sysop)" \
+            Tagline  "Tagline: $(conf tagline)" \
+            Greeting "Greeting (text callers read first)" \
+            Art      "ANSI art greeting: $([ -e "$ETC/greeting.ans" ] && echo "yes (instead of the text)" || echo none)" \
+            News     "News (shown after logging in)" \
+            Goodbye  "Goodbye message" \
+            Hosted   "\"Hosted on Kilobyte\" line: $(conf_or hosted on)" \
+            City     "Weather app's city: $(conf_or city "(guessed)")") || return
+        case $sel in
+            Name)    v=$(kb_input "BBS Name" "The name of your BBS:" "$(conf name)") && [ -n "$v" ] && conf_set name "$v" ;;
+            Sysop)   v=$(kb_input "Sysop" "Your name as the sysop:" "$(conf sysop)") && [ -n "$v" ] && conf_set sysop "$v" ;;
+            Tagline) v=$(kb_input "Tagline" "One line under the name:" "$(conf tagline)") && conf_set tagline "$v" ;;
+            Greeting | News | Goodbye)
+                v="$ETC/${sel,,}.txt"
+                [ -e "$v" ] || : > "$v"
+                kb_guarded '\e[21~' mcedit "$v" ;;
+            Art)
+                if [ -e "$ETC/greeting.ans" ]; then
+                    kb_yesno "ANSI Art" "Remove the ANSI art greeting (and show the text one again)?" 7 64 && rm -f "$ETC/greeting.ans"
+                else
+                    v=$(kb_dialog --title " An ANSI Art Greeting " --fselect "$KB_DOCS/" 14 64) || continue
+                    [ -f "$v" ] || continue
+                    cp "$v" "$ETC/greeting.ans"
+                    kb_msg "ANSI Art" "Callers see it when they arrive. (ANSI art in the IBM PC characters, CP437: Paint saves it as .ans.)" 8 66
+                fi ;;
+            Hosted)  conf_set hosted "$([ "$(conf_or hosted on)" = on ] && echo off || echo on)" ;;
+            City)    v=$(kb_input "Weather" "City for the weather app (empty: guessed):" "$(conf city)") && conf_set city "$v" ;;
+        esac
+    done
+}
+
+# checklist KEY TITLE TEXT DEFAULT  NAME LABEL ...: choose words for KEY
+checklist() {
+    local key=$1 title=$2 text=$3 def=$4 items=() v
+    shift 4
+    while [ $# -ge 2 ]; do
+        items+=("$1" "$2" "$(has "$key" "$1" "$def" && echo on || echo off)")
+        shift 2
+    done
+    v=$(kb_dialog --title " $title " --ok-label "Use" --cancel-label "Back" --checklist "$text" 0 70 0 "${items[@]}") &&
+        conf_set "$key" "$v"
+}
+
+callers_panel() {
+    local sel v
+    while true; do
+        sel=$(kb_dialog --title " Callers " --ok-label "Change" --cancel-label "Back" --menu \
+            "Who may call, for how long, and how many at once." 0 66 0 \
+            New     "New callers may join: $(conf_or newusers on)" \
+            Guests  "Guests may look around (read only): $(conf_or guests on)" \
+            Minutes "Minutes per call: $(conf_or minutes 60)" \
+            Lines   "Callers at once: $(conf_or max 8)" \
+            Port    "Port: $(conf_or port 2323) (telnet's own is 23)" \
+            Users   "The users: see them, delete one") || return
+        case $sel in
+            New)     conf_set newusers "$([ "$(conf_or newusers on)" = on ] && echo off || echo on)" ;;
+            Guests)  conf_set guests "$([ "$(conf_or guests on)" = on ] && echo off || echo on)" ;;
+            Minutes) v=$(kb_dialog --title " Minutes per Call " --rangebox "How long one call may last:" 7 60 5 240 "$(conf_or minutes 60)") &&
+                         conf_set minutes "$v" ;;
+            Lines)   v=$(kb_dialog --title " Callers at Once " --rangebox "How many may be on at the same time:" 7 60 1 30 "$(conf_or max 8)") &&
+                         conf_set max "$v" && bbs_root apply ;;
+            Port)    v=$(kb_input "Port" "The port callers dial (1024 to 65535, or 23):" "$(conf_or port 2323)") || continue
+                     if [[ $v =~ ^[0-9]+$ ]] && { [ "$v" = 23 ] || { [ "$v" -ge 1024 ] && [ "$v" -le 65535 ]; }; }; then
+                         conf_set port "$v"; bbs_root apply
+                     else
+                         kb_msg "$T" "23, or a number from 1024 to 65535." 7 50
+                     fi ;;
+            Users)   users_panel ;;
+        esac
+    done
+}
+
+users_panel() {
+    local items=() name joined calls last sel
+    while IFS=$'\t' read -r name joined calls last; do
+        [ -n "$name" ] && items+=("$name" "$(printf 'joined %s, %3s calls, last %s' "$joined" "$calls" "$last")")
+    done < <(bbs_root sysop users)
+    [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "Nobody has joined yet." 7 40; return; }
+    sel=$(kb_dialog --title " Users " --ok-label "Delete" --cancel-label "Back" --menu "Choose one to delete it:" 0 72 0 "${items[@]}") || return
+    kb_yesno "$T" "Delete the user \Zb$sel\Zn? (Their messages stay.)" 7 56 && bbs_root sysop deluser "$sel"
+}
+
+boards_panel() {
+    local sel v items b n
+    while true; do
+        items=()
+        n=0
+        IFS='|' read -ra b <<< "$(conf_or boards "General")"
+        for v in "${b[@]}"; do n=$((n + 1)); items+=("$n" "$v"); done
+        items+=(Add "» Add a board" Remove "» Remove a board" Messages "» Read and delete messages")
+        sel=$(kb_dialog --title " Message Boards " --ok-label "Select" --cancel-label "Back" --menu \
+            "The boards callers write on (up to 9)." 0 60 0 "${items[@]}") || return
+        case $sel in
+            Add)
+                [ ${#b[@]} -lt 9 ] || { kb_msg "$T" "Nine boards at most." 7 40; continue; }
+                v=$(kb_input "New Board" "Its name:" "") && v=${v//|/} && [ -n "$v" ] &&
+                    conf_set boards "$(conf_or boards General)|$v" ;;
+            Remove)
+                items=()
+                for v in "${b[@]}"; do items+=("$v" ""); done
+                v=$(kb_dialog --title " Remove a Board " --ok-label "Remove" --cancel-label "Back" --menu \
+                    "Its messages are kept, should it come back." 0 50 0 "${items[@]}") || continue
+                conf_set boards "$(printf '%s\n' "${b[@]}" | grep -vxF -- "$v" | paste -sd'|' -)" ;;
+            Messages) messages_panel ;;
+            *)  v=$(kb_input "Rename" "New name of \"${b[sel - 1]}\" (its messages stay with the old name):" "${b[sel - 1]}") &&
+                    v=${v//|/} && [ -n "$v" ] && { b[sel - 1]=$v; conf_set boards "$(IFS='|'; echo "${b[*]}")"; } ;;
+        esac
+    done
+}
+
+messages_panel() {
+    local items=() board id date from subject sel
+    while true; do
+        items=()
+        while IFS=$'\t' read -r board id date from subject; do
+            [ -n "$id" ] && items+=("$board/$id" "$(printf '%-12s %-16s %s' "${board:0:12}" "${from:0:16}" "${subject:0:36}")")
+        done < <(bbs_root sysop posts | sort -t$'\t' -k3,3r | head -n 200)
+        [ ${#items[@]} -gt 0 ] || { kb_msg "$T" "There are no messages yet." 7 44; return; }
+        sel=$(kb_dialog --title " Messages " --no-tags --ok-label "Read" --cancel-label "Back" --menu \
+            "Newest first." 0 76 0 "${items[@]}") || return
+        bbs_root sysop show "${sel%/*}" "${sel#*/}" > "$TMP/post"
+        kb_dialog --title " Message " --yes-label "Back" --no-label "Delete it" --yesno "$(cat "$TMP/post")" 20 76 ||
+            { kb_yesno "$T" "Delete this message?" 7 40 && bbs_root sysop delete "${sel%/*}" "${sel#*/}"; }
+    done
+}
+
+files_panel() {
+    local sel n
+    while true; do
+        n=$(find "$STORIES" -maxdepth 1 -type f \( -iname '*.z[1-8]' -o -iname '*.zblorb' \) 2>/dev/null | wc -l)
+        sel=$(kb_dialog --title " Files " --ok-label "Select" --cancel-label "Back" --menu \
+"Every folder in $FILES is a file area; callers download
+its files (ZMODEM). Describe them in the area's descriptions.txt:
+one line per file, its name, then what it is." 0 70 0 \
+            Open    "Open the file areas in the file manager" \
+            Area    "Add a file area" \
+            Stories "Text adventures for callers: $n (copy them from Documents/Stories)") || return
+        case $sel in
+            Open)  kb_guarded '\e[21~' mc "$FILES" "$KB_DOCS" ;;
+            Area)  n=$(kb_input "New File Area" "Its name:" "") && n=${n//\//} && [ -n "$n" ] &&
+                       mkdir -p "$FILES/$n" && printf '%s\n' "# One line per file: its name, then what it is." > "$FILES/$n/descriptions.txt" ;;
+            Stories)
+                n=0
+                for f in "$KB_DOCS"/Stories/*; do
+                    case ${f,,} in *.z[1-8] | *.zblorb) cp -n "$f" "$STORIES/" && n=$((n + 1)) ;; esac
+                done
+                kb_msg "$T" "Callers have $(find "$STORIES" -maxdepth 1 -type f | wc -l) text adventures now.\n\n(Games > Text adventures downloads more into Documents/Stories.)" 9 64 ;;
+        esac
+    done
+}
+
+status_panel() {
+    bbs_root sysop status > "$TMP/status" 2>&1
+    kb_textfile "Callers" "$TMP/status"
+}
+
+dial_it() {
+    running || { kb_msg "$T" "Switch the BBS on first." 7 40; return; }
+    clear
+    kb_guarded '' python3 "$KB_LIB/py/bbsterm.py" 127.0.0.1 "$(conf_or port 2323)"
+}
+
+[ -f "$CONF" ] || first_time
+[ -w "$CONF" ] || { kb_msg "$T" "This BBS belongs to $(stat -c %U "$ETC"), its sysop: only they can change it." 8 60; exit 0; }
+
+sel=Switch
+while true; do
+    if running; then
+        state="\ZbON\Zn: friends dial $(for a in $(addresses); do printf '%s:%s ' "$a" "$(conf_or port 2323)"; done)"
+    else
+        state="OFF"
+    fi
+    sel=$(kb_dialog --title " $T: $(conf name) " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "The BBS is $state" 0 76 0 \
+        Switch   "Switch the BBS $(running && echo off || echo on)" \
+        Names    "Name, greeting, news and goodbye" \
+        Features "What callers can do: $(conf_or features "$FEATURES")" \
+        Games    "Games: $(conf_or games "$GAMES")" \
+        Apps     "Apps: $(conf_or apps "$APPS")" \
+        Boards   "Message boards, and their messages" \
+        Files    "File areas and text adventures" \
+        Callers  "Callers: joining, guests, minutes, lines, port, users" \
+        Who      "Who is on now, and the last callers" \
+        Chat     "Chat with the callers" \
+        Dial     "Call your BBS yourself") || exit 0
+    case $sel in
+        Switch)   switch ;;
+        Names)    names_panel ;;
+        Features) checklist features "What Callers Can Do" "Tick what your BBS has:" "$FEATURES" \
+                      boards "Message boards" files "Files to download" games "Games" apps "Apps (weather, dictionary...)" \
+                      chat "Chat (with each other, and you)" who "Who is here" callers "Last callers" ;;
+        Games)    checklist games "Games" "The games callers can play:" "$GAMES" \
+                      adventure "Adventure (Colossal Cave)" hangman "Hangman" robots "Robots" snake "Snake" \
+                      sudoku "Sudoku" chess "Chess (GNU Chess)" stories "Text adventures (see Files)" ;;
+        Apps)     checklist apps "Apps" "The apps callers can use:" "$APPS" \
+                      weather "Weather" dictionary "Dictionary" calculator "Calculator" calendar "Calendar" ;;
+        Boards)   boards_panel ;;
+        Files)    files_panel ;;
+        Callers)  callers_panel ;;
+        Who)      status_panel ;;
+        Chat)     kb_run bash -c 'sudo -n /usr/lib/kilobyte/kb-root bbs sysop chat || sudo /usr/lib/kilobyte/kb-root bbs sysop chat' ;;
+        Dial)     dial_it ;;
+    esac
+done
