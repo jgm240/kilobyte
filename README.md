@@ -13,7 +13,7 @@ text-mode programs, plus a few small Python programs for the real-time parts
 
 It runs on 64-bit and 32-bit PCs and on the Raspberry Pi.
 
-**Already have a computer?** Add Kilobyte next to your system, then type
+**Want to keep your data** Add Kilobyte next to your system, then type
 `kb open`:
 
 ```bash
