@@ -203,13 +203,13 @@ case "${1:-} ${2:-}" in
         ;;
     # Kilobyte BBS (Internet > Host a BBS; the server is hostbbs, as the user
     # kbbs): only for administrators (the sudo group) or the sysop who set it up.
-    "bbs setup" | "bbs on" | "bbs off" | "bbs restart" | "bbs passwd" | "bbs who")
+    "bbs setup" | "bbs on" | "bbs off" | "bbs restart" | "bbs passwd" | "bbs who" | "bbs log" | "bbs update" | "bbs op")
         [ -n "$user" ] || { echo "run through sudo as the user" >&2; exit 1; }
         if ! id -nG "$user" | tr ' ' '\n' | grep -qx sudo &&
            [ "$(stat -c %U /etc/kilobyte/bbs 2>/dev/null)" != "$user" ]; then
             echo "only an administrator, or the BBS's sysop, may do that" >&2; exit 1
         fi
-        hostbbs="runuser -u kbbs -- python3 /usr/lib/kilobyte/py/hostbbs.py"
+        hostbbs="runuser -u kbbs -- /usr/lib/kilobyte/kb-bbs-run"
         case $2 in
             setup)
                 id kbbs >/dev/null 2>&1 ||
@@ -220,13 +220,20 @@ case "${1:-} ${2:-}" in
                 for d in /etc/kilobyte/bbs /srv/kilobyte-bbs /srv/kilobyte-bbs/files /srv/kilobyte-bbs/stories; do
                     [ -d "$d" ] || install -d -m 755 -o "$user" -g "$(id -gn "$user")" "$d"
                 done ;;
-            on)      systemctl enable kilobyte-bbs.service >/dev/null 2>&1; systemctl restart kilobyte-bbs.service ;;
-            off)     systemctl disable --now kilobyte-bbs.service >/dev/null 2>&1 || true ;;
+            on)      systemctl enable --now kilobyte-bbs-update.path >/dev/null 2>&1 || true
+                     systemctl enable kilobyte-bbs.service >/dev/null 2>&1; systemctl restart kilobyte-bbs.service ;;
+            off)     systemctl disable --now kilobyte-bbs.service kilobyte-bbs-update.path >/dev/null 2>&1 || true ;;
+            # The newest hostbbs from rBBS on GitHub (checked; the BBS restarts with it).
+            update)  exec /usr/lib/kilobyte/kb-bbs-update ;;
+            # hostbbs's operator commands (op help lists them), on the running BBS.
+            op)      shift 2; exec $hostbbs op -c /etc/kilobyte/bbs/hostbbs.json --data-dir /var/lib/kilobyte-bbs "$@" ;;
             restart) systemctl try-restart kilobyte-bbs.service ;;
             # The password on standard input; the user's handle, or the sysop's.
             passwd)  case ${3:-} in *[!A-Za-z0-9_-]*) echo "not a handle: $3" >&2; exit 2 ;; esac
                      exec $hostbbs passwd -c /etc/kilobyte/bbs/hostbbs.json --data-dir /var/lib/kilobyte-bbs ${3:+"$3"} ;;
             who)     cat /var/lib/kilobyte-bbs/online.json 2>/dev/null || echo "[]" ;;
+            # The activity log (public activity only: no mail, no private messages).
+            log)     tail -n 2000 /var/lib/kilobyte-bbs/hostbbs.log 2>/dev/null || echo "(nothing logged yet)" ;;
         esac
         ;;
     "power reboot")   systemctl reboot ;;
@@ -234,6 +241,6 @@ case "${1:-} ${2:-}" in
     *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2
        echo "       autologin on|off | sounds on|off | post on|off | usb mount|eject DEV | usb format DISK fat32|exfat LABEL" >&2
        echo "       speech on|off | speech voice LANG | speech rate 0-9 | braille on|off | access boot" >&2
-       echo "       bbs setup|on|off|restart|who | bbs passwd [USER]" >&2
+       echo "       bbs setup|on|off|restart|who|log|update | bbs passwd [USER] | bbs op COMMAND..." >&2
        exit 2 ;;
 esac

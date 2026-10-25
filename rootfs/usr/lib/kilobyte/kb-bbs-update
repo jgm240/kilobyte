@@ -1,0 +1,25 @@
+#!/bin/bash
+# The newest hostbbs, from rBBS on GitHub (github.com/jgm240/rbbs), for
+# Kilobyte's BBS: when a sysop types "op update" in the BBS (the BBS may not
+# change its program itself: it leaves update-requested, which
+# kilobyte-bbs-update.path notices), or from Internet > Host a BBS > Update.
+# hostbbs checks the download is a whole hostbbs and keeps the one before.
+set -u
+REQ=/var/lib/kilobyte-bbs/update-requested
+DIR=/usr/local/lib/kilobyte-bbs
+LOG=/var/lib/kilobyte-bbs/hostbbs.log
+rm -f "$REQ"
+note() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG" 2>/dev/null; }
+install -d -m 755 "$DIR"
+# (From the newest there is now, Kilobyte's or an earlier update.)
+[ "$(/usr/lib/kilobyte/kb-bbs-run --which)" = "$DIR/hostbbs" ] || install -m 755 /usr/lib/kilobyte/py/hostbbs.py "$DIR/hostbbs"
+before=$(sha256sum < "$DIR/hostbbs")
+if ! out=$(python3 "$DIR/hostbbs" update 2>&1); then
+    note "update did not work: $out"
+    exit 1
+fi
+note "update: $out"
+if [ "$(sha256sum < "$DIR/hostbbs")" != "$before" ] && systemctl -q is-active kilobyte-bbs.service; then
+    systemctl restart kilobyte-bbs.service
+fi
+exit 0

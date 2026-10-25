@@ -1,15 +1,18 @@
 [Unit]
-Description=Kilobyte BBS (hostbbs): the bulletin board friends dial into
+Description=Kilobyte BBS (hostbbs, from rBBS): the bulletin board friends dial into
 Documentation=file:/usr/lib/kilobyte/py/hostbbs.py
 After=network.target
 # Switched on and off in Internet > Host a BBS (kb-root bbs on|off).
 
 [Service]
-ExecStart=/usr/bin/python3 /usr/lib/kilobyte/py/hostbbs.py run -c /etc/kilobyte/bbs/hostbbs.json --data-dir /var/lib/kilobyte-bbs
+# (The newest hostbbs there is: Kilobyte's, or one a sysop's "op update" brought.)
+ExecStart=/usr/lib/kilobyte/kb-bbs-run run -c /etc/kilobyte/bbs/hostbbs.json --data-dir /var/lib/kilobyte-bbs
 User=kbbs
 Group=kbbs
 WorkingDirectory=/var/lib/kilobyte-bbs
 Environment=LANG=C.UTF-8 HOME=/var/lib/kilobyte-bbs PYTHONUNBUFFERED=1
+# "op update" in the BBS leaves this file; kilobyte-bbs-update.path does the rest.
+Environment=HOSTBBS_UPDATE_REQUEST=/var/lib/kilobyte-bbs/update-requested
 Restart=on-failure
 RestartSec=5
 # Telnet's own port, 23, is below 1024: allowed, nothing else.

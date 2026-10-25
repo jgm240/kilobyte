@@ -234,11 +234,19 @@
                   network, while Messenger is open.
    Host a BBS     Internet > Host a BBS makes this computer a bulletin board
                   that friends dial into with the BBS Dialer (or any telnet
-                  BBS program): chat rooms, message boards, private mail,
-                  file areas they download from, games and apps. Settings is
-                  hostbbs's own setup: name, banner, rooms, boards, features,
-                  games, port, callers, minutes per call. Log in to it as the
-                  sysop (Call) to kick callers, broadcast and delete messages.
+                  BBS program): hostbbs from rBBS, with chat rooms, boards,
+                  mail, files, games, multiplayer, polls, news and more.
+                  Settings is hostbbs's own setup. Log in to it as the sysop
+                  (Call) for Sysop tools; there, or at the main menu, the op
+                  commands: op restart, op update (the newest hostbbs from
+                  rBBS on GitHub), op help. Host a BBS has Update and Restart
+                  too, and the Log: what callers did in public (never mail,
+                  private messages or pages to the sysop).
+                  Kids mode (Settings > K): callers say their age, features
+                  go by it, rooms and boards can be for some ages, adults and
+                  under-18s can't write privately, rude words are hidden from
+                  the young. Parent mode: parents make their children's
+                  accounts (Family, E) and approve who else may write to them.
                   Every folder in /srv/kilobyte-bbs/files is a file area.
                   Friends elsewhere need your router to forward the port.
 

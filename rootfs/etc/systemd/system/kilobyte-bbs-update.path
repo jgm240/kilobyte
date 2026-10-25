@@ -1,0 +1,9 @@
+[Unit]
+Description=Kilobyte BBS: a sysop asked for the newest hostbbs (op update)
+
+[Path]
+PathExists=/var/lib/kilobyte-bbs/update-requested
+Unit=kilobyte-bbs-update.service
+
+[Install]
+WantedBy=multi-user.target

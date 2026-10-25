@@ -1,0 +1,11 @@
+[Unit]
+Description=Kilobyte BBS: the newest hostbbs, from rBBS on GitHub
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte/kb-bbs-update
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+TimeoutStartSec=5min

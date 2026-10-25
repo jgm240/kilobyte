@@ -1,0 +1,19 @@
+#!/bin/sh
+# Kilobyte's BBS with the newest hostbbs there is: Kilobyte's own copy, or the
+# one a sysop's "op update" brought (kb-bbs-update, in /usr/local/lib/kilobyte-bbs).
+#   kb-bbs-run ARGS...     hostbbs ARGS...
+#   kb-bbs-run --which     which one that is
+own=/usr/lib/kilobyte/py/hostbbs.py
+new=/usr/local/lib/kilobyte-bbs/hostbbs
+ver() { sed -n 's/^VERSION = "\([0-9.]*\)"$/\1/p' "$1" 2>/dev/null | head -n 1; }
+pick=$own
+if [ -f "$new" ]; then
+    a=$(ver "$own") b=$(ver "$new")
+    if [ -n "$b" ] && [ "$a" != "$b" ]; then
+        [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n 1)" = "$b" ] && pick=$new
+    elif [ -n "$b" ] && [ "$new" -nt "$own" ]; then
+        pick=$new                    # (the same version: the later one)
+    fi
+fi
+[ "${1:-}" = --which ] && { echo "$pick"; exit 0; }
+exec python3 "$pick" "$@"

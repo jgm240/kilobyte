@@ -2,8 +2,9 @@
 # Host a BBS: this computer as a bulletin board system that friends dial into
 # with a BBS dialer (Kilobyte's, or any telnet BBS program): chat rooms,
 # message boards, private mail, file areas, games and apps. The board is
-# hostbbs (py/hostbbs.py), run by kilobyte-bbs.service as the user kbbs; its
-# own setup dialog sets it up. kb-root switches it on and off.
+# hostbbs from rBBS (github.com/jgm240/rbbs; Kilobyte's copy, or a newer one
+# "Update" brought: kb-bbs-run), run by kilobyte-bbs.service as the user kbbs;
+# its own setup dialog sets it up. kb-root switches it on and off.
 . /usr/lib/kilobyte/lib.sh
 
 T="Host a BBS"
@@ -11,7 +12,7 @@ ETC=/etc/kilobyte/bbs
 CONF="$ETC/hostbbs.json"
 FILES=/srv/kilobyte-bbs/files
 STORIES=/srv/kilobyte-bbs/stories
-HOSTBBS="$KB_LIB/py/hostbbs.py"
+HOSTBBS="$KB_LIB/kb-bbs-run"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -93,7 +94,7 @@ PY
 # restart the BBS".
 settings() {
     clear
-    HOSTBBS_SERVICE=1 python3 "$HOSTBBS" setup -c "$CONF"
+    HOSTBBS_SERVICE=1 "$HOSTBBS" setup -c "$CONF"
     local rc=$?
     kb_load_theme
     if [ $rc -eq 10 ]; then
@@ -175,6 +176,9 @@ while true; do
         Files    "File areas, text adventures and the greeting" \
         Password "The sysop's password" \
         Who      "Who is on now" \
+        Update   "Get the newest hostbbs (from rBBS on GitHub): $("$HOSTBBS" --version 2>/dev/null | cut -d' ' -f2) now" \
+        Restart  "Restart the BBS (callers are told first)" \
+        Log      "The log: what callers did in public (never mail or private messages)" \
         Call     "Call your BBS (log in as the sysop for the sysop tools)") || exit 0
     case $sel in
         Switch)   switch ;;
@@ -182,6 +186,12 @@ while true; do
         Files)    files_panel ;;
         Password) sysop_password ;;
         Who)      who_panel ;;
+        Update)   kb_info "Getting the newest hostbbs..."
+                  bbs_root update > "$TMP/up" 2>&1
+                  kb_msg "$T" "$(tail -n 2 "$TMP/up" | sed 's/^[0-9-]* [0-9:]*  //')" 9 70 ;;
+        Restart)  if running; then bbs_root op restart > "$TMP/out" 2>&1 || bbs_root restart; kb_msg "$T" "The BBS restarts: callers are told, then it is back in a moment." 8 60
+                  else kb_msg "$T" "The BBS is off." 7 30; fi ;;
+        Log)      bbs_root log > "$TMP/log" 2>&1; tac "$TMP/log" > "$TMP/log.new" && kb_textfile "Activity Log (newest first)" "$TMP/log.new" ;;
         Call)     call_it ;;
     esac
 done
