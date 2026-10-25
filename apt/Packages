@@ -201,3 +201,32 @@ Description: Kilobyte, the text-mode desktop, next to your normal desktop
    kb autolaunch on    start the computer into Kilobyte
    kb autolaunch off   start the computer into the desktop again
 
+Package: kilobyte-transition
+Version: 1.5-8
+Architecture: all
+Maintainer: Kilobyte contributors <kilobyte@users.noreply.github.com>
+Installed-Size: 1996
+Depends: bash, dialog, mc, python3, python3-pyte, sudo, kbd, procps, curl, file, systemd
+Recommends: elinks, sc-im, calcurse, htop, bc, bsdgames, moon-buggy, alpine, weechat, luit, telnet,
+ openssh-client, newsboat, unison, gnuchess, nudoku, frotz, dict-wn, kiwix-tools, mpv, ffmpeg,
+ quickjs, yt-dlp, poppler-utils, gpm, alsa-utils, unzip, zip, restic, gtypist, lrzsz, libzbar0t64
+Filename: ./kilobyte-transition_1.5-8_all.deb
+Size: 329500
+MD5sum: f9cbd43828c250e1d6542ee11698225e
+SHA1: 29e229f19f68c080ea15b7c8679dab12f160836a
+SHA256: dc5f93e8e55e0f820a97d656b321bd066fcbde97cd3e42b984751d34a021fd91
+Section: x11
+Priority: optional
+Homepage: https://github.com/jgm240/kilobyte
+Description: Kilobyte, the text-mode desktop, next to your normal desktop
+ Kilobyte is a desktop made of text: a Program Manager with an editor,
+ spreadsheet, web browser, email, file manager, news feeds, games and more,
+ all in the terminal. This package adds it to a normal Debian, Ubuntu or
+ Raspberry Pi OS, on a text console of its own, and the command kb to move
+ between the two:
+ .
+   kb open             go to Kilobyte
+   kb close            go back to the desktop
+   kb autolaunch on    start the computer into Kilobyte
+   kb autolaunch off   start the computer into the desktop again
+
