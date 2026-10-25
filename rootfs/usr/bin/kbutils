@@ -26,7 +26,7 @@ flag_off() { [ -e "$1" ] && echo off || echo on; }    # flag_off FILE: a file th
 # --- the settings ----------------------------------------------------------------
 #   NAME|what it is|values|not on (variants)
 SETTINGS="theme|Colour theme|a theme's name (vals theme)|
-wifi|Wi-Fi|on, off, scan, connect NETWORK [PASSWORD], forget NETWORK|kindle wsl transition
+wifi|Wi-Fi|on, off, scan, connect NETWORK [PASSWORD or - for standard input], forget NETWORK|kindle wsl transition
 windows|Movable windows and multitasking|on, off|kindle
 sounds|Start-up and shut-down sounds|on, off|kindle
 volume|Sound volume|0 to 100, mute|kindle wsl
@@ -148,7 +148,9 @@ chg() {
                     [ -n "${3:-}" ] || die "kbutils settings chg wifi connect NETWORK [PASSWORD]"
                     [ ! -e /etc/kilobyte/wifi-off ] || { $ROOT wifi on; sleep 2; }
                     pw=${4:-}
-                    if [ -z "$pw" ] && [ -t 0 ]; then read -r -s -p "Password for \"$3\" (Enter for an open network): " pw; echo; fi
+                    # "-": the password on standard input (not on a command line, where others see it).
+                    if [ "$pw" = - ]; then IFS= read -r pw || pw=""
+                    elif [ -z "$pw" ] && [ -t 0 ]; then read -r -s -p "Password for \"$3\" (Enter for an open network): " pw; echo; fi
                     id=$(wpa_cli -i "$IF" add_network | tail -n 1)
                     hex=$(printf '%s' "$3" | od -An -tx1 | tr -d ' \n')
                     wpa_cli -i "$IF" set_network "$id" ssid "$hex" >/dev/null
@@ -304,7 +306,8 @@ encyclopedia|kiwix-tools|Reading Wikipedia offline, about 50 MB
 dictionary|dict-wn|The English dictionary without the Internet, about 40 MB
 games|gnuchess nudoku frotz bsdgames moon-buggy|Chess, Sudoku, text adventures and the classic games
 feeds|newsboat|News feeds (Internet > News feeds), about 3 MB
-sync|unison|Sync between computers, about 5 MB"
+sync|unison|Sync between computers, about 5 MB
+camera|libzbar0t64|QR codes and bar codes in the Camera, under 1 MB"
 # (accessibility: the same packages as image/packages-accessibility.txt.)
 
 dl() {

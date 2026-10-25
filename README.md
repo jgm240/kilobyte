@@ -52,6 +52,7 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
 | Internet › Company desktops | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
 | Media › Music Player | Kilobyte (`ffmpeg`, `aplay`) | songs and playlists with spectrum bars |
+| Media › Camera | `mpv`, `ffmpeg`, zbar (`libzbar0t64`) | a webcam's picture in the Video Player's picture modes, photos into `~/Pictures/Camera`, and QR codes and bar codes (live, or from a picture): web addresses open, Wi-Fi codes connect, contacts become index cards |
 | Media › Podcasts | Kilobyte, fyyd | find podcasts (the fyyd directory) or add one by its address; episodes download into `~/Music/Podcasts` and play in the Music Player |
 | Accessories › Today | Kilobyte, `calcurse`, wttr.in | the date, weather, appointments, to-dos, headlines and unread feeds on one screen; can open at start-up |
 | Accessories › Notes | Kilobyte | quick notes as text files in `~/Documents/Notes`, with search and `#tags`; opens them in the chosen editor |

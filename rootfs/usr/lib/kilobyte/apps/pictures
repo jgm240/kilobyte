@@ -3,8 +3,11 @@
 # (or the real picture), and opened in Paint.
 . /usr/lib/kilobyte/lib.sh
 
+#   pictures [FOLDER]      the pictures there (default: Pictures, Documents, Downloads)
 PIC_EXT='jpg|jpeg|png|gif|bmp|webp|tif|tiff'
 mkdir -p "$HOME/Pictures"
+FOLDERS=("$HOME/Pictures" "$HOME/Documents" "$HOME/Downloads")
+[ $# -gt 0 ] && [ -d "$1" ] && FOLDERS=("$1")
 
 show() { # show INDEX: view that picture; < and > page through the others
     local i=$1 n=${#files[@]} list=() j
@@ -22,12 +25,12 @@ while true; do
     while IFS= read -r f; do
         files+=("$f")
         items+=("${#files[@]}" "${f#"$HOME"/}")
-    done < <(find "$HOME/Pictures" "$HOME/Documents" "$HOME/Downloads" -maxdepth 2 -type f 2>/dev/null \
+    done < <(find "${FOLDERS[@]}" -maxdepth 2 -type f 2>/dev/null \
              | grep -iE "\.($PIC_EXT)$" | sort)
 
     sel=$(kb_dialog --title " Pictures " --default-item "$sel" --ok-label "View" --cancel-label "Close" \
         --extra-button --extra-label "Paint" \
-        --menu "Pictures in ~/Pictures:" 20 76 12 "${items[@]}")
+        --menu "Pictures in ${FOLDERS[0]/#$HOME/\~}:" 20 76 12 "${items[@]}")
     rc=$?
     case $rc in
         "$DIALOG_OK" | "$DIALOG_EXTRA") ;;

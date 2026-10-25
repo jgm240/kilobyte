@@ -198,12 +198,12 @@ apps_table() {
 # turn off: those programs are left out, and so are animations, which an
 # e-ink screen cannot keep up with. YouTube and the Video Player stay: they
 # save videos and sound, and play as text blocks (silently) in the terminal.
-KINDLE_LEAVE_OUT=" BBS BBSHost Podcasts Typing Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
+KINDLE_LEAVE_OUT=" BBS BBSHost Podcasts Typing Camera Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
 KINDLE_LEAVE_OUT+="Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
 # In Windows (WSL, Kilobyte for Windows): Windows has the hardware, the
 # users and the power button; Kilobyte's window simply closes.
 # Windows' own network is in the way of finding others (Messenger) and of being called (Host a BBS).
-WSL_LEAVE_OUT=" Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network Messenger BBSHost "
+WSL_LEAVE_OUT=" Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network Messenger BBSHost Camera "
 apps_table_for_device() {
     local line leave=""
     case $KB_VARIANT in
@@ -238,6 +238,7 @@ Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|
 Citrix|internet|Company desktops|Remote desktops and apps of a company or school (with Citrix's own program)|Cx|M
 Video|media|Video Player|Videos and music as coloured blocks or the real picture|Tv|M
 Pictures|media|Pictures|Photos and drawings, shown with coloured blocks|▒▓|M
+Camera|media|Camera|The camera's picture in blocks or for real, photos, and QR codes to scan|[o|M
 Music|media|Music Player|Songs and playlists with dancing bars|♫ |M
 Podcasts|media|Podcasts|Find and follow podcasts; episodes play in the Music Player|((|M
 YouTube|media|Online videos|Search YouTube and other video sites; watch, read (as text) or save|Vd|M
@@ -317,6 +318,7 @@ run_app() {
         Citrix)      "$APPS/citrix" "$@" ;;
         Video)       "$APPS/player" "$@" ;;
         Pictures)    "$APPS/pictures" "$@" ;;
+        Camera)      "$APPS/camera" "$@" ;;
         Music)       run_music "$@" ;;
         Podcasts)    "$APPS/podcasts" "$@" ;;
         Disc)        "$APPS/disc" ;;
@@ -547,7 +549,7 @@ program_manager() {
         done < <(apps_table)
         # Categories with nothing in them (on a Kindle: Media) are left out.
         [[ $cats == *" internet "* ]] && items+=(Internet "Internet  »" "News feeds, chat, Messenger, BBSes, online videos, network drives...")
-        [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, podcasts, pictures, discs")
+        [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, podcasts, pictures, camera, discs")
         [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, encyclopedia, backup, typing tutor, paint...")
         [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Chess, Sudoku, text adventures, Mines, Solitaire...")
         [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")

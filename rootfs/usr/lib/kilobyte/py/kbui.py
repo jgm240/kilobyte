@@ -254,7 +254,10 @@ def play_sound(name):
         return
     path = os.path.join(KB_SHARE, "sounds", name)
     if os.path.exists(path):
-        subprocess.Popen(["aplay", "-q", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.Popen(["aplay", "-q", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass  # (no sound player here: KilobytEink, a computer without ALSA's tools)
 
 
 def run(main, mouse=True):

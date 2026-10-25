@@ -276,7 +276,13 @@
  ─────────────
    Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem
                   sounds; files they send arrive in ~/Downloads), Online videos.
-   Media          Podcasts: Find searches the podcasts of the world, or Add
+   Media          Camera: Look shows the camera's picture in the Video
+                  Player's picture modes (blocks, text, or the real picture);
+                  S or Enter takes a photo (into Pictures/Camera), M mirrors.
+                  Scan reads QR codes and bar codes: web addresses open,
+                  Wi-Fi codes connect (it asks first), contacts become index
+                  cards; Scan a picture reads them from photos and screenshots.
+                  Podcasts: Find searches the podcasts of the world, or Add
                   takes a podcast's address. Episodes download into
                   Music/Podcasts and play in the Music Player; Newest shows
                   what is new in all of them.

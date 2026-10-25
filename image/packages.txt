@@ -21,6 +21,8 @@ python3 python3-pyte weechat luit telnet openssh-client
 newsboat unison gnuchess nudoku frotz dict-wn kiwix-tools
 # backups (restic), typing tutor, BBS file transfers and hosting (ZMODEM)
 restic gtypist lrzsz
+# the Camera's QR codes (the zbar library)
+libzbar0t64
 
 # --- media: video, pictures, YouTube, discs, sound ---
 mpv ffmpeg quickjs lsdvd eject alsa-utils alsa-ucm-conf

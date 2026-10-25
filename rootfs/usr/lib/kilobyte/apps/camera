@@ -1,0 +1,190 @@
+#!/bin/bash
+# Camera: the camera's picture in the Video Player's picture modes (blocks,
+# text or the real picture), photos into Pictures/Camera, and QR codes (and
+# bar codes): web addresses open, Wi-Fi codes connect, contacts become cards.
+#   camera [--scan]          --scan: scan a code at once
+. /usr/lib/kilobyte/lib.sh
+
+T="Camera"
+PY="$KB_LIB/py/camera.py"
+PHOTOS="$HOME/Pictures/Camera"
+HISTORY="$KB_CONF/qr-history"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+mode_name() { "$KB_LIB/apps/player" --mode-name; }
+
+# The camera to use: the one chosen, else the first.
+camera() {
+    local dev
+    dev=$(cat "$KB_CONF/camera" 2>/dev/null)
+    if [ -z "$dev" ] || [ ! -e "$dev" ]; then
+        dev=$(python3 "$PY" cameras | head -n 1 | cut -f1)
+    fi
+    [ -n "$dev" ] || return 1
+    printf '%s\n' "$dev"
+}
+
+no_camera() {
+    kb_msg "$T" "\Z1No camera found.\Zn\n\nPlug in a USB webcam (most work without anything to install), then try again. Scan a picture still reads QR codes from photos and screenshots." 10 66
+}
+
+look() {
+    local dev keys
+    dev=$(camera) || { no_camera; return; }
+    mkdir -p "$PHOTOS"
+    keys="$TMP/keys"
+    # S or Enter takes a photo; M mirrors the picture.
+    printf '%s\n' "s screenshot video" "ENTER screenshot video" "m vf toggle hflip" "M vf toggle hflip" > "$keys"
+    kb_info "S or Enter takes a photo   M mirrors   q or Ctrl+C stops"
+    sleep 2
+    "$KB_LIB/kb-play" "$(cat "$KB_CONF/player-mode" 2>/dev/null || echo medium)" "av://v4l2:$dev" \
+        --profile=low-latency --untimed --cache=no --input-conf="$keys" \
+        --screenshot-directory="$PHOTOS" --screenshot-template="photo-%tY-%tm-%td-%tH%tM%tS" \
+        --screenshot-format=jpg --screenshot-jpeg-quality=92
+    local n
+    n=$(find "$PHOTOS" -maxdepth 1 -name 'photo-*.jpg' -newer "$keys" 2>/dev/null | wc -l)
+    [ "$n" -gt 0 ] && kb_msg "$T" "$n photo$([ "$n" = 1 ] || echo s) taken: in Pictures/Camera." 7 50
+}
+
+# --- QR codes -------------------------------------------------------------------
+
+connect_wifi() { # connect_wifi CODE
+    local ssid sec pw hidden
+    IFS=$'\t' read -r ssid sec pw hidden < <(python3 "$PY" wifi "$1")
+    [ -n "$ssid" ] || { kb_msg "$T" "That Wi-Fi code has no network name." 7 50; return; }
+    kb_yesno "Wi-Fi" "Connect to the Wi-Fi network\n\n  \Zb$ssid\Zn  ($([ "$sec" = nopass ] && echo open || echo "secured, $sec"))?" 10 60 || return
+    # (The password goes to kbutils on standard input, not on its command line.)
+    KB_WIFI_PW="$pw" kb_run bash -c 'printf "%s\n" "$KB_WIFI_PW" | /usr/bin/kbutils settings chg wifi connect "$1" -
+        printf "\n\033[7m Press Enter to return to Kilobyte \033[0m"; read -r _' _ "$ssid"
+}
+
+save_card() { # save_card CODE: a contact (vCard or MECARD) on an index card
+    local name f
+    name=$(printf '%s\n' "$1" | sed -n -e 's/^FN[;:]\(.*\)/\1/p' -e 's/^MECARD:N:\([^;]*\).*/\1/p' | head -n 1 | tr -d '\r' | tr -cd '[:alnum:] ._-' | cut -c1-40)
+    mkdir -p "$HOME/Cardfile"
+    f="$HOME/Cardfile/${name:-Contact $(date +%F-%H%M)}.txt"
+    printf '%s\n' "$1" | tr -d '\r' | sed -e 's/^MECARD://' -e 's/;/\n/g' > "$f"
+    kb_msg "$T" "Saved on an index card:\n\n  ${f#"$HOME"/}" 9 64
+}
+
+save_note() { # save_note CODE
+    mkdir -p "$KB_DOCS/Notes"
+    local f="$KB_DOCS/Notes/QR code $(date '+%Y-%m-%d %H%M%S').txt"
+    printf 'QR code\n\n%s\n' "$1" > "$f"
+    kb_msg "$T" "Saved as a note:\n\n  ${f#"$HOME"/}" 9 70
+}
+
+# found CODE: what to do with a code that was read
+found() {
+    local code=$1 kind items=() sel shown
+    printf '%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "${code//$'\n'/\\n}" >> "$HISTORY"
+    tail -n 100 "$HISTORY" > "$HISTORY.new" 2>/dev/null && mv "$HISTORY.new" "$HISTORY"
+    case $code in
+        http://* | https://* | HTTP://* | HTTPS://*) kind=web;  items+=(Open "Open the web page") ;;
+        WIFI:*)                                      kind=wifi; items+=(Connect "Connect to this Wi-Fi network") ;;
+        BEGIN:VCARD* | MECARD:*)                     kind=card; items+=(Card "Save the contact on an index card") ;;
+        mailto:* | MATMSG:*)                         kind=mail; items+=(Mail "Write the email") ;;
+        *)                                           kind=text ;;
+    esac
+    items+=(Note "Save it as a note" Again "Scan another code")
+    # (A code is text from anywhere: shown, never acted on without asking.)
+    shown=$(printf '%s' "$code" | tr -d '\000-\010\013-\037\177' | sed 's/\\/\\\\/g' | head -c 600)
+    [ "$kind" = wifi ] && shown=$(printf '%s' "$shown" | sed 's/\(P:\)[^;]*/\1(the password)/')
+    while true; do
+        sel=$(kb_dialog --title " QR Code ($kind) " --ok-label "Select" --cancel-label "Done" --menu \
+            "$shown" 0 76 0 "${items[@]}") || return 0
+        case $sel in
+            Open)    "$KB_LIB/kb-link" "$code" ;;
+            Connect) connect_wifi "$code" ;;
+            Card)    save_card "$code" ;;
+            Mail)    "$KB_LIB/apps/mail" ;;
+            Note)    save_note "$code" ;;
+            Again)   return 3 ;;
+        esac
+    done
+}
+
+scan_camera() {
+    local dev rc
+    dev=$(camera) || { no_camera; return; }
+    while true; do
+        rm -f "$TMP/code"
+        kb_run python3 "$PY" scan "$dev" "$TMP/code" 2> "$TMP/err"
+        rc=$?
+        kb_load_theme
+        if [ $rc -ne 0 ] || [ ! -s "$TMP/code" ]; then
+            [ -s "$TMP/err" ] && kb_msg "$T" "\Z1$(tail -n 1 "$TMP/err")\Zn" 8 66
+            return
+        fi
+        found "$(cat "$TMP/code")"
+        [ $? -eq 3 ] || return
+    done
+}
+
+scan_picture() {
+    local f out n codes=()
+    f=$(kb_dialog --title " Scan a Picture " --fselect "$HOME/Pictures/" 14 64) || return
+    [ -f "$f" ] || { kb_msg "$T" "\"$f\" is not a file." 7 50; return; }
+    kb_info "Looking for codes..."
+    out=$(python3 "$PY" scanfile "$f" 2>&1)
+    case $? in
+        0) ;;
+        2) kb_msg "$T" "There is no QR code (or bar code) in that picture that could be read." 8 60; return ;;
+        *) kb_msg "$T" "\Z1$(tail -n 1 <<< "$out")\Zn" 8 66; return ;;
+    esac
+    mapfile -t codes <<< "$out"
+    for n in "${codes[@]}"; do
+        found "$(printf '%b' "${n//\\n/\\n}")"
+        [ $? -eq 3 ] && { scan_camera; return; }
+    done
+}
+
+history_panel() {
+    local items=() when code sel i=0
+    [ -s "$HISTORY" ] || { kb_msg "$T" "No codes scanned yet." 7 40; return; }
+    while IFS=$'\t' read -r when code; do
+        i=$((i + 1))
+        items+=("$i" "$when  ${code:0:52}")
+    done < <(tac "$HISTORY")
+    sel=$(kb_dialog --title " Codes Scanned " --ok-label "Open" --cancel-label "Back" --menu \
+        "Newest first:" 0 76 0 "${items[@]}") || return
+    code=$(tac "$HISTORY" | sed -n "${sel}p" | cut -f2-)
+    found "$(printf '%b' "$code")"
+}
+
+choose_camera() {
+    local items=() dev name cur sel
+    cur=$(camera 2>/dev/null)
+    while IFS=$'\t' read -r dev name; do
+        items+=("$dev" "$name" "$([ "$dev" = "$cur" ] && echo on || echo off)")
+    done < <(python3 "$PY" cameras)
+    [ ${#items[@]} -gt 0 ] || { no_camera; return; }
+    sel=$(kb_dialog --title " Which Camera " --ok-label "Use" --cancel-label "Back" --radiolist \
+        "The cameras on this computer (Space selects):" 0 64 0 "${items[@]}") && echo "$sel" > "$KB_CONF/camera"
+}
+
+[ "${1:-}" = --scan ] && { scan_camera; exit 0; }
+
+sel=Look
+while true; do
+    cam=$(camera 2>/dev/null) && cam_name=$(python3 "$PY" cameras | awk -F'\t' -v d="$cam" '$1 == d { print $2 }')
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "${cam_name:-No camera is plugged in.}" 0 72 0 \
+        Look    "Look through the camera, and take photos (S)" \
+        Scan    "Scan a QR code or bar code" \
+        Picture "Scan a QR code in a picture or screenshot" \
+        Photos  "The photos taken (Pictures/Camera)" \
+        History "Codes scanned before" \
+        Mode    "Picture: $(mode_name)" \
+        Camera  "Which camera: ${cam:-none}") || exit 0
+    case $sel in
+        Look)    look ;;
+        Scan)    scan_camera ;;
+        Picture) scan_picture ;;
+        Photos)  mkdir -p "$PHOTOS"; "$KB_LIB/apps/pictures" "$PHOTOS" ;;
+        History) history_panel ;;
+        Mode)    "$KB_LIB/apps/player" --choose-mode ;;
+        Camera)  choose_camera ;;
+    esac
+done
