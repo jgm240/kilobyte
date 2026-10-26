@@ -1,7 +1,7 @@
 #!/bin/bash
-# Internet Time Machine: web sites as they were, years ago, in the web browser: from
-# the Internet Archive's Wayback Machine (web.archive.org), which has kept
-# copies of the web since 1996.
+# Internet Time Machine: web sites as they were, years ago, in the web
+# browser: from the Internet Archive's Wayback Machine (web.archive.org),
+# which has kept copies of the web since 1996.
 #   timemachine [ADDRESS [YEAR]]
 . /usr/lib/kilobyte/lib.sh
 
