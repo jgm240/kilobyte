@@ -1,23 +1,23 @@
 Architectures: all
 Codename: stable
-Date: Mon, 26 Oct 2026 09:04:18 +0000
+Date: Mon, 26 Oct 2026 09:36:12 +0000
 Description: Kilobyte for normal Debian, Ubuntu and Raspberry Pi OS
 Label: Kilobyte
 Origin: Kilobyte
 Suite: stable
 MD5Sum:
- 63f8b28e97ded8aa7efab7316c960333            12673 Packages
- cdd8e1a25b35cdc832e79be76ac29692             1846 Packages.gz
- ee16a29a0714ad59cfb37e12f437f44f              189 Release
+ e3e1168c9b6b45284fbef8e488e3599f            14111 Packages
+ 46b6df6c03f4faab8668dfd86506c904             1963 Packages.gz
+ 88cb3da5c663bfc1ad2e2e7a2a29ff1a              189 Release
 SHA1:
- 67b8ba4b38fd8295d067dc7232aa2c5d7bcb17e1            12673 Packages
- 5ead7d1dc4732433c92a872e1b2f8b4690865eab             1846 Packages.gz
- 59d237702c2576e20bae7597925b40c48068396a              189 Release
+ 5189f0192b995460682c38f8fe617629345f5eb9            14111 Packages
+ fe4e3cd0aeae2bb48ef1c624d5c9d4dda5b609b5             1963 Packages.gz
+ ed06f1069f11782357c9e48c38a335dfac2bb97a              189 Release
 SHA256:
- 7efc570e315fb032c76a4884c3fe55275ab91d0672b1746ee1eb1f3add6829a8            12673 Packages
- 3a653174e7620d3fd4a1895b7695e6de056398909021e6e8f8a3d4949eeaacd7             1846 Packages.gz
- d818c07717c1d30e5fbf22234fd0657466a778a3e2a6a39e26fe65c234eb218a              189 Release
+ b5ad3e21f7f0b93fb7bd5c6d4efc02046dc4c0db843b50a68760eac79c9a7d2f            14111 Packages
+ fb0fd8412801bcc3286e0b35439051d8118fc95a989fef49f98680e8984428d5             1963 Packages.gz
+ 994965e221ba885c7399b4cc49cc0fca2de40fafcb85177fd63bbdacb76712ba              189 Release
 SHA512:
- 36a1d7c5a1114509ff112ffdd7c11d4b127350055841cf9c3d11771393014317f68943d0fd77c3385734e59a3f72bf789e1a6d6a52ecea583dc924da93b000cb            12673 Packages
- 94f31060f997cb63e2128692cb6fd3eb7ab681608a61054d3fbdf31d1be85c7091ff788fa7dc88e9a5b339c1ef60ca7b2e53a3a8bbfcd73b7993678cfc744d5a             1846 Packages.gz
- 33e9676b814adac14b5fee38273eccf2300e1728486dcaca5b4b9077364fa8df21441f1852f05182af5890fb37fb66ef1b09ad242ecb2aa9860f19b559e59ec9              189 Release
+ 9880b0374dc5832ceee84f21a59bdeae3b462dde1fe2c41ff383a8ad4799b4b96e33ab9b5b742bea8306effc67bad316c0d906c2117c527f030c3444a7aa5392            14111 Packages
+ ce598d1d1bb402beba2ff12a9b0d5a9e2ed94ffa84d2b9c967c6e11681eb4a404f6e677e356e160d9325cd6311c9d4af72b8014aad4837cda0e2e5b591976808             1963 Packages.gz
+ 1b6abd7a3010dc14907122aa492dfe722ead84fde2c9660e5d56f15da4943742425c1ddfde4a63b79eac44d3fd7e80f77f6f22ef744ac7af6d71959df16acd3c              189 Release
