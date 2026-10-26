@@ -19,6 +19,27 @@ Description: Kilobyte's parental controls
  Set up in Kilobyte's Settings > Parental controls. Installed with
  "kbutils dl parentalctl".
 
+Package: kilobyte-parentalctl
+Version: 1.5-3
+Architecture: all
+Maintainer: Kilobyte contributors <kilobyte@users.noreply.github.com>
+Installed-Size: 76
+Depends: python3, nftables, systemd, procps, libpam-modules
+Filename: ./kilobyte-parentalctl_1.5-3_all.deb
+Size: 9036
+MD5sum: 11b37fd8bf18feae9493ed1ab74b9e3c
+SHA1: 60b455523a2d988598c02d2519b86b6f21d58285
+SHA256: d1d6b079b992908ebfaf2467102e45b1252c09d3fb234e000effbdb17a6e2334
+Section: admin
+Priority: optional
+Homepage: https://github.com/jgm240/kilobyte
+Description: Kilobyte's parental controls
+ For the children's accounts of a Kilobyte computer: time per day (school
+ days and weekends), allowed hours, programs turned off, and the Internet
+ always, never or only in computer time; extra time today and a report.
+ Set up in Kilobyte's Settings > Parental controls. Installed with
+ "kbutils dl parentalctl".
+
 Package: kilobyte-transition
 Version: 1.5-1
 Architecture: all
@@ -120,6 +141,36 @@ Size: 344004
 MD5sum: 48e09d0b636a1fb2d22c30f3eb274a42
 SHA1: 8acbae54f38e89317ca25e87edfe64c667ea01b8
 SHA256: 9f1c58210ff12c9cb2800580713cdfd9a43560ded39f3e2c37f7399f7ee70b96
+Section: x11
+Priority: optional
+Homepage: https://github.com/jgm240/kilobyte
+Description: Kilobyte, the text-mode desktop, next to your normal desktop
+ Kilobyte is a desktop made of text: a Program Manager with an editor,
+ spreadsheet, web browser, email, file manager, news feeds, games and more,
+ all in the terminal. This package adds it to a normal Debian, Ubuntu or
+ Raspberry Pi OS, on a text console of its own, and the command kb to move
+ between the two:
+ .
+   kb open             go to Kilobyte
+   kb close            go back to the desktop
+   kb autolaunch on    start the computer into Kilobyte
+   kb autolaunch off   start the computer into the desktop again
+
+Package: kilobyte-transition
+Version: 1.5-13
+Architecture: all
+Maintainer: Kilobyte contributors <kilobyte@users.noreply.github.com>
+Installed-Size: 2140
+Depends: bash, dialog, mc, python3, python3-pyte, sudo, kbd, procps, curl, file, systemd
+Recommends: elinks, sc-im, calcurse, htop, bc, bsdgames, moon-buggy, alpine, weechat, luit, telnet,
+ openssh-client, newsboat, unison, gnuchess, nudoku, frotz, dict-wn, kiwix-tools, mpv, ffmpeg,
+ quickjs, yt-dlp, poppler-utils, gpm, alsa-utils, unzip, zip, restic, gtypist, lrzsz, libzbar0t64, figlet, qrencode,
+ xvfb, xdotool, matchbox-window-manager, libmpv2
+Filename: ./kilobyte-transition_1.5-13_all.deb
+Size: 355324
+MD5sum: 22616d8b4cf7f70b29e75ff4758b1c25
+SHA1: bee8dea13d85d327e04c9ac96cb6495be970ffd3
+SHA256: 5c4bbd3ebdefa75ca21a63d631ed9d5c3f9240925b9aa476fef8c2169ef89e50
 Section: x11
 Priority: optional
 Homepage: https://github.com/jgm240/kilobyte
