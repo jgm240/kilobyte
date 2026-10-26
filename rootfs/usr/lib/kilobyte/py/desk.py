@@ -46,6 +46,10 @@ import pyte  # noqa: E402
 NAMES = {"black": 0, "red": 1, "green": 2, "brown": 3, "yellow": 3, "blue": 4, "magenta": 5, "cyan": 6,
          "white": 7}
 MIN_W, MIN_H = 20, 6
+# The 16 colours by name (Settings > Mouse pointer).
+COLOURS16 = {n: i for i, n in enumerate((
+    "black", "red", "green", "brown", "blue", "magenta", "cyan", "lightgrey", "darkgrey", "lightred",
+    "lightgreen", "yellow", "lightblue", "lightmagenta", "lightcyan", "white"))}
 
 
 def colour(name, default):
@@ -825,10 +829,51 @@ class Desk:
             curses.curs_set(0)
         self.s.scr.refresh()
 
+    def pointer_style(self):
+        """The pointer chosen in Settings > Mouse pointer ($KB_CONF/pointer):
+        (characters, fg, bg, hotspot at the "first" or "last" one), or None for
+        the classic one. Read again when the file changes."""
+        path = os.path.join(deskbg.CONF, "pointer")
+        try:
+            stamp = os.stat(path).st_mtime
+        except OSError:
+            stamp = None
+        if stamp != getattr(self, "pointer_stamp", 0):
+            self.pointer_stamp, self.pointer_look = stamp, None
+            conf = {}
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if "=" in line:
+                            k, v = line.rstrip("\n").split("=", 1)
+                            conf[k.strip()] = v
+            except OSError:
+                pass
+            chars = "".join(c for c in conf.get("chars", "") if c.isprintable())[:8]
+            if chars:
+                fg = COLOURS16.get(conf.get("fg", "white").strip(), WHITE)
+                bg = conf.get("bg", "under").strip()
+                self.pointer_look = (chars, fg, COLOURS16.get(bg, -8) & 7 if bg != "under" else -1,
+                                     "last" if conf.get("hotspot", "").strip() == "last" else "first")
+        return self.pointer_look
+
     def draw_pointer(self, px, py):
-        """The cell under the mouse with its colours swapped. Where that would
+        """The pointer: the characters chosen in Settings > Mouse pointer, or
+        else the cell under the mouse with its colours swapped. Where that would
         hardly show (half-filled wallpaper characters, a bright letter on its
         own colour) the pointer is a plain block instead."""
+        look = self.pointer_style()
+        if look:
+            chars, fg, bg, hot = look
+            x0 = px - len(chars) + 1 if hot == "last" else px
+            under = self.s.watched.get(px) if py == self.s.watch_y else None
+            if bg < 0:                      # "under": the background of the cell beneath
+                bg = (under[2] & 7) if under else BLACK
+                if fg & 7 == bg:            # (would not show: the other side of the colours)
+                    fg = BLACK if bg >= 4 or bg == LIGHTGREY else WHITE
+            self.s.watch_y = None
+            self.s.put(py, x0, chars, fg, bg)
+            return
         cell = self.s.watched.get(px) if py == self.s.watch_y else None
         if not cell:
             self.invert(py, px, 1)

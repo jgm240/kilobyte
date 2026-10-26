@@ -34,6 +34,7 @@ saver|Screen saver|random, starfield, lines, floppies, off|kindle
 saver-minutes|Minutes before the screen saver starts|1 to 120|kindle
 saver-lock|Password after the screen saver|on, off|kindle
 tiles|Weather and news tiles|on, off|kindle
+pointer|The mouse pointer (with windows)|classic, or any characters (up to 8)|kindle
 tiles-city|City of the weather|a city, or \"\" to guess|kindle
 tiles-units|Temperatures|C, F|kindle
 speech|Screen reader (speech)|on, off|kindle wsl transition
@@ -86,6 +87,7 @@ disp() {
         saver-minutes)  cat "$KB_CONF/saver-minutes" 2>/dev/null || echo 5 ;;
         saver-lock)     [ -e "$KB_CONF/saver-lock" ] && echo on || echo off ;;
         tiles)          flag_off "$KB_CONF/tiles-off" ;;
+        pointer)        st=$(sed -n 's/^chars=//p' "$KB_CONF/pointer" 2>/dev/null | tail -n 1); echo "${st:-classic}" ;;
         tiles-city)     st=$(cat "$KB_CONF/tiles-city" 2>/dev/null); echo "${st:-(guessed from the Internet address)}" ;;
         tiles-units)    [ -e "$KB_CONF/tiles-fahrenheit" ] && echo F || echo C ;;
         speech)         if [ -e /etc/kilobyte/speech-on ]; then echo on
@@ -194,6 +196,14 @@ chg() {
             echo "$v" > "$KB_CONF/saver-minutes" ;;
         saver-lock)     onoff "$v" saver-lock
                         if [ "$v" = on ]; then : > "$KB_CONF/saver-lock"; else rm -f "$KB_CONF/saver-lock"; fi ;;
+        pointer)
+            if [ "$v" = classic ]; then rm -f "$KB_CONF/pointer"
+            else
+                v=${v:0:8}
+                { grep -v '^chars=' "$KB_CONF/pointer" 2>/dev/null; printf 'chars=%s\n' "$v"; } > "$KB_CONF/pointer.new" &&
+                    mv "$KB_CONF/pointer.new" "$KB_CONF/pointer"
+                grep -q '^fg=' "$KB_CONF/pointer" || echo fg=white >> "$KB_CONF/pointer"
+            fi ;;
         tiles)          onoff "$v" tiles
                         if [ "$v" = on ]; then rm -f "$KB_CONF/tiles-off"; else : > "$KB_CONF/tiles-off"; fi ;;
         tiles-city)     printf '%s\n' "$v" > "$KB_CONF/tiles-city"; rm -f "$KB_CONF/tiles/weather" "$KB_CONF/tiles/attempt" ;;
@@ -307,7 +317,8 @@ dictionary|dict-wn|The English dictionary without the Internet, about 40 MB
 games|gnuchess nudoku frotz bsdgames moon-buggy|Chess, Sudoku, text adventures and the classic games
 feeds|newsboat|News feeds (Internet > News feeds), about 3 MB
 sync|unison|Sync between computers, about 5 MB
-camera|libzbar0t64|QR codes and bar codes in the Camera, under 1 MB"
+camera|libzbar0t64|QR codes and bar codes in the Camera, under 1 MB
+asciiart|figlet|The ASCII Art Generator's big-letter fonts, under 1 MB"
 # (accessibility: the same packages as image/packages-accessibility.txt.)
 
 dl() {

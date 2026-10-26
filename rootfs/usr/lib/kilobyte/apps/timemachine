@@ -1,0 +1,123 @@
+#!/bin/bash
+# Time Machine: web sites as they were, years ago, in the web browser: from
+# the Internet Archive's Wayback Machine (web.archive.org), which has kept
+# copies of the web since 1996.
+#   timemachine [ADDRESS [YEAR]]
+. /usr/lib/kilobyte/lib.sh
+
+T="Time Machine"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+# year|address|what it was
+FAMOUS=(
+    "1992|http://info.cern.ch/hypertext/WWW/TheProject.html|The first web site, at CERN (still online, as it was)"
+    "1996|http://www.yahoo.com/|Yahoo: the web sorted into a directory, by hand"
+    "1996|http://www.altavista.digital.com/|AltaVista, the big search engine before the others"
+    "1996|http://www.nasa.gov/|NASA, the year of Mars Pathfinder"
+    "1996|http://www.spacejam.com/|The Space Jam film site (famous for still being up)"
+    "1997|http://www.geocities.com/|GeoCities: everybody's homepage, with GIFs"
+    "1997|http://www.cnn.com/|CNN, news on the early web"
+    "1998|http://www.debian.org/|Debian, where Kilobyte comes from"
+    "1998|http://www.google.com/|Google, the year it began"
+    "1999|http://slashdot.org/|Slashdot: News for nerds. Stuff that matters."
+    "1999|http://www.amazon.com/|Amazon, when it was a bookshop"
+    "2001|http://www.wikipedia.com/|Wikipedia, the year it began"
+)
+
+online() {
+    getent hosts web.archive.org >/dev/null 2>&1 && return 0
+    kb_msg "$T" "\Z1\ZbNot connected to the Internet.\Zn\n\nConnect in Settings > Wi-Fi or plug in a network cable." 9 60
+    return 1
+}
+
+# visit ADDRESS YEAR: the copy nearest to that year, without the archive's
+# toolbar (its links lead on into the same years).
+visit() {
+    local url=$1 year=$2
+    case $url in *://*) ;; *) url="http://$url" ;; esac
+    kb_info "Travelling to $year ..."
+    sleep 1
+    "$KB_LIB/kb-link" "https://web.archive.org/web/${year}0601000000if_/$url"
+}
+
+# years ADDRESS: the years the archive has copies of it (it is slow at times)
+years() {
+    local q
+    q=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1")
+    kb_info "Asking the archive which years it has..."
+    curl -fsS --max-time 40 -A "Kilobyte Time Machine" \
+        "https://web.archive.org/cdx/search/cdx?url=$q&output=json&fl=timestamp&collapse=timestamp:4&filter=statuscode:200" \
+        2>/dev/null | python3 -c 'import json, sys
+try:
+    rows = json.load(sys.stdin)[1:]
+except ValueError:
+    sys.exit(1)
+for r in rows:
+    print(r[0][:4])' 2>/dev/null
+}
+
+go_to() { # go_to [ADDRESS]
+    local url=${1:-} items=() y year
+    url=${url:-$(kb_input "$T" "Which web site? (an address such as nasa.gov or bbc.co.uk)" "$(cat "$KB_CONF/timemachine-last" 2>/dev/null)")} || return
+    url=$(printf '%s' "$url" | tr -d '[:space:]')
+    [ -n "$url" ] && online || return
+    echo "$url" > "$KB_CONF/timemachine-last"
+    mapfile -t ys < <(years "$url")
+    if [ ${#ys[@]} -gt 0 ]; then
+        for y in "${ys[@]}"; do items+=("$y" ""); done
+        year=$(kb_dialog --title " $T: $url " --ok-label "Travel" --cancel-label "Back" --menu \
+            "The years the archive kept a copy of it:" 0 50 0 "${items[@]}") || return
+    else
+        # (The archive did not answer in time, or knows no copies: try a year anyway.)
+        year=$(kb_input "$T" "Which year? (from 1996 on)" "1999") || return
+        [[ $year =~ ^(199[0-9]|20[0-9][0-9])$ ]] || { kb_msg "$T" "A year such as 1997." 7 40; return; }
+    fi
+    visit "$url" "$year"
+}
+
+famous() {
+    local items=() i year url what sel
+    for i in "${!FAMOUS[@]}"; do
+        IFS='|' read -r year url what <<< "${FAMOUS[i]}"
+        items+=("$i" "$year  $what")
+    done
+    while sel=$(kb_dialog --title " $T: Famous Old Sites " --no-tags --ok-label "Travel" --cancel-label "Back" \
+            --menu "The web as it was. In the browser, links lead on into the same years." 0 76 0 "${items[@]}"); do
+        IFS='|' read -r year url what <<< "${FAMOUS[sel]}"
+        online || return
+        case $url in
+            http://info.cern.ch/*) "$KB_LIB/kb-link" "$url" ;;     # (still online itself)
+            *) visit "$url" "$year" ;;
+        esac
+    done
+}
+
+surprise() {
+    local year url what
+    IFS='|' read -r year url what <<< "${FAMOUS[RANDOM % ${#FAMOUS[@]}]}"
+    year=$(( year + RANDOM % 3 ))
+    online || return
+    kb_msg "$T" "Off to \Zb$year\Zn:\n\n  $what" 9 70
+    visit "$url" "$year"
+}
+
+if [ $# -ge 1 ]; then
+    if [ -n "${2:-}" ]; then online && visit "$1" "$2"; else go_to "$1"; fi
+    exit 0
+fi
+
+sel=Famous
+while true; do
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "Web sites as they were, years ago: from the Internet Archive's
+Wayback Machine, which has kept copies of the web since 1996." 0 70 0 \
+        Famous   "Famous old sites (1992 to 2001)" \
+        Site     "A web site of your choice, in a year of your choice" \
+        Surprise "Somewhere in the 90s, by chance") || exit 0
+    case $sel in
+        Famous)   famous ;;
+        Site)     go_to ;;
+        Surprise) surprise ;;
+    esac
+done

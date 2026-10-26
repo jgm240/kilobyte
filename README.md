@@ -48,6 +48,7 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
 | Media › Pictures | `mpv` | photos in coloured blocks or the real picture; opens them in Paint |
 | Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
+| Internet › Time Machine | the Internet Archive's Wayback Machine, ELinks | web sites as they were, years ago: famous old sites (1992 to 2001), any site in any year the archive has, or a surprise; the copies come without the archive's toolbar and their links lead on in the same years |
 | Internet › Network drives | `cifs-utils`, `sshfs` | shared folders of Windows PCs, NAS boxes (SMB) and SSH servers (SFTP) as folders in `~/Network` |
 | Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
 | Internet › Company desktops | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |
@@ -60,6 +61,7 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Accessories › Encyclopedia | `kiwix-tools` | downloads a Wikipedia from Kiwix (130 MB to 50 GB, many languages) and reads it in the web browser without the Internet |
 | Accessories › Sync | `unison` | keeps `~/Documents` the same on several Kilobyte computers and a Kindle, over SSH or through a USB stick; deletions sync too, the newer change wins |
 | Accessories › Backup | Kilobyte, `restic` | encrypted backups to a USB stick, an SSH server or a network drive, by hand or every day or week by themselves; any file comes back as it was on a chosen day |
+| Accessories › ASCII Art Generator | Kilobyte (`py/asciiart.py`), `figlet` | a heading in big letters (figlet's fonts, or a built-in block font), a subheading and art (big letters, a picture made of characters, or your own text) in a border of any characters; saved as text, printed portrait or landscape and scaled to the page |
 | Accessories › Typing tutor | `gtypist` | learn to type with ten fingers: courses in English and 20 other languages |
 | Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
 | Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |
@@ -109,7 +111,8 @@ has no room for them: it says so at the first start, and
 `kbutils dl accessibility` downloads them.
 
 **Kilobyte Desktop** (`py/desk.py`, `py/deskbg.py`) is a desktop in text
-mode. Every program runs in a window of its own: a pseudo terminal emulated
+mode. Its mouse pointer can be any character(s), in any colours (Settings ›
+Mouse pointer, `~/.config/kilobyte/pointer`). Every program runs in a window of its own: a pseudo terminal emulated
 with `pyte` and drawn with the same character cells as everything else. The
 Program Manager is one of those windows and stays where it is.
 

@@ -1,0 +1,209 @@
+#!/bin/bash
+# ASCII Art Generator: a heading in big letters, a subheading, and art (big
+# letters, a picture made of characters, or your own text) in a border of any
+# characters. Saved as text in Documents/ASCII Art, or printed portrait or
+# landscape, as big as the page allows. The work is py/asciiart.py's.
+. /usr/lib/kilobyte/lib.sh
+
+T="ASCII Art Generator"
+PY="$KB_LIB/py/asciiart.py"
+OUT="$KB_DOCS/ASCII Art"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+get() { python3 "$PY" get "$1"; }
+set_() { python3 "$PY" set "$1" "$2" 2>"$TMP/err" || kb_msg "$T" "$(cat "$TMP/err")" 7 40; }
+
+pick_font() { # pick_font KEY TITLE
+    local cur items=() f
+    cur=$(get "$1")
+    while IFS= read -r f; do
+        case $f in
+            plain)  items+=("$f" "Plain letters (as typed)" "$([ "$f" = "$cur" ] && echo on || echo off)") ;;
+            blocks) items+=("$f" "Blocks (built in)" "$([ "$f" = "$cur" ] && echo on || echo off)") ;;
+            *)      items+=("$f" "" "$([ "$f" = "$cur" ] && echo on || echo off)") ;;
+        esac
+    done < <(python3 "$PY" fonts)
+    f=$(kb_dialog --title " $2 " --ok-label "Use" --cancel-label "Back" --extra-button --extra-label "Try it" \
+        --radiolist "Letters for it (Space selects; Try it shows the text in that font):" 0 60 0 "${items[@]}")
+    case $? in
+        "$DIALOG_OK")    set_ "$1" "$f" ;;
+        "$DIALOG_EXTRA") figlet -d /usr/share/figlet -f "${f:-standard}" -w 200 -- "$( [ "$1" = heading_font ] && get heading || get body_text)" > "$TMP/try" 2>/dev/null ||
+                             echo "(this one is built in: see Preview)" > "$TMP/try"
+                         kb_textfile "Font: $f" "$TMP/try" ;;
+    esac
+}
+
+art_panel() {
+    local sel body
+    while true; do
+        body=$(get body)
+        sel=$(kb_dialog --title " The Art " --default-item "$body" --ok-label "Select" --cancel-label "Back" --menu \
+            "What is under the headings:" 0 70 0 \
+            big     "Big letters: $(get body_text | head -n 1 | cut -c1-30) ($(get body_font))" \
+            picture "A picture, made of characters: $(basename "$(get picture)" 2>/dev/null)" \
+            text    "Your own text (typed, or from a file)" \
+            none    "Nothing: just the headings") || return
+        case $sel in
+            big)
+                local t
+                t=$(kb_input "Big Letters" "The text in big letters:" "$(get body_text | head -n 1)") || continue
+                set_ body big; set_ body_text "$t"
+                pick_font body_font "Big Letters" ;;
+            picture) picture_panel ;;
+            text)
+                [ "$(get body)" = text ] || set_ body_text ""
+                get body_text > "$TMP/text"
+                local t
+                t=$(kb_dialog --title " Your Own Text (also ASCII art you made) " --ok-label "Use" --cancel-label "Back" \
+                    --extra-button --extra-label "From a file" --editbox "$TMP/text" 20 76)
+                case $? in
+                    "$DIALOG_OK")    printf '%s' "$t" > "$TMP/text" ;;
+                    "$DIALOG_EXTRA") t=$(kb_dialog --title " A Text File " --fselect "$KB_DOCS/" 14 64) && [ -f "$t" ] &&
+                                         head -c 20000 "$t" > "$TMP/text" || continue ;;
+                    *) continue ;;
+                esac
+                set_ body text
+                python3 -c 'import json, sys
+p = sys.argv[1]; t = open(sys.argv[2], encoding="utf-8", errors="replace").read()
+w = json.load(open(p)); w["body_text"] = t[:20000]; json.dump(w, open(p, "w"), ensure_ascii=False)' \
+                    "${XDG_CONFIG_HOME:-$HOME/.config}/kilobyte/asciiart.json" "$TMP/text" ;;
+            none) set_ body none ;;
+        esac
+    done
+}
+
+picture_panel() {
+    local sel f ramp
+    while true; do
+        sel=$(kb_dialog --title " A Picture in Characters " --ok-label "Select" --cancel-label "Back" --menu \
+            "Any photo or drawing (JPG, PNG, GIF... and Paint's pictures)." 0 70 0 \
+            File   "The picture: $(basename "$(get picture)" 2>/dev/null)" \
+            Width  "Its width: $(get width) characters" \
+            Chars  "Characters: $(get ramp)" \
+            Invert "Light on dark (for the screen) instead of dark on paper: $(get invert)") || return
+        case $sel in
+            File)  f=$(kb_dialog --title " A Picture " --fselect "$HOME/Pictures/" 14 64) || continue
+                   [ -f "$f" ] && { set_ picture "$f"; set_ body picture; } ;;
+            Width) f=$(kb_dialog --title " Width " --rangebox "How many characters wide:" 7 60 20 200 "$(get width)") && set_ width "$f" ;;
+            Chars)
+                ramp=$(kb_dialog --title " Characters " --ok-label "Use" --cancel-label "Back" --menu \
+                    "From light to dark:" 0 64 0 \
+                    classic " .:-=+*#%@  (the classic)" blocks " ░▒▓█  (shades)" \
+                    dense   "70 characters, finest" letters " .oO0@  (round)" own "Your own, light to dark") || continue
+                if [ "$ramp" = own ]; then
+                    ramp=$(kb_input "Characters" "Your own characters, from light to dark (start with a space):" " .:oO@") || continue
+                fi
+                set_ ramp "$ramp" ;;
+            Invert) set_ invert "$([ "$(get invert)" = true ] && echo false || echo true)" ;;
+        esac
+    done
+}
+
+border_label() {
+    case $1 in
+        none)    echo "No border" ;;                  single)  echo "┌──┐ single line" ;;
+        double)  echo "╔══╗ double line" ;;           heavy)   echo "┏━━┓ heavy line" ;;
+        rounded) echo "╭──╮ rounded" ;;               ascii)   echo "+--+ plain ASCII (any printer)" ;;
+        stars)   echo "**** stars" ;;                 hash)    echo "#### hashes" ;;
+        dots)    echo ".... dots" ;;                  blocks)  echo "████ blocks" ;;
+        custom)  echo "Your own characters: $(get border_chars)" ;;
+    esac
+}
+
+border_panel() {
+    local b items=() s
+    b=$(get border)
+    for s in none single double heavy rounded ascii stars hash dots blocks custom; do
+        items+=("$s" "$(border_label "$s")" "$([ "$s" = "$b" ] && echo on || echo off)")
+    done
+    b=$(kb_dialog --title " Border " --ok-label "Use" --cancel-label "Back" --radiolist "The frame around it all:" 0 60 0 "${items[@]}") || return
+    if [ "$b" = custom ]; then
+        s=$(kb_input "Your Own Border" "One character for all of it (*), a pattern for the top and bottom (=-~),\nor six: corners and sides (top-left top-right bottom-left bottom-right\ntop vertical, e.g. +++-+|  or  /\\\\\\\\/=| ):" "$(get border_chars)") || return
+        [ -n "$s" ] && set_ border_chars "$s"
+    fi
+    set_ border "$b"
+    s=$(kb_dialog --title " Space Inside " --rangebox "Space between the border and the art:" 7 60 0 6 "$(get padding)") && set_ padding "$s"
+}
+
+preview() {
+    if ! python3 "$PY" render "$TMP/art.txt" 2>"$TMP/err"; then
+        kb_msg "$T" "\Z1$(tail -n 1 "$TMP/err")\Zn" 7 60
+        return 1
+    fi
+    [ "${1:-}" = quiet ] || kb_textfile "Preview ($(awk '{ if (length > w) w = length } END { print w }' "$TMP/art.txt") x $(wc -l < "$TMP/art.txt"))" "$TMP/art.txt"
+}
+
+save_it() {
+    local name f
+    preview quiet || return
+    name=$(kb_input "Save" "A name for it (saved in Documents/ASCII Art):" "$( { get heading; get body_text; } | grep -m1 . | tr -cd '[:alnum:] _-' | cut -c1-30)") || return
+    name=$(printf '%s' "$name" | tr -d '/')
+    [ -n "$name" ] || return
+    mkdir -p "$OUT"
+    f="$OUT/$name.txt"
+    cp "$TMP/art.txt" "$f"
+    kb_msg "$T" "Saved:\n\n  ${f#"$HOME"/}" 9 70
+}
+
+print_it() {
+    local o opts info
+    preview quiet || return
+    if ! lpstat -e 2>/dev/null | grep -q .; then
+        kb_msg "$T" "No printer is set up yet. Add one in Settings > Printers.\n\n(Save keeps it in Documents to print later.)" 9 60
+        return
+    fi
+    o=$(kb_dialog --title " Print " --ok-label "Print" --cancel-label "Back" --menu \
+        "Which way round on the paper? It is made as big as the page allows." 0 64 0 \
+        portrait  "Portrait (upright)" \
+        landscape "Landscape (sideways): for wide art") || return
+    read -ra opts < <(python3 "$PY" printopts "$TMP/art.txt" "$o" 2>"$TMP/info")
+    info=$(cat "$TMP/info")
+    if out=$(lp "${opts[@]}" -t "ASCII art" -- "$TMP/art.txt" 2>&1); then
+        kb_msg "$T" "\ZbSent to the printer\Zn, $o: $info.\n\n$out" 10 70
+    else
+        kb_msg "$T" "\Z1Printing failed:\Zn\n\n$out" 10 70
+    fi
+}
+
+art_label() {
+    case $(get body) in
+        big)     echo "big letters" ;;
+        picture) echo "a picture" ;;
+        text)    echo "your own text" ;;
+        *)       echo nothing ;;
+    esac
+}
+
+sel=Preview
+while true; do
+    sel=$(kb_dialog --title " $T " --default-item "$sel" --ok-label "Select" --cancel-label "Close" --menu \
+        "Big letters and pictures made of characters, in a frame of any
+characters, for the screen or the printer." 0 76 0 \
+        Heading  "Heading: $(get heading | cut -c1-30)  ($(get heading_font))" \
+        Sub      "Subheading: $(get subheading | cut -c1-40)" \
+        Art      "The art: $(art_label)" \
+        Border   "Border: $(get border)$([ "$(get border)" = custom ] && echo " ($(get border_chars))")" \
+        Layout   "Centred or left, and a line under the headings: $(get align), $([ "$(get divider)" = true ] && echo line || echo "no line")" \
+        Preview  "» Preview" \
+        Save     "» Save in Documents" \
+        Print    "» Print, portrait or landscape" \
+        New      "» Start a new one") || exit 0
+    case $sel in
+        Heading)
+            h=$(kb_input "Heading" "The heading (big letters; empty: none):" "$(get heading)") || continue
+            set_ heading "$h"
+            [ -n "$h" ] && pick_font heading_font "Heading Letters" ;;
+        Sub)     h=$(kb_input "Subheading" "A line of normal text under the heading (empty: none):" "$(get subheading)") && set_ subheading "$h" ;;
+        Art)     art_panel ;;
+        Border)  border_panel ;;
+        Layout)
+            h=$(kb_dialog --title " Layout " --ok-label "Use" --cancel-label "Back" --menu "Change:" 0 50 0 \
+                center "Everything centred" left "Everything on the left" line "Line under the headings: on/off") || continue
+            case $h in line) set_ divider "$([ "$(get divider)" = true ] && echo false || echo true)" ;; *) set_ align "$h" ;; esac ;;
+        Preview) preview ;;
+        Save)    save_it ;;
+        Print)   print_it ;;
+        New)     kb_yesno "$T" "Start a new one? (Save this one first if you want to keep it.)" 8 60 && python3 "$PY" reset ;;
+    esac
+done

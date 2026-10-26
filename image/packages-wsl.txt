@@ -12,3 +12,4 @@ mpv ffmpeg quickjs
 newsboat unison gnuchess nudoku frotz dict-wn
 # backups, typing tutor, BBS file transfers
 restic gtypist lrzsz
+figlet

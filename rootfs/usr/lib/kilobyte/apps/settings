@@ -650,6 +650,74 @@ Enter opens, Esc goes back." 20 66 ;;
     done
 }
 
+# --- The mouse pointer of Kilobyte Desktop: any character(s), in any colours.
+# Kept in $KB_CONF/pointer (chars, fg, bg, hotspot); py/desk.py draws it.
+
+pointer_panel() {
+    local f="$KB_CONF/pointer" sel chars fg bg hot p items c
+    pget() { sed -n "s/^$1=//p" "$f" 2>/dev/null | tail -n 1; }
+    pset() { # pset KEY VALUE [KEY VALUE ...]
+        local k
+        touch "$f"
+        while [ $# -ge 2 ]; do
+            k=$1
+            { grep -v "^$k=" "$f"; printf '%s=%s\n' "$k" "$2"; } > "$f.new" && mv "$f.new" "$f"
+            shift 2
+        done
+    }
+    while true; do
+        chars=$(pget chars) fg=$(pget fg) bg=$(pget bg) hot=$(pget hotspot)
+        sel=$(kb_dialog --title " Mouse Pointer " --ok-label "Select" --cancel-label "Back" --menu \
+"How the mouse pointer looks in Kilobyte Desktop (with windows).
+Now: $([ -n "$chars" ] && echo "\"$chars\" in ${fg:-white} on ${bg:-what is under it}" || echo "the classic block (the colours swapped)")
+(Without windows, the text console's own block pointer shows.)" 0 70 0 \
+            Pick    "Choose a pointer" \
+            Own     "Type your own: any characters (up to 8)" \
+            Colour  "Its colour: ${fg:-white}" \
+            Behind  "Behind it: ${bg:-what is under it}" \
+            Point   "It points with its $([ "$hot" = last ] && echo last || echo first) character" \
+            Classic "Back to the classic block") || return
+        case $sel in
+            Pick)
+                items=(arrow "▲   arrow" up "↑   arrow up" left "←   arrow left (points with ←)" ptr "<-  two characters"
+                       ptr2 "->  points with its tip" dot "●   dot" ring "○   ring" diamond "♦   diamond"
+                       smile "☺   smiley" heart "♥   heart" block "█   solid block" shade "▓   shaded block"
+                       plus "+   cross" star "*   star" at "@   at" x "X   letter X")
+                p=$(kb_dialog --title " Choose a Pointer " --no-tags --ok-label "Use" --cancel-label "Back" \
+                    --menu "Characters every Kilobyte screen font has:" 0 50 0 "${items[@]}") || continue
+                case $p in
+                    arrow) pset chars "▲" hotspot first ;;   up) pset chars "↑" hotspot first ;;
+                    left) pset chars "←" hotspot first ;;    ptr) pset chars "<-" hotspot first ;;
+                    ptr2) pset chars "->" hotspot last ;;    dot) pset chars "●" hotspot first ;;
+                    ring) pset chars "○" hotspot first ;;    diamond) pset chars "♦" hotspot first ;;
+                    smile) pset chars "☺" hotspot first ;;   heart) pset chars "♥" hotspot first ;;
+                    block) pset chars "█" hotspot first ;;   shade) pset chars "▓" hotspot first ;;
+                    plus) pset chars "+" hotspot first ;;    star) pset chars "*" hotspot first ;;
+                    at) pset chars "@" hotspot first ;;      x) pset chars "X" hotspot first ;;
+                esac
+                [ -n "$(pget fg)" ] || pset fg white ;;
+            Own)
+                c=$(kb_input "Your Pointer" "Any characters, up to 8 (from the Character Map, too).\nOn the text console only those in its font show:" "$chars") || continue
+                c=${c:0:8}
+                [ -n "$c" ] && pset chars "$c"
+                [ -n "$(pget fg)" ] || pset fg white ;;
+            Colour)
+                [ -n "$chars" ] || { kb_msg "Mouse Pointer" "Choose a pointer first: the classic one has the colours under it." 8 56; continue; }
+                c=$(wp_colour "Pointer Colour" "${fg:-white}") && pset fg "$c" ;;
+            Behind)
+                [ -n "$chars" ] || { kb_msg "Mouse Pointer" "Choose a pointer first." 7 40; continue; }
+                items=(under "What is under it (see-through)" "$([ -z "$bg" ] || [ "$bg" = under ] && echo on || echo off)")
+                for c in black red green brown blue magenta cyan lightgrey; do
+                    items+=("$c" "" "$([ "$c" = "$bg" ] && echo on || echo off)")
+                done
+                c=$(kb_dialog --title " Behind the Pointer " --ok-label "Use" --cancel-label "Back" --radiolist \
+                    "Space selects, Enter uses it." 0 50 0 "${items[@]}") && pset bg "$c" ;;
+            Point)  pset hotspot "$([ "$hot" = last ] && echo first || echo last)" ;;
+            Classic) rm -f "$f" ;;
+        esac
+    done
+}
+
 # --- Keyboard -------------------------------------------------------------
 
 keyboard_panel() {
@@ -1370,6 +1438,7 @@ while true; do
             Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
             Appearance "Colour theme"                  "Classic blue, panels, 8-bit, 16-bit, 1984... or make your own" \
             Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
+            Pointer    "Mouse pointer"                 "Any character(s) as the mouse pointer, in any colours" \
             Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
             Defaults   "Default programs"              "Text editor, web browser, file manager, email, music..." \
             Display    "Console font and size"         "Bigger letters for high resolution screens" \
@@ -1402,7 +1471,7 @@ while true; do
         elif [ "$KB_VARIANT" = wsl ]; then
             # In Windows (WSL): Windows looks after the network, users, fonts,
             # printers and power; Kilobyte Update keeps Kilobyte itself new.
-            keep=" Update Windows Appearance Wallpaper Desktop Defaults Saver Tiles Email Software Tasks About " k=()
+            keep=" Update Windows Appearance Wallpaper Pointer Desktop Defaults Saver Tiles Email Software Tasks About " k=()
             for ((n = 0; n < ${#items[@]}; n += 3)); do
                 [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
             done
@@ -1410,7 +1479,7 @@ while true; do
         elif [ "$KB_VARIANT" = transition ]; then
             # Next to a normal desktop: the computer's own settings look after
             # the network, login, fonts, printers, users and updates (apt).
-            keep=" Windows Appearance Wallpaper Desktop Defaults Saver Tiles Sound Battery Email Software Tasks About " k=()
+            keep=" Windows Appearance Wallpaper Pointer Desktop Defaults Saver Tiles Sound Battery Email Software Tasks About " k=()
             for ((n = 0; n < ${#items[@]}; n += 3)); do
                 [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
             done
@@ -1431,6 +1500,7 @@ while true; do
         Network)    network_panel ;;
         Appearance) appearance_panel ;;
         Wallpaper)  wallpaper_panel ;;
+        Pointer)    pointer_panel ;;
         Display)    display_panel ;;
         Access)     access_panel ;;
         Swap)       swap_panel ;;

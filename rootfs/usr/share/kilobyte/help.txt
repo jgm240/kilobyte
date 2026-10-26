@@ -117,7 +117,8 @@
    Videos in the block modes and as the real picture take the whole screen
    while they play; the Text picture mode plays inside the window.
    Settings > Login and startup switches windows off (one program at a time,
-   fullscreen).
+   fullscreen). Settings > Mouse pointer makes the pointer any character(s),
+   in any colours (kbutils settings chg pointer "<-").
 
 
  FILES
@@ -274,7 +275,10 @@
 
  MORE PROGRAMS
  ─────────────
-   Internet       Chat (IRC rooms), BBS Dialer (bulletin boards with modem
+   Internet       Time Machine: web sites as they were, years ago (the
+                  Internet Archive's Wayback Machine): famous old sites, any
+                  site in any year, or a surprise; links lead on in that year.
+                  Chat (IRC rooms), BBS Dialer (bulletin boards with modem
                   sounds; files they send arrive in ~/Downloads), Online videos.
    Media          Camera: Look shows the camera's picture in the Video
                   Player's picture modes (blocks, text, or the real picture);
@@ -289,6 +293,11 @@
    Accessories    Paint: arrows move, Space draws, , and . change colour,
                   P L B X C O F E K choose the tool, S saves, U undoes.
                   Print, USB sticks, Backup, Screen saver and more.
+                  ASCII Art Generator: a heading in big letters (figlet's
+                  fonts), a subheading, and art: big letters, a picture made
+                  of characters, or your own text, in a border of any
+                  characters. Saves to Documents/ASCII Art; prints portrait
+                  or landscape, as big as the page allows.
                   Typing tutor: learn to type with ten fingers, in many
                   languages; Esc leaves a lesson.
    Games          Mines, Solitaire, Reversi, Moon Buggy, Snake and others.
