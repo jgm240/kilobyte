@@ -654,7 +654,7 @@ Enter opens, Esc goes back." 20 66 ;;
 # Kept in $KB_CONF/pointer (chars, fg, bg, hotspot); py/desk.py draws it.
 
 pointer_panel() {
-    local f="$KB_CONF/pointer" sel chars fg bg hot p items c
+    local f="$KB_CONF/pointer" sel chars fg bg hot size p items c
     pget() { sed -n "s/^$1=//p" "$f" 2>/dev/null | tail -n 1; }
     pset() { # pset KEY VALUE [KEY VALUE ...]
         local k
@@ -666,7 +666,7 @@ pointer_panel() {
         done
     }
     while true; do
-        chars=$(pget chars) fg=$(pget fg) bg=$(pget bg) hot=$(pget hotspot)
+        chars=$(pget chars) fg=$(pget fg) bg=$(pget bg) hot=$(pget hotspot) size=$(pget size)
         sel=$(kb_dialog --title " Mouse Pointer " --ok-label "Select" --cancel-label "Back" --menu \
 "How the mouse pointer looks in Kilobyte Desktop (with windows).
 Now: $([ -n "$chars" ] && echo "\"$chars\" in ${fg:-white} on ${bg:-what is under it}" || echo "the classic block (the colours swapped)")
@@ -675,8 +675,9 @@ Now: $([ -n "$chars" ] && echo "\"$chars\" in ${fg:-white} on ${bg:-what is unde
             Own     "Type your own: any characters (up to 8)" \
             Colour  "Its colour: ${fg:-white}" \
             Behind  "Behind it: ${bg:-what is under it}" \
-            Point   "It points with its $([ "$hot" = last ] && echo last || echo first) character" \
-            Classic "Back to the classic block") || return
+            Size    "Size: ${size:-1} ($([ "${size:-1}" = 1 ] && echo "one row" || echo "an arrow ${size} rows tall"))" \
+            Point   "It points with its $([ "$hot" = last ] && echo "last character (an arrow: to the right)" || echo "first character (an arrow: to the left)")" \
+            Classic "Back to the classic block (the size stays)") || return
         case $sel in
             Pick)
                 items=(arrow "▲   arrow" up "↑   arrow up" left "←   arrow left (points with ←)" ptr "<-  two characters"
@@ -712,8 +713,17 @@ Now: $([ -n "$chars" ] && echo "\"$chars\" in ${fg:-white} on ${bg:-what is unde
                 done
                 c=$(kb_dialog --title " Behind the Pointer " --ok-label "Use" --cancel-label "Back" --radiolist \
                     "Space selects, Enter uses it." 0 50 0 "${items[@]}") && pset bg "$c" ;;
+            Size)
+                c=$(kb_dialog --title " Pointer Size " --rangebox \
+"1: the pointer's characters as they are. 2 to 5: an arrow that many rows
+tall, made of them (or, classic, of cells with their colours swapped):" 8 76 1 5 "${size:-1}") && pset size "$c" ;;
             Point)  pset hotspot "$([ "$hot" = last ] && echo first || echo last)" ;;
-            Classic) rm -f "$f" ;;
+            Classic)
+                if [ -n "$(pget size)" ] && [ "$(pget size)" != 1 ]; then
+                    c=$(pget size); rm -f "$f"; pset size "$c"
+                else
+                    rm -f "$f"
+                fi ;;
         esac
     done
 }

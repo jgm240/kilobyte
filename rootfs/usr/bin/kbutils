@@ -35,6 +35,7 @@ saver-minutes|Minutes before the screen saver starts|1 to 120|kindle
 saver-lock|Password after the screen saver|on, off|kindle
 tiles|Weather and news tiles|on, off|kindle
 pointer|The mouse pointer (with windows)|classic, or any characters (up to 8)|kindle
+pointer-size|Size of the mouse pointer|1 (one row) to 5 (an arrow 5 rows tall)|kindle
 tiles-city|City of the weather|a city, or \"\" to guess|kindle
 tiles-units|Temperatures|C, F|kindle
 speech|Screen reader (speech)|on, off|kindle wsl transition
@@ -88,6 +89,7 @@ disp() {
         saver-lock)     [ -e "$KB_CONF/saver-lock" ] && echo on || echo off ;;
         tiles)          flag_off "$KB_CONF/tiles-off" ;;
         pointer)        st=$(sed -n 's/^chars=//p' "$KB_CONF/pointer" 2>/dev/null | tail -n 1); echo "${st:-classic}" ;;
+        pointer-size)   st=$(sed -n 's/^size=//p' "$KB_CONF/pointer" 2>/dev/null | tail -n 1); echo "${st:-1}" ;;
         tiles-city)     st=$(cat "$KB_CONF/tiles-city" 2>/dev/null); echo "${st:-(guessed from the Internet address)}" ;;
         tiles-units)    [ -e "$KB_CONF/tiles-fahrenheit" ] && echo F || echo C ;;
         speech)         if [ -e /etc/kilobyte/speech-on ]; then echo on
@@ -196,8 +198,16 @@ chg() {
             echo "$v" > "$KB_CONF/saver-minutes" ;;
         saver-lock)     onoff "$v" saver-lock
                         if [ "$v" = on ]; then : > "$KB_CONF/saver-lock"; else rm -f "$KB_CONF/saver-lock"; fi ;;
+        pointer-size)
+            [[ $v =~ ^[1-5]$ ]] || die "pointer-size: 1 to 5"
+            { grep -v '^size=' "$KB_CONF/pointer" 2>/dev/null; printf 'size=%s\n' "$v"; } > "$KB_CONF/pointer.new" &&
+                mv "$KB_CONF/pointer.new" "$KB_CONF/pointer" ;;
         pointer)
-            if [ "$v" = classic ]; then rm -f "$KB_CONF/pointer"
+            if [ "$v" = classic ]; then
+                # (the size stays)
+                { grep '^size=' "$KB_CONF/pointer" 2>/dev/null; } > "$KB_CONF/pointer.new"
+                if [ -s "$KB_CONF/pointer.new" ]; then mv "$KB_CONF/pointer.new" "$KB_CONF/pointer"
+                else rm -f "$KB_CONF/pointer.new" "$KB_CONF/pointer"; fi
             else
                 v=${v:0:8}
                 { grep -v '^chars=' "$KB_CONF/pointer" 2>/dev/null; printf 'chars=%s\n' "$v"; } > "$KB_CONF/pointer.new" &&

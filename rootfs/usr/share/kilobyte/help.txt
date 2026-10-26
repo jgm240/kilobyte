@@ -118,7 +118,8 @@
    while they play; the Text picture mode plays inside the window.
    Settings > Login and startup switches windows off (one program at a time,
    fullscreen). Settings > Mouse pointer makes the pointer any character(s),
-   in any colours (kbutils settings chg pointer "<-").
+   in any colours and sizes: 1 is the characters themselves, 2 to 5 an arrow
+   that many rows tall (kbutils settings chg pointer "<-", pointer-size 3).
 
 
  FILES

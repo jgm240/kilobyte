@@ -832,7 +832,9 @@ class Desk:
     def pointer_style(self):
         """The pointer chosen in Settings > Mouse pointer ($KB_CONF/pointer):
         (characters, fg, bg, hotspot at the "first" or "last" one), or None for
-        the classic one. Read again when the file changes."""
+        the classic one; its size is in self.pointer_size (1: the characters
+        as they are, 2 to 5: an arrow that many rows tall). Read again when
+        the file changes."""
         path = os.path.join(deskbg.CONF, "pointer")
         try:
             stamp = os.stat(path).st_mtime
@@ -849,6 +851,11 @@ class Desk:
                             conf[k.strip()] = v
             except OSError:
                 pass
+            try:
+                self.pointer_size = max(1, min(5, int(conf.get("size", "1"))))
+            except ValueError:
+                self.pointer_size = 1
+            self.pointer_hot = "last" if conf.get("hotspot", "").strip() == "last" else "first"
             chars = "".join(c for c in conf.get("chars", "") if c.isprintable())[:8]
             if chars:
                 fg = COLOURS16.get(conf.get("fg", "white").strip(), WHITE)
@@ -863,6 +870,9 @@ class Desk:
         hardly show (half-filled wallpaper characters, a bright letter on its
         own colour) the pointer is a plain block instead."""
         look = self.pointer_style()
+        if getattr(self, "pointer_size", 1) > 1:
+            self.draw_big_pointer(px, py, look)
+            return
         if look:
             chars, fg, bg, hot = look
             x0 = px - len(chars) + 1 if hot == "last" else px
@@ -886,6 +896,29 @@ class Desk:
             self.s.put(py, px, " ", block, block)
         else:
             self.s.put(py, px, ch, bg, fg & 7)
+
+    def draw_big_pointer(self, px, py, look):
+        """A pointer of size 2 to 5: an arrow (a triangle) that many rows tall,
+        its tip at the mouse, made of the chosen characters; with the classic
+        pointer, of cells with their colours swapped. It points up and to the
+        left, or up and to the right when it points with its last character."""
+        size = self.pointer_size
+        hot = look[3] if look else getattr(self, "pointer_hot", "first")
+        step = -1 if hot == "last" else 1
+        under = self.s.watched.get(px) if py == self.s.watch_y else None
+        self.s.watch_y = None
+        for r in range(size):
+            for c in range(2 * r + 1):              # (cells are twice as tall as wide)
+                x, y = px + step * c, py + r
+                if not look:
+                    self.invert(y, x, 1)
+                    continue
+                chars, fg, bg, _ = look
+                if bg < 0:
+                    bg = (under[2] & 7) if under else BLACK
+                    if fg & 7 == bg:
+                        fg = BLACK if bg >= 4 or bg == LIGHTGREY else WHITE
+                self.s.put(y, x, chars[(r + c) % len(chars)], fg, bg)
 
     def invert(self, y, x, n):
         """Swap foreground and background of n cells, whatever their colours

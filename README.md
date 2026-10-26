@@ -111,7 +111,8 @@ has no room for them: it says so at the first start, and
 `kbutils dl accessibility` downloads them.
 
 **Kilobyte Desktop** (`py/desk.py`, `py/deskbg.py`) is a desktop in text
-mode. Its mouse pointer can be any character(s), in any colours (Settings ›
+mode. Its mouse pointer can be any character(s), in any colours and in five sizes
+(1: the characters themselves, 2 to 5: an arrow that many rows tall; Settings ›
 Mouse pointer, `~/.config/kilobyte/pointer`). Every program runs in a window of its own: a pseudo terminal emulated
 with `pyte` and drawn with the same character cells as everything else. The
 Program Manager is one of those windows and stays where it is.
