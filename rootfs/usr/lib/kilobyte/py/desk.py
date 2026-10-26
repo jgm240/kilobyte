@@ -1518,6 +1518,9 @@ class Desk:
         if k == curses.KEY_F11:
             self.paste()
             return
+        if k == "\x00":                          # Ctrl+Space: KBFind, from anywhere
+            self.launch_app("Find")
+            return
         win = self.active()
         if not win:
             return

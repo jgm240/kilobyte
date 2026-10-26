@@ -165,6 +165,14 @@ kb_backtitle() {
         return
     fi
     note+="  │  $(kb_network)"
+    # Parental controls: the computer time left today.
+    local left=""
+    { read -r left _ < "/run/kilobyte-parental/${USER:-x}"; } 2>/dev/null
+    case $left in
+        "" | unlimited) ;;
+        0) note+="  │  Time is up" ;;
+        *) note+="  │  Time left: $left min" ;;
+    esac
     bat=$(kb_battery) && note+="  │  Battery $bat"
     kb_update_available && note+="  │  ▲ Update available"
     printf -v now '%(%a %d %b  %H:%M)T' -1

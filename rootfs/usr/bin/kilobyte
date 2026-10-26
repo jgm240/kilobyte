@@ -160,7 +160,8 @@ run_terminal() {
     # A real shell: Ctrl-C and Ctrl-Z keep their usual meaning in here.
     stty susp '^Z'
     kb_export_editor
-    KILOBYTE_SHELL=1 bash -i
+    # (Its own start-up file: the user's, and Ctrl+Space for KBFind.)
+    KILOBYTE_SHELL=1 bash --rcfile "$KB_SHARE/terminal-rc" -i
     stty susp undef
     kb_load_theme
 }
@@ -176,10 +177,14 @@ run_terminal() {
 # The table only changes when programs are installed or removed, or with an
 # update of Kilobyte: it is kept in a file until then (working out which Store
 # programs are there takes a second or two on a Raspberry Pi 1).
+# Parental controls (kbutils dl parentalctl): the programs a parent turned off
+# for this user are left out.
+PARENTAL="/etc/kilobyte/parental/${USER:-$(id -un)}.json"
+
 apps_table() {
     local cache="${XDG_RUNTIME_DIR:-/tmp}/kilobyte-apps-${UID:-0}" lines
     if [ -s "$cache" ] && [ "$cache" -nt /var/lib/dpkg/status ] && [ "$cache" -nt /usr/bin/kilobyte ] &&
-       [ "$cache" -nt /usr/share/kilobyte/store.tsv ]; then
+       [ "$cache" -nt /usr/share/kilobyte/store.tsv ] && { [ ! -e "$PARENTAL" ] || [ "$cache" -nt "$PARENTAL" ]; }; then
         mapfile -t lines < "$cache"
         printf '%s\n' "${lines[@]}"
         return 0
@@ -209,12 +214,20 @@ apps_table_for_device() {
     case $KB_VARIANT in
         kindle) leave=$KINDLE_LEAVE_OUT ;;
         wsl)    leave=$WSL_LEAVE_OUT ;;
-        *)      apps_table_now; return ;;
     esac
+    [ -r "$PARENTAL" ] && leave+=" $(parental_blocked) "
+    if [ -z "${leave// /}" ]; then
+        apps_table_now
+        return
+    fi
     apps_table_now | while IFS= read -r line; do
         case $leave in *" ${line%%|*} "*) continue ;; esac
         printf '%s\n' "$line"
     done
+}
+
+parental_blocked() {
+    python3 -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1])).get("blocked", [])))' "$PARENTAL" 2>/dev/null
 }
 
 apps_table_now() {
@@ -282,6 +295,7 @@ Hangman|games|Hangman|Guess the word: type letters|_a|M
 Adventure|games|Adventure|Colossal Cave Adventure: type commands such as GO NORTH; QUIT ends|N↑|M
 Rain|games|Rain|Rain on the screen; Ctrl+C stops it|' |M
 Worms|games|Worms|Worms on the screen; Ctrl+C stops it|~ |M
+Find|system|KBFind|Find anything: programs, settings, files and what is in them (Ctrl+Space)|?f|M
 Settings|system|Settings|Wi-Fi, theme, wallpaper, keyboard, date, software, users...|≡≡|M
 Help|system|Help|How to use Kilobyte|? |M
 Users|system|Switch user|Let someone else log in; your programs keep running|☺ |S
@@ -302,6 +316,10 @@ app_field() { # app_field ID N: the Nth column of the program's first line
 run_app() {
     local id=$1
     shift
+    if [ -r "$PARENTAL" ] && [[ " $(parental_blocked) " == *" $id "* ]]; then
+        kb_msg "Kilobyte" "A parent turned this program off for you." 7 50
+        return
+    fi
     case $id in
         Editor)      run_editor "$@" ;;
         Spreadsheet) run_spreadsheet "$@" ;;
@@ -363,6 +381,7 @@ run_app() {
         Adventure)   kb_guarded '' /usr/games/adventure ;;
         Rain)        kb_run /usr/games/rain ;;
         Worms)       kb_run /usr/games/worms ;;
+        Find)        "$APPS/kbfind" "$@" ;;
         Settings)
             "$APPS/settings" "$@"
             # 42: Kilobyte was updated, so the new one should run.
@@ -414,6 +433,21 @@ category_menu() { # category_menu CATEGORY TITLE TEXT
             --default-item "$sel" --menu "$3" 0 64 0 "${items[@]}"); do
         launch "$sel"
     done
+}
+
+# Parental controls: say when the computer time is nearly up, and when it is.
+KB_TIME_WARNED=
+time_warning() {
+    local left=""
+    { read -r left _ < "/run/kilobyte-parental/${USER:-x}"; } 2>/dev/null || return 0
+    [[ $left =~ ^[0-9]+$ ]] || return 0
+    if [ "$left" -eq 0 ] && [ "$KB_TIME_WARNED" != 0 ]; then
+        KB_TIME_WARNED=0
+        kb_msg "Time Is Up" "\Z1\ZbThe computer time is up.\Zn\n\nSave your work now: in a minute this session ends." 9 56
+    elif [ "$left" -gt 0 ] && [ "$left" -le 5 ] && [ -z "$KB_TIME_WARNED" ]; then
+        KB_TIME_WARNED=5
+        kb_msg "Nearly Time" "\ZbOnly $left minutes of computer time are left.\Zn\n\nTime to finish what you are doing." 9 56
+    fi
 }
 
 # Warn once when the battery runs low; again only after it was charged.
@@ -545,6 +579,7 @@ program_manager() {
     local sel=Editor rc items idle=0 tiles=() id cat name help rest
     while true; do
         battery_warning
+        time_warning
         items=()
         local cats=" "
         while IFS='|' read -r id cat name help rest; do
@@ -557,6 +592,7 @@ program_manager() {
         [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, encyclopedia, backup, typing tutor, paint...")
         [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Chess, Sudoku, text adventures, Mines, Solitaire...")
         [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")
+        items+=(Find "KBFind" "Find anything: programs, settings, files and what is in them (Ctrl+Space)")
         items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
         kb_is_live && items+=(Install "Install Kilobyte to disk" "Copy this system to the computer's hard disk")
         items+=(Help "Help" "How to use Kilobyte" Quit "Exit  »" "Log out, restart or shut down")

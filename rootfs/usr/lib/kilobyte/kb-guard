@@ -93,6 +93,21 @@ while (1) {
     if ($n > 0 && $stdin_open && vec($rout, fileno(STDIN), 1)) {
         my $got = sysread(STDIN, my $buf, 4096);
         if (!$got) { $stdin_open = 0; next; }
+        # Ctrl+Space: KBFind, over the program (which draws itself again after).
+        if ($buf =~ /\x00/) {
+            $buf =~ s/\x00//g;
+            system('stty', $saved_tty);
+            system('/usr/lib/kilobyte/apps/kbfind');
+            system('stty', 'raw', '-echo');
+            my $ws = "\0" x 8;
+            if (ioctl(STDIN, $TIOCGWINSZ, $ws)) {
+                # (A changed window size makes the program draw everything again.)
+                my ($rows, $cols, $xp, $yp) = unpack('S4', $ws);
+                ioctl($master, $TIOCSWINSZ, pack('S4', $rows > 2 ? $rows - 1 : $rows + 1, $cols, $xp, $yp));
+                select(undef, undef, undef, 0.15);
+                ioctl($master, $TIOCSWINSZ, $ws);
+            }
+        }
         if ($buf =~ /\x03/) {
             $ctrl_c++;
             if (defined $quit_keys && $ctrl_c == 1) {

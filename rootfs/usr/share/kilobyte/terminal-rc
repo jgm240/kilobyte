@@ -1,0 +1,5 @@
+# The Terminal of Kilobyte (kilobyte's run_terminal): the usual start-up
+# files, and Ctrl+Space for KBFind.
+[ -r /etc/bash.bashrc ] && . /etc/bash.bashrc
+[ -r ~/.bashrc ] && . ~/.bashrc
+bind -x '"\C-@": /usr/lib/kilobyte/apps/kbfind' 2>/dev/null

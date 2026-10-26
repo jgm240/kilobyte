@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+if [ "$1" = purge ]; then
+    rm -rf /etc/kilobyte/parental /var/lib/kilobyte-parentalctl
+fi
+[ -d /run/systemd/system ] && systemctl daemon-reload || true
+exit 0

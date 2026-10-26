@@ -328,7 +328,8 @@ games|gnuchess nudoku frotz bsdgames moon-buggy|Chess, Sudoku, text adventures a
 feeds|newsboat|News feeds (Internet > News feeds), about 3 MB
 sync|unison|Sync between computers, about 5 MB
 camera|libzbar0t64|QR codes and bar codes in the Camera, under 1 MB
-asciiart|figlet|The ASCII Art Generator's big-letter fonts, under 1 MB"
+asciiart|figlet|The ASCII Art Generator's big-letter fonts, under 1 MB
+parentalctl|kilobyte-parentalctl|Parental controls: time, bedtimes, programs, the Internet (only this way)"
 # (accessibility: the same packages as image/packages-accessibility.txt.)
 
 dl() {
@@ -348,9 +349,19 @@ dl() {
     getent hosts deb.debian.org >/dev/null 2>&1 || die "not connected to the Internet (Settings > Wi-Fi, or kbutils settings chg wifi connect NETWORK)"
     echo "Downloading and installing: ${missing[*]}"
     need_sudo
+    # Kilobyte's own packages (parental controls) are in Kilobyte's signed APT
+    # repository: added here once, as kilobyte-transition has it.
+    if [[ " ${missing[*]} " == *" kilobyte-"* ]] && [ ! -e /etc/apt/sources.list.d/kilobyte.sources ]; then
+        sudo install -D -m 644 "$KB_SHARE/kilobyte-archive-keyring.gpg" /etc/apt/keyrings/kilobyte-archive-keyring.gpg
+        printf 'Types: deb\nURIs: https://jgm240.github.io/kilobyte/apt\nSuites: ./\nSigned-By: /etc/apt/keyrings/kilobyte-archive-keyring.gpg\n' |
+            sudo tee /etc/apt/sources.list.d/kilobyte.sources >/dev/null
+    fi
     sudo apt-get update -q || true
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${missing[@]}" || die "the download did not work"
-    if [ "$name" = accessibility ]; then
+    if [ "$name" = parentalctl ]; then
+        echo
+        echo "${B}Parental controls are installed.${N} Set them up in Settings > Parental controls."
+    elif [ "$name" = accessibility ]; then
         # (Debian starts them at once; Kilobyte only when switched on.)
         [ -e /etc/kilobyte/speech-on ] || sudo systemctl disable --now espeakup.service >/dev/null 2>&1 || true
         [ -e /etc/kilobyte/braille-on ] || sudo systemctl disable --now brltty.service >/dev/null 2>&1 || true

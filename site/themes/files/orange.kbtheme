@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Blue and Orange (16-bit)
+mc=default
+shadow=ON
+palette=000022 ff8800 0055aa ff8800 0055aa ff8800 0055aa ffffff 000022 ff8800 ffffff ff8800 0055aa ff8800 ffffff ffffff
+screen=WHITE,BLUE,ON
+dialog=WHITE,BLUE,ON
+title=BLUE,WHITE,OFF
+border=WHITE,BLUE,ON
+border2=BLACK,BLUE,OFF
+item=WHITE,BLUE,ON
+sel=BLACK,YELLOW,OFF
+tag=WHITE,BLUE,ON
+sel_tag=BLACK,YELLOW,OFF
+key=YELLOW,BLUE,OFF
+sel_key=BLUE,YELLOW,OFF
+btn_on=BLACK,YELLOW,OFF
+btn_off=WHITE,BLUE,ON
+btn_key_on=BLUE,YELLOW,OFF
+btn_key_off=YELLOW,BLUE,OFF
+input=BLACK,WHITE,OFF
+arrow=YELLOW,BLUE,OFF
+status=BLUE,WHITE,OFF
+gauge=YELLOW,BLUE,OFF

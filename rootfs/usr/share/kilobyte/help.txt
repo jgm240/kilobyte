@@ -6,6 +6,16 @@
  the program fills the screen, and when you close it you are back here.
 
 
+ FINDING THINGS
+ ──────────────
+   Ctrl+Space     KBFind: type a few letters and it finds programs, settings,
+                  files (by name, and words inside notes, index cards and
+                  text documents), the agenda and the help; Enter opens it.
+                  Ctrl+Space works in Kilobyte Desktop, in programs started
+                  from Kilobyte and in the Terminal; KBFind is also in the
+                  Program Manager.
+
+
  MOVING AROUND
  ─────────────
    ↑ ↓            move the highlight
@@ -260,6 +270,20 @@
    console even the exact colours themselves. The editor's own screens show
    the changes at once. Export saves the theme as a .kbtheme file to give
    away; Import adds one.
+   Upload shows a QR code and a link to the theme gallery on Kilobyte's
+   website: open it on a phone or computer to submit your theme. Gallery
+   gets the themes people made.
+
+
+ PARENTAL CONTROLS
+ ─────────────────
+   kbutils dl parentalctl installs them; then Settings > Parental controls
+   (for a parent, an administrator): for each child's account, minutes per
+   day (school days and weekends), the hours the computer may be used, the
+   programs turned off, and the Internet always, never or only in computer
+   time. Children see the time left in the top line and are warned before
+   it ends; extra time can be given for today, and a report shows the last
+   7 days.
 
 
  KBUTILS (THE COMMAND LINE)

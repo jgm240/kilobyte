@@ -1,0 +1,24 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Kilobyte
+Source: https://github.com/jgm240/kilobyte
+
+Files: *
+Copyright: 2026 Kilobyte contributors
+License: GPL-3+
+
+Files: usr/share/consolefonts/Kilobyte-*
+Copyright: Debian console-setup authors; 2026 Kilobyte contributors
+License: GPL-2+
+
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the Free
+ Software Foundation, either version 3 of the License, or (at your option)
+ any later version.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 3 can be found in "/usr/share/common-licenses/GPL-3".
+
+License: GPL-2+
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in "/usr/share/common-licenses/GPL-2".

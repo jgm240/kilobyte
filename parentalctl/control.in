@@ -1,0 +1,14 @@
+Package: kilobyte-parentalctl
+Version: @VERSION@
+Architecture: all
+Maintainer: Kilobyte contributors <kilobyte@users.noreply.github.com>
+Section: admin
+Priority: optional
+Homepage: https://github.com/jgm240/kilobyte
+Depends: python3, nftables, systemd, procps, libpam-modules
+Description: Kilobyte's parental controls
+ For the children's accounts of a Kilobyte computer: time per day (school
+ days and weekends), allowed hours, programs turned off, and the Internet
+ always, never or only in computer time; extra time today and a report.
+ Set up in Kilobyte's Settings > Parental controls. Installed with
+ "kbutils dl parentalctl".

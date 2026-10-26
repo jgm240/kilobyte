@@ -291,6 +291,73 @@ my_theme_pick() {
         --menu "Your themes:" 0 50 0 "${items[@]}"
 }
 
+# The gallery: https://jgm240.github.io/kilobyte/themes.html. A theme travels
+# as a short code (py/themes.py code); approved ones are listed in
+# themes/gallery.json on the website's branch.
+GALLERY=https://jgm240.github.io/kilobyte/themes.html
+GALLERY_JSON=https://raw.githubusercontent.com/jgm240/kilobyte/gh-pages/themes/gallery.json
+
+theme_upload() {
+    local id code by url q
+    id=$(my_theme_pick "Upload to the Gallery") || return
+    by=$(kb_input "Upload to the Gallery" "Your name or nickname in the gallery (or nothing):" "") || return
+    by=$(printf '%s' "$by" | tr -cd '[:alnum:] ._-' | cut -c1-30)
+    code=$(python3 "$THEMES_PY" code "$MY_THEMES/$id") || return
+    url="$GALLERY?add=$code${by:+&by=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$by")}"
+    clear
+    printf '
+  [1mUpload "%s" to the gallery[0m
+
+' "$(theme_title "$MY_THEMES/$id")"
+    printf '  Open this on a phone or computer: it shows your theme, and "Submit to the
+'
+    printf '  gallery" sends it (with a GitHub account). Once it is approved, everyone
+'
+    printf '  can get it, also from Settings > Colour theme > Theme editor > Gallery.
+
+'
+    if command -v qrencode >/dev/null; then
+        qrencode -t UTF8 -m 2 -l L "$url" | sed 's/^/  /'
+    fi
+    printf '
+  %s
+
+' "$url"
+    printf '[7m Enter: done   W: open it here in the web browser [0m'
+    read -r -n 1 q
+    case $q in w | W) "$KB_LIB/kb-link" "$url" ;; esac
+    kb_load_theme
+}
+
+theme_gallery() {
+    local items=() n name by code sel id i=0
+    getent hosts raw.githubusercontent.com >/dev/null 2>&1 || { kb_msg "Gallery" "Not connected to the Internet." 7 40; return; }
+    kb_info "Looking at the gallery..."
+    curl -fsS --max-time 30 "$GALLERY_JSON" 2>/dev/null | python3 -c 'import json, sys, re
+for t in json.load(sys.stdin):
+    c = str(t.get("code", ""))
+    if re.fullmatch(r"[A-Za-z0-9_-]{20,200}", c):
+        print("%s	%s	%s" % (c, re.sub(r"[	
+]", " ", str(t.get("name", "")))[:40], re.sub(r"[	
+]", " ", str(t.get("by", "")))[:30]))'         > "$TMP_G" 2>/dev/null
+    while IFS=$'	' read -r code name by; do
+        i=$((i + 1))
+        items+=("$i" "$(printf '%-30s %s' "$name" "${by:+by $by}")")
+    done < "$TMP_G"
+    [ ${#items[@]} -gt 0 ] || { kb_msg "Gallery" "The gallery is empty, or could not be reached. ($GALLERY)" 8 64; return; }
+    sel=$(kb_dialog --title " The Theme Gallery " --ok-label "Get it" --cancel-label "Back" --menu         "Themes people made (see them at $GALLERY):" 0 70 0 "${items[@]}") || return
+    code=$(sed -n "${sel}p" "$TMP_G" | cut -f1)
+    mkdir -p "$MY_THEMES"
+    if id=$(python3 "$THEMES_PY" fromcode "$code" "$MY_THEMES" 2>&1); then
+        kb_yesno "Gallery" "\Zb$(theme_title "$MY_THEMES/$id")\Zn is one of your themes now.\n\nUse it?" 9 56 &&
+            { echo "$id" > "$KB_CONF/theme"; kb_load_theme; }
+    else
+        kb_msg "Gallery" "\Z1$id\Zn" 7 50
+    fi
+}
+TMP_G=$(mktemp)
+trap 'rm -f "$TMP_G"' EXIT
+
 theme_editor() { # theme_editor BASE: the theme to start a new one from
     local base=$1 sel name id f bd
     case $base in my-*) bd="$MY_THEMES/$base" ;; *) bd="$KB_SHARE/themes/$base" ;; esac
@@ -302,6 +369,8 @@ theme_editor() { # theme_editor BASE: the theme to start a new one from
             Edit   "Change one of your themes" \
             Import "Add a theme someone gave you (a .kbtheme file)" \
             Export "Save one of yours in Documents, to give away" \
+            Upload "Upload one of yours to the gallery (on Kilobyte's website)" \
+            Gallery "Get a theme from the gallery" \
             Delete "Delete one of your themes") || return
         case $sel in
             New)
@@ -327,6 +396,8 @@ theme_editor() { # theme_editor BASE: the theme to start a new one from
                 f="$KB_DOCS/${name:-$id}.kbtheme"
                 python3 "$THEMES_PY" export "$MY_THEMES/$id" "$f" &&
                     kb_msg "Export" "Saved as\n\n  \Zb${f#"$HOME"/}\Zn\n\nGive this file to someone: they choose Import in their theme editor." 11 64 ;;
+            Upload)  theme_upload ;;
+            Gallery) theme_gallery ;;
             Delete)
                 id=$(my_theme_pick "Delete a Theme") || continue
                 kb_yesno "Delete" "Delete the theme \Zb$(theme_title "$MY_THEMES/$id")\Zn?" 7 56 || continue
@@ -1434,67 +1505,82 @@ defaults_panel() {
     done
 }
 
+# The pages of Settings, as ID "title" "what it is" triples, for this kind
+# of Kilobyte.
+settings_items() {
+    items=(
+
+        Update     "Kilobyte Update"               "Get the newest Kilobyte from GitHub" \
+        Wi-Fi      "Wireless networks"             "Turn Wi-Fi on or off and connect to a network" \
+        Windows    "Windows and multitasking: $([ -e "$KB_CONF/windows-off" ] && echo OFF || echo ON)" "Several programs at once in movable windows" \
+        Hotspot    "Wi-Fi hotspot"                 "Share this computer's Internet connection over Wi-Fi" \
+        Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
+        Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
+        Appearance "Colour theme"                  "Classic blue, panels, 8-bit, 16-bit, 1984... or make your own" \
+        Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
+        Pointer    "Mouse pointer"                 "Any character(s) as the mouse pointer, in any colours" \
+        Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
+        Defaults   "Default programs"              "Text editor, web browser, file manager, email, music..." \
+        Display    "Console font and size"         "Bigger letters for high resolution screens" \
+        Access     "Accessibility"                 "Screen reader (speech), braille display, large letters" \
+        Swap       "Swap and memory"               "Compressed memory (zram), a swap file, how readily to swap" \
+        Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
+        Tiles      "Desktop tiles"                 "Weather and news beside the Program Manager" \
+        Sound      "Sound"                         "Volume, start-up and shut-down sounds" \
+        Printers   "Printers"                      "Add a printer, print a test page" \
+        Battery    "Battery"                       "Charge, time left and battery health (laptops)" \
+        Email      "Email account"                 "Set up the account the Email program uses" \
+        Keyboard   "Keyboard layout"               "Choose the layout of your keyboard" \
+        Date       "Date, time and time zone"      "Set the clock and the time zone" \
+        Software   "Add or remove programs"        "Search, install and update Debian packages" \
+        Login      "Login and startup"             "Windows, automatic login, start-up screen" \
+        Users      "Users"                         "Switch user, add and remove users" \
+        Remote     "Remote login"                  "Let other computers use this one (SSH)" \
+        Password   "Change your password"          "Change the password of $USER" \
+        Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
+        About      "About this computer"           "Processor, memory, disk and version"
+    )
+    # Parental controls, when downloaded (kbutils dl parentalctl).
+    [ -x /usr/lib/kilobyte-parentalctl/parentalctl ] &&
+        items+=(Parental "Parental controls" "Time limits, bedtimes, programs and the Internet for children")
+    if [ "$KB_VARIANT" = kindle ]; then
+        # KilobytEink on a Kindle: the Kindle looks after Wi-Fi, the clock,
+        # the screen, sound and power; only KilobytEink's own settings here.
+        keep=" Update Appearance Defaults Network Battery Email Software Tasks About " k=()
+        for ((n = 0; n < ${#items[@]}; n += 3)); do
+            [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
+        done
+        items=("${k[@]}")
+    elif [ "$KB_VARIANT" = wsl ]; then
+        # In Windows (WSL): Windows looks after the network, users, fonts,
+        # printers and power; Kilobyte Update keeps Kilobyte itself new.
+        keep=" Update Windows Appearance Wallpaper Pointer Desktop Defaults Saver Tiles Email Software Tasks About " k=()
+        for ((n = 0; n < ${#items[@]}; n += 3)); do
+            [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
+        done
+        items=("${k[@]}")
+    elif [ "$KB_VARIANT" = transition ]; then
+        # Next to a normal desktop: the computer's own settings look after
+        # the network, login, fonts, printers, users and updates (apt).
+        keep=" Windows Appearance Wallpaper Pointer Desktop Defaults Saver Tiles Sound Battery Email Software Tasks About " k=()
+        for ((n = 0; n < ${#items[@]}; n += 3)); do
+            [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
+        done
+        items=("${k[@]}")
+    fi
+}
+
 page=${1:-}
+# settings --list: the pages, ID<TAB>title<TAB>what it is (for KBFind).
+if [ "$page" = --list ]; then
+    settings_items
+    for ((n = 0; n < ${#items[@]}; n += 3)); do printf '%s\t%s\t%s\n' "${items[@]:n:3}"; done
+    exit 0
+fi
 sel=Update
 while true; do
     if [ -z "$page" ]; then
-        items=(
-
-            Update     "Kilobyte Update"               "Get the newest Kilobyte from GitHub" \
-            Wi-Fi      "Wireless networks"             "Turn Wi-Fi on or off and connect to a network" \
-            Windows    "Windows and multitasking: $([ -e "$KB_CONF/windows-off" ] && echo OFF || echo ON)" "Several programs at once in movable windows" \
-            Hotspot    "Wi-Fi hotspot"                 "Share this computer's Internet connection over Wi-Fi" \
-            Bluetooth  "Bluetooth"                     "Keyboards, mice, headphones and speakers" \
-            Network    "Network status"                "Addresses, gateway, DNS and a connection test" \
-            Appearance "Colour theme"                  "Classic blue, panels, 8-bit, 16-bit, 1984... or make your own" \
-            Wallpaper  "Desktop wallpaper"             "Patterns, your own characters, colours or a picture" \
-            Pointer    "Mouse pointer"                 "Any character(s) as the mouse pointer, in any colours" \
-            Desktop    "Desktop icons"                 "Which programs have an icon on the desktop" \
-            Defaults   "Default programs"              "Text editor, web browser, file manager, email, music..." \
-            Display    "Console font and size"         "Bigger letters for high resolution screens" \
-            Access     "Accessibility"                 "Screen reader (speech), braille display, large letters" \
-            Swap       "Swap and memory"               "Compressed memory (zram), a swap file, how readily to swap" \
-            Saver      "Screen saver"                  "Starfield, lines or flying floppies, and when" \
-            Tiles      "Desktop tiles"                 "Weather and news beside the Program Manager" \
-            Sound      "Sound"                         "Volume, start-up and shut-down sounds" \
-            Printers   "Printers"                      "Add a printer, print a test page" \
-            Battery    "Battery"                       "Charge, time left and battery health (laptops)" \
-            Email      "Email account"                 "Set up the account the Email program uses" \
-            Keyboard   "Keyboard layout"               "Choose the layout of your keyboard" \
-            Date       "Date, time and time zone"      "Set the clock and the time zone" \
-            Software   "Add or remove programs"        "Search, install and update Debian packages" \
-            Login      "Login and startup"             "Windows, automatic login, start-up screen" \
-            Users      "Users"                         "Switch user, add and remove users" \
-            Remote     "Remote login"                  "Let other computers use this one (SSH)" \
-            Password   "Change your password"          "Change the password of $USER" \
-            Tasks      "Task manager"                  "htop: F9 ends a task, F10 closes" \
-            About      "About this computer"           "Processor, memory, disk and version"
-        )
-        if [ "$KB_VARIANT" = kindle ]; then
-            # KilobytEink on a Kindle: the Kindle looks after Wi-Fi, the clock,
-            # the screen, sound and power; only KilobytEink's own settings here.
-            keep=" Update Appearance Defaults Network Battery Email Software Tasks About " k=()
-            for ((n = 0; n < ${#items[@]}; n += 3)); do
-                [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
-            done
-            items=("${k[@]}")
-        elif [ "$KB_VARIANT" = wsl ]; then
-            # In Windows (WSL): Windows looks after the network, users, fonts,
-            # printers and power; Kilobyte Update keeps Kilobyte itself new.
-            keep=" Update Windows Appearance Wallpaper Pointer Desktop Defaults Saver Tiles Email Software Tasks About " k=()
-            for ((n = 0; n < ${#items[@]}; n += 3)); do
-                [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
-            done
-            items=("${k[@]}")
-        elif [ "$KB_VARIANT" = transition ]; then
-            # Next to a normal desktop: the computer's own settings look after
-            # the network, login, fonts, printers, users and updates (apt).
-            keep=" Windows Appearance Wallpaper Pointer Desktop Defaults Saver Tiles Sound Battery Email Software Tasks About " k=()
-            for ((n = 0; n < ${#items[@]}; n += 3)); do
-                [[ $keep == *" ${items[n]} "* ]] && k+=("${items[@]:n:3}")
-            done
-            items=("${k[@]}")
-        fi
+        settings_items
         sel=$(kb_dialog --title " Settings " --item-help --default-item "$sel" \
             --ok-label "Open" --cancel-label "Close" \
             --menu "Settings for this computer." 0 64 0 "${items[@]}") || exit 0
@@ -1532,6 +1618,7 @@ while true; do
         Password)   kb_run_pause passwd ;;
         Tasks)      kb_run htop ;;
         About)      about_panel ;;
+        Parental)   [ -x /usr/lib/kilobyte-parentalctl/parentalctl-ui ] && /usr/lib/kilobyte-parentalctl/parentalctl-ui ;;
     esac
     [ -z "$page" ] || exit 0
 done

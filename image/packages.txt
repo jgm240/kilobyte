@@ -23,8 +23,8 @@ newsboat unison gnuchess nudoku frotz dict-wn kiwix-tools
 restic gtypist lrzsz
 # the Camera's QR codes (the zbar library)
 libzbar0t64
-# the ASCII Art Generator's big letters
-figlet
+# the ASCII Art Generator's big letters; QR codes to show (the theme gallery)
+figlet qrencode
 
 # --- media: video, pictures, YouTube, discs, sound ---
 mpv ffmpeg quickjs lsdvd eject alsa-utils alsa-ucm-conf

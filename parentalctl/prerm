@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ]; then
+    systemctl disable --now kilobyte-parentalctl.timer >/dev/null 2>&1 || true
+    nft delete table inet kilobyte_parental 2>/dev/null || true
+    for f in /etc/pam.d/login /etc/pam.d/sshd; do
+        [ -f "$f" ] && sed -i '/kilobyte-parentalctl/d' "$f"
+    done
+    rm -rf /run/kilobyte-parental
+fi
+exit 0

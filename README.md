@@ -73,6 +73,8 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Games › Sudoku | `nudoku` | Sudoku in three difficulties |
 | Games › Text adventures | `frotz` | interactive fiction: free classics (9:05, Lost Pig, Bronze, Spider and Web, Anchorhead...) download from the IF Archive with a keypress; own story files in `~/Documents/Stories` |
 | Settings | Kilobyte | Kilobyte Update, Wi-Fi, hotspot, Bluetooth, network, theme and theme editor, wallpaper, default programs, font, accessibility, swap, screen saver, desktop tiles, sound, printers, battery, email, keyboard, date and time, software, login and startup, password, task manager |
+| KBFind (Ctrl+Space) | Kilobyte (`py/kbfind.py`) | find anything as you type: programs, Settings pages, files by name and by the words in notes, index cards and text documents, the agenda and the help; Ctrl+Space opens it in Kilobyte Desktop, in programs started from Kilobyte (`kb-guard`) and in the Terminal |
+| Parental controls | `kilobyte-parentalctl` (only with `kbutils dl parentalctl`, from Kilobyte's APT repository) | per child's account: minutes per day, allowed hours, programs turned off, the Internet (nftables, per user); counted every minute by a timer, logins refused outside computer time (PAM), sessions ended when the time is up, a report of the last 7 days |
 | `kbutils` (Terminal) | Kilobyte | the settings from the command line (`kbutils settings chg theme mustard`, `kbutils settings wifi disp`), and extras to download or remove (`kbutils dl accessibility`, `kbutils del typing`) |
 | Install | `kilobyte-install` | installs the live system to disk (PC live medium only) |
 
@@ -99,7 +101,11 @@ black-and-white themes recolour every program. The **theme editor** makes
 themes of your own from any of them (in `~/.config/kilobyte/themes/my-NAME`):
 every part of the screen in its colours, and on the console the 16 exact
 colours too; the editor's own screens show each change at once. A theme is
-shared as a small `.kbtheme` file (Export, Import).
+shared as a small `.kbtheme` file (Export, Import), or through the **theme
+gallery** on the website: Upload shows a QR code and a link carrying the
+theme as a short code; the page shows it and submits it as a GitHub issue,
+and the label `theme-approved` publishes it (`.github/workflows/theme-gallery.yml`).
+Gallery in the theme editor installs themes from there.
 
 **Accessibility** (Settings › Accessibility): a screen reader (Speakup with
 `espeakup`; the voice's language and speed), braille displays (`brltty`),

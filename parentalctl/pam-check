@@ -1,0 +1,4 @@
+#!/bin/sh
+# Parental controls at login (pam_exec, account): a child may not log in
+# outside computer time or when today's time is used up.
+exec /usr/lib/kilobyte-parentalctl/pctl check "${PAM_USER:-}"

@@ -21,7 +21,17 @@ theme.conf, saved anywhere as NAME.kbtheme, shares a theme.
     themes.py export DIR FILE           save it to share
     themes.py import FILE THEMES-DIR    a shared one: prints its new folder name
     themes.py sample                    the colour names, for the menus
+    themes.py code DIR                  a theme as a short code (for the gallery)
+    themes.py fromcode CODE THEMES-DIR  a theme from a code: prints its folder name
+    themes.py decode CODE               a code's theme, as JSON (the gallery's checks)
+
+The code (version 1), in URL-safe base64 without padding: a version byte (1);
+flags (1: shadows, 2: exact colours follow); the file manager look (its
+place in MC_SKINS); one byte for each role in ROLES' order, text colour
+(0-15) * 8 + background (0-7); if flag 2, 16 colours of 3 bytes; then the
+name in UTF-8 (up to 40 bytes).
 """
+import base64
 import os
 import re
 import sys
@@ -200,6 +210,49 @@ def folder_name(name, root):
     return d
 
 
+def to_code(t):
+    """A theme (as read_conf gives it) as a short code."""
+    flags = (1 if t.get("shadow", "ON") == "ON" else 0) | (2 if "palette" in t else 0)
+    mc = MC_SKINS.index(t.get("mc", "default")) if t.get("mc", "default") in MC_SKINS else 0
+    data = bytearray([1, flags, mc])
+    for k in ROLE_KEYS:
+        fg, bg, on = t[k].split(",")
+        data.append((BASE.index(fg) + (8 if on == "ON" else 0)) * 8 + BASE.index(bg))
+    if flags & 2:
+        data += bytes.fromhex("".join(t["palette"].split()))
+    data += t.get("name", "Theme").encode("utf-8")[:40]
+    return base64.urlsafe_b64encode(bytes(data)).decode().rstrip("=")
+
+
+def from_code(code):
+    """A code as a theme; ValueError if it is not one."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,200}", code or ""):
+        raise ValueError("not a theme code")
+    data = base64.urlsafe_b64decode(code + "=" * (-len(code) % 4))
+    if len(data) < 3 + len(ROLE_KEYS) or data[0] != 1:
+        raise ValueError("not a theme code (or one from a newer Kilobyte)")
+    flags, mc = data[1], data[2]
+    if mc >= len(MC_SKINS):
+        raise ValueError("not a theme code")
+    t = {"shadow": "ON" if flags & 1 else "OFF", "mc": MC_SKINS[mc]}
+    i = 3
+    for k in ROLE_KEYS:
+        v = data[i]
+        fg, bg = v // 8, v % 8
+        if fg > 15:
+            raise ValueError("not a theme code")
+        t[k] = "%s,%s,%s" % (BASE[fg & 7], BASE[bg], "ON" if fg >= 8 else "OFF")
+        i += 1
+    if flags & 2:
+        if len(data) < i + 48:
+            raise ValueError("not a theme code")
+        t["palette"] = " ".join(data[i + 3 * j:i + 3 * j + 3].hex() for j in range(16))
+        i += 48
+    name = re.sub(r"[^\w .,'()&+-]", "", data[i:].decode("utf-8", "replace"))[:40].strip()
+    t["name"] = name or "Gallery theme"
+    return t
+
+
 def main(args):
     cmd = args[0] if args else ""
     if cmd == "new" and len(args) == 4:
@@ -241,6 +294,23 @@ def main(args):
         d = folder_name(t["name"], args[2])
         write(os.path.join(args[2], d), t)
         print(d)
+    elif cmd == "code" and len(args) == 2:
+        t = read_conf(os.path.join(args[1], "theme.conf")) if os.path.exists(os.path.join(args[1], "theme.conf")) else from_dir(args[1])
+        print(to_code(t))
+    elif cmd == "fromcode" and len(args) == 3:
+        try:
+            t = from_code(args[1])
+        except (ValueError, UnicodeDecodeError) as e:
+            sys.exit(str(e))
+        d = folder_name(t["name"], args[2])
+        write(os.path.join(args[2], d), t)
+        print(d)
+    elif cmd == "decode" and len(args) == 2:
+        import json
+        try:
+            print(json.dumps(from_code(args[1]), ensure_ascii=False))
+        except (ValueError, UnicodeDecodeError) as e:
+            sys.exit(str(e))
     elif cmd == "folder" and len(args) == 3:
         print(folder_name(args[1], args[2]))
     elif cmd == "roles":

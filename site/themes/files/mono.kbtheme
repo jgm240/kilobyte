@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Black and White (1984)
+mc=default
+shadow=ON
+palette=000000 000000 000000 000000 000000 000000 a0a0a0 ffffff 555555 000000 000000 000000 000000 000000 a0a0a0 ffffff
+screen=BLACK,CYAN,OFF
+dialog=BLACK,WHITE,OFF
+title=WHITE,BLACK,ON
+border=BLACK,WHITE,OFF
+border2=BLACK,WHITE,OFF
+item=BLACK,WHITE,OFF
+sel=WHITE,BLACK,ON
+tag=BLACK,WHITE,OFF
+sel_tag=WHITE,BLACK,ON
+key=BLACK,WHITE,OFF
+sel_key=WHITE,BLACK,ON
+btn_on=WHITE,BLACK,ON
+btn_off=BLACK,WHITE,OFF
+btn_key_on=WHITE,BLACK,ON
+btn_key_off=BLACK,WHITE,OFF
+input=BLACK,WHITE,OFF
+arrow=BLACK,WHITE,OFF
+status=BLACK,WHITE,OFF
+gauge=BLACK,WHITE,OFF

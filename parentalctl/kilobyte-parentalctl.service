@@ -1,0 +1,6 @@
+[Unit]
+Description=Kilobyte parental controls: count the minutes, end sessions, block the Internet
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/kilobyte-parentalctl/pctl tick

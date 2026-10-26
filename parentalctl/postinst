@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    install -d -m 755 /etc/kilobyte/parental
+    install -d -m 700 /var/lib/kilobyte-parentalctl
+    # Logins check the time (also automatic logins: login -f runs the account checks).
+    for f in /etc/pam.d/login /etc/pam.d/sshd; do
+        [ -f "$f" ] || continue
+        grep -q kilobyte-parentalctl "$f" && continue
+        # Before the first account check (Debian's: @include common-account),
+        # or at the end.
+        awk 'BEGIN { line = "account requisite pam_exec.so quiet stdout /usr/lib/kilobyte-parentalctl/pam-check  # kilobyte-parentalctl" }
+             !done && /^(account|@include[ \t]+common-account)/ { print line; done = 1 }
+             { print }
+             END { if (!done) print line }' "$f" > "$f.kb-new" && cat "$f.kb-new" > "$f" && rm -f "$f.kb-new"
+    done
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable --now kilobyte-parentalctl.timer >/dev/null 2>&1 || true
+    else
+        systemctl enable kilobyte-parentalctl.timer >/dev/null 2>&1 || true
+    fi
+    # (Kilobyte's Program Manager makes its list of programs anew.)
+    rm -f /tmp/kilobyte-apps-* /run/user/*/kilobyte-apps-* 2>/dev/null || true
+fi
+exit 0

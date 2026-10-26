@@ -1,0 +1,111 @@
+#!/bin/bash
+# Parental controls (Settings > Parental controls): for each child's account,
+# time per day, allowed hours, programs turned off and the Internet; extra
+# time today and a report. Changes need an administrator's password.
+. /usr/lib/kilobyte/lib.sh
+
+T="Parental Controls"
+PCTL=/usr/lib/kilobyte-parentalctl/pctl
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+root() { sudo "$PCTL" "$@" 2> "$TMP/err" || { kb_msg "$T" "\Z1$(tail -n 1 "$TMP/err")\Zn" 8 64; return 1; }; }
+val() { sudo "$PCTL" get "$1" 2>/dev/null | sed -n "s/^$2=//p"; }
+
+kb_sudo || exit 0
+sudo -n true 2>/dev/null || { kb_msg "$T" "Only an administrator (a parent) can change parental controls." 7 64; exit 0; }
+
+programs_panel() { # programs_panel USER: which programs are turned off
+    local u=$1 blocked items=() id cat name rest chosen
+    blocked=" $(val "$u" blocked) "
+    while IFS='|' read -r id cat name rest; do
+        case $id in Settings | Help | Shutdown | Restart | Users | Find) continue ;; esac
+        items+=("$id" "$name" "$([[ $blocked == *" $id "* ]] && echo on || echo off)")
+    done < <(/usr/bin/kilobyte --list-apps | awk -F'|' '!seen[$1]++')
+    chosen=$(kb_dialog --title " Programs Turned Off for $u " --separate-output --ok-label "Use" --cancel-label "Back" \
+        --checklist "Ticked programs are gone from $u's menus and desktop. The Terminal and the
+file manager can start any program: keep them off for younger children." 0 70 0 "${items[@]}") || return
+    root set "$u" blocked "$(echo $chosen)"
+}
+
+net_label() {
+    case $1 in
+        on)  echo "always" ;;
+        off) echo "never" ;;
+        *)   echo "only in computer time" ;;
+    esac
+}
+
+child_panel() { # child_panel USER
+    local u=$1 sel l lw f t net v
+    while true; do
+        l=$(val "$u" limit) lw=$(val "$u" limit_weekend) f=$(val "$u" from) t=$(val "$u" to) net=$(val "$u" internet)
+        sel=$(kb_dialog --title " $T: $u " --ok-label "Change" --cancel-label "Back" --menu \
+            "Time left today: $(sudo "$PCTL" left "$u") $( [ "$(sudo "$PCTL" left "$u")" = unlimited ] || echo minutes)" 0 72 0 \
+            Limit    "Time on school days: $([ "${l:-0}" = 0 ] && echo "no limit" || echo "$l minutes")" \
+            Weekend  "Time at the weekend: $([ "${lw:-0}" = 0 ] && echo "no limit" || echo "$lw minutes")" \
+            Hours    "Computer time: from $f to $t" \
+            Programs "Programs turned off: $(val "$u" blocked)" \
+            Internet "The Internet: $(net_label "$net")" \
+            Extra    "Give more time today" \
+            Report   "What $u did: the last 7 days" \
+            Off      "Turn parental controls off for $u") || return
+        case $sel in
+            Limit | Weekend)
+                v=$(kb_dialog --title " Minutes per Day " --rangebox "Minutes ($([ "$sel" = Limit ] && echo "Monday to Friday" || echo "Saturday and Sunday"); 0: no limit):" 7 64 0 720 \
+                    "$([ "$sel" = Limit ] && echo "${l:-120}" || echo "${lw:-180}")") || continue
+                root set "$u" "$([ "$sel" = Limit ] && echo limit || echo limit_weekend)" "$v" ;;
+            Hours)
+                v=$(kb_dialog --title " From " --time-format '%H:%M' --timebox "Computer time starts at:" 0 0 "${f%%:*}" "${f##*:}" 0) || continue
+                root set "$u" from "${v:0:5}" || continue
+                v=$(kb_dialog --title " Until " --time-format '%H:%M' --timebox "Computer time ends at (bedtime):" 0 0 "${t%%:*}" "${t##*:}" 0) || continue
+                root set "$u" to "${v:0:5}" ;;
+            Programs) programs_panel "$u" ;;
+            Internet)
+                v=$(kb_dialog --title " The Internet " --default-item "$net" --ok-label "Use" --cancel-label "Back" --menu \
+                    "When may $u use the Internet (web, email, chat, videos)?" 0 60 0 \
+                    hours "Only in computer time, while there is time left" on "Always" off "Never") && root set "$u" internet "$v" ;;
+            Extra)
+                v=$(kb_dialog --title " More Time Today " --ok-label "Give" --cancel-label "Back" --menu "How much more, today only?" 0 40 0 \
+                    15 "15 minutes" 30 "30 minutes" 60 "an hour" 120 "two hours") && root extra "$u" "$v" &&
+                    kb_msg "$T" "$u has $v more minutes today." 7 44 ;;
+            Report)  sudo "$PCTL" report "$u" > "$TMP/report" 2>&1; kb_textfile "$u: The Last 7 Days" "$TMP/report" ;;
+            Off)     kb_yesno "$T" "Turn parental controls off for $u?" 7 50 && root off "$u" && return ;;
+        esac
+    done
+}
+
+while true; do
+    items=()
+    while IFS=$'\t' read -r u kind name; do
+        case $kind in
+            child) items+=("$u" "$name: parental controls on") ;;
+            user)  items+=("$u" "$name: no controls (choose to set them up)") ;;
+            admin) items+=("$u" "$name: an administrator (a parent)") ;;
+        esac
+    done < <("$PCTL" users)
+    items+=(New "» Make a child's account")
+    sel=$(kb_dialog --title " $T " --ok-label "Select" --cancel-label "Close" --menu \
+"Time limits, bedtimes, programs and the Internet for children's
+accounts. Administrators (parents) have no limits." 0 70 0 "${items[@]}") || exit 0
+    if [ "$sel" = New ]; then
+        n=$(kb_input "$T" "The child's user name (small letters, no spaces):" "") || continue
+        [[ $n =~ ^[a-z][a-z0-9_-]{0,30}$ ]] || { kb_msg "$T" "Small letters and digits, starting with a letter." 7 54; continue; }
+        if sudo useradd -m -s /bin/bash -G users,audio,video,plugdev "$n" 2>"$TMP/err"; then
+            kb_msg "$T" "Now a password for $n (they type it to log in)." 7 54
+            clear; sudo passwd "$n"
+            root set "$n" new 1 && child_panel "$n"
+        else
+            kb_msg "$T" "\Z1$(tail -n 1 "$TMP/err")\Zn" 7 60
+        fi
+        continue
+    fi
+    if "$PCTL" users | awk -F'\t' -v u="$sel" '$1 == u && $2 == "admin"' | grep -q .; then
+        kb_msg "$T" "$sel is an administrator: parental controls are for children's accounts. (Settings > Users makes accounts.)" 8 64
+        continue
+    fi
+    "$PCTL" users | awk -F'\t' -v u="$sel" '$1 == u && $2 == "child"' | grep -q . ||
+        { kb_yesno "$T" "Set up parental controls for $sel?\n\n(Starting with 2 hours a day, 3 at the weekend, from 7:00 to 20:00, no Terminal or Store.)" 10 66 || continue
+          root set "$sel" new 1 || continue; }
+    child_panel "$sel"
+done

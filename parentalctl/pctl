@@ -1,0 +1,374 @@
+#!/usr/bin/python3
+"""Kilobyte's parental controls: time per day, allowed hours, programs and
+the Internet for the children's accounts of a computer.
+
+    pctl tick                  (root, every minute: kilobyte-parentalctl.timer)
+                               count the minutes, warn, end sessions, block
+                               and unblock the Internet
+    pctl check USER            (PAM, at login) may USER log in now?
+    pctl users                 the users, and who has controls
+    pctl get USER              a child's settings, KEY=VALUE
+    pctl set USER KEY VALUE    (root) change one; KEY: limit, limit_weekend,
+                               from, to, blocked, internet
+    pctl extra USER MINUTES    (root) more time today
+    pctl off USER              (root) no controls for USER any more
+    pctl report USER           the last 7 days: minutes and programs
+    pctl left USER             minutes left today ("unlimited", or a number)
+
+Settings: /etc/kilobyte/parental/USER.json (readable: Kilobyte hides the
+programs turned off). Usage: /var/lib/kilobyte-parentalctl/USER.json. Now:
+/run/kilobyte-parental/USER (minutes left, for the child's top line).
+"""
+import datetime
+import json
+import os
+import pwd
+import grp
+import re
+import subprocess
+import sys
+import time
+
+CONF = "/etc/kilobyte/parental"
+STATE = "/var/lib/kilobyte-parentalctl"
+RUN = "/run/kilobyte-parental"
+NFT_TABLE = "kilobyte_parental"
+DEFAULT = {"limit": 120, "limit_weekend": 180, "from": "07:00", "to": "20:00",
+           "blocked": ["Terminal", "Store"], "internet": "hours"}
+# Programs worth reporting, by the name of their process.
+PROGRAMS = {"mcedit": "Editor", "sc-im": "Spreadsheet", "elinks": "Web", "alpine": "Email", "mc": "Files",
+            "weechat": "Chat", "mpv": "Videos", "calcurse": "Agenda", "nudoku": "Sudoku", "frotz": "Text adventures",
+            "gnuchess": "Chess", "gtypist": "Typing tutor", "newsboat": "News feeds", "dosbox": "DOS programs",
+            "wine": "Windows programs", "bash": "Terminal", "moon-buggy": "Moon Buggy", "worm": "Snake",
+            "robots": "Robots", "hangman": "Hangman", "adventure": "Adventure", "yt-dlp": "Online videos"}
+PY_PROGRAMS = {"paint.py": "Paint", "mines.py": "Mines", "solitaire.py": "Solitaire", "reversi.py": "Reversi",
+               "chess.py": "Chess", "music.py": "Music", "messenger.py": "Messenger", "kbfind.py": "KBFind"}
+
+
+def die(msg, code=1):
+    print("pctl: " + msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def user_ok(name):
+    if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", name or ""):
+        die("not a user name: %s" % name)
+    try:
+        return pwd.getpwnam(name)
+    except KeyError:
+        die("no such user: %s" % name)
+
+
+def is_admin(name):
+    try:
+        return name in grp.getgrnam("sudo").gr_mem
+    except KeyError:
+        return False
+
+
+def conf(name):
+    try:
+        with open(os.path.join(CONF, name + ".json")) as f:
+            c = dict(DEFAULT)
+            c.update(json.load(f))
+            return c
+    except (OSError, ValueError):
+        return None
+
+
+def save_json(path, data, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".new", "w") as f:
+        json.dump(data, f, indent=1)
+    os.chmod(path + ".new", mode)
+    os.replace(path + ".new", path)
+
+
+def usage(name):
+    try:
+        with open(os.path.join(STATE, name + ".json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def today():
+    return datetime.date.today().isoformat()
+
+
+def minutes(hhmm):
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def in_hours(c, now=None):
+    now = now or datetime.datetime.now()
+    t = now.hour * 60 + now.minute
+    a, b = minutes(c["from"]), minutes(c["to"])
+    return a <= t < b if a <= b else (t >= a or t < b)        # (hours over midnight too)
+
+
+def limit_today(c):
+    weekend = datetime.date.today().weekday() >= 5
+    lim = c["limit_weekend"] if weekend else c["limit"]
+    return None if lim in (None, "", 0, "0") else int(lim)
+
+
+def left(name, c=None, u=None):
+    """Minutes left today, or None (no limit)."""
+    c = c or conf(name)
+    if not c:
+        return None
+    lim = limit_today(c)
+    if lim is None:
+        return None
+    day = (u if u is not None else usage(name)).get(today(), {})
+    return max(0, lim + int(day.get("extra", 0)) - int(day.get("minutes", 0)))
+
+
+def active(name):
+    """Is the user at the computer now: an active (shown) session?"""
+    try:
+        out = subprocess.run(["loginctl", "list-sessions", "--no-legend"], capture_output=True, text=True, timeout=10).stdout
+        for line in out.splitlines():
+            f = line.split()
+            if len(f) >= 3 and f[2] == name:
+                st = subprocess.run(["loginctl", "show-session", f[0], "-p", "State", "--value"],
+                                    capture_output=True, text=True, timeout=10).stdout.strip()
+                if st == "active":
+                    return True
+        return False
+    except (OSError, subprocess.SubprocessError):
+        # (no logind: any process of the user on a terminal)
+        out = subprocess.run(["ps", "-o", "tty=", "-u", name], capture_output=True, text=True).stdout
+        return any(t.strip() not in ("", "?") for t in out.splitlines())
+
+
+def programs_of(name):
+    found = set()
+    out = subprocess.run(["ps", "-o", "comm=,args=", "-u", name], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        parts = line.split(None, 1)
+        if not parts:
+            continue
+        comm, args = parts[0], parts[1] if len(parts) > 1 else ""
+        if comm in PROGRAMS:
+            found.add(PROGRAMS[comm])
+        for py, label in PY_PROGRAMS.items():
+            if py in args:
+                found.add(label)
+    if "Terminal" in found and "Files" in found:
+        found.discard("Terminal")                   # (mc's own shell)
+    return found
+
+
+def end_session(name):
+    subprocess.run(["loginctl", "terminate-user", name], capture_output=True)
+    subprocess.run(["pkill", "-KILL", "-u", name], capture_output=True)
+
+
+def write_now(name, text):
+    os.makedirs(RUN, exist_ok=True)
+    os.chmod(RUN, 0o755)
+    with open(os.path.join(RUN, name + ".new"), "w") as f:
+        f.write(text + "\n")
+    os.chmod(os.path.join(RUN, name + ".new"), 0o644)
+    os.replace(os.path.join(RUN, name + ".new"), os.path.join(RUN, name))
+
+
+def blocked_uids():
+    """Users whose Internet is off now."""
+    uids = []
+    for f in sorted(os.listdir(CONF)) if os.path.isdir(CONF) else []:
+        if not f.endswith(".json"):
+            continue
+        name = f[:-5]
+        c = conf(name)
+        try:
+            uid = pwd.getpwnam(name).pw_uid
+        except KeyError:
+            continue
+        net = c.get("internet", "hours")
+        if net == "off" or (net == "hours" and not in_hours(c)) or (net != "on" and left(name, c) == 0):
+            uids.append(uid)
+    return uids
+
+
+def apply_net():
+    """The nftables table that keeps those users off the Internet (loopback stays)."""
+    uids = blocked_uids()
+    marker = os.path.join(RUN, ".net")
+    want = ",".join(map(str, uids))
+    try:
+        with open(marker) as f:
+            if f.read() == want:
+                return
+    except OSError:
+        pass
+    rules = "table inet %s\ndelete table inet %s\n" % (NFT_TABLE, NFT_TABLE)
+    if uids:
+        rules += ("table inet %s {\n  chain out {\n    type filter hook output priority 0; policy accept;\n"
+                  "    oifname \"lo\" accept\n    meta skuid { %s } counter reject\n  }\n}\n" % (NFT_TABLE, ", ".join(map(str, uids))))
+    r = subprocess.run(["nft", "-f", "-"], input=rules, text=True, capture_output=True)
+    if r.returncode == 0:
+        os.makedirs(RUN, exist_ok=True)
+        with open(marker, "w") as f:
+            f.write(want)
+
+
+def tick():
+    if os.geteuid() != 0:
+        die("tick is for root")
+    names = [f[:-5] for f in os.listdir(CONF) if f.endswith(".json")] if os.path.isdir(CONF) else []
+    for name in names:
+        c = conf(name)
+        try:
+            pwd.getpwnam(name)
+        except KeyError:
+            continue
+        u = usage(name)
+        day = u.setdefault(today(), {"minutes": 0, "programs": {}, "extra": 0})
+        on = active(name)
+        if on:
+            day["minutes"] = int(day.get("minutes", 0)) + 1
+            for p in programs_of(name):
+                day.setdefault("programs", {})[p] = day["programs"].get(p, 0) + 1
+        for d in sorted(u)[:-31]:                       # (a month is kept)
+            del u[d]
+        save_json(os.path.join(STATE, name + ".json"), u, 0o600)
+        lft = left(name, c, u)
+        out_of_hours = not in_hours(c)
+        state = "unlimited" if lft is None else str(lft)
+        if out_of_hours:
+            state = "0 hours"
+        write_now(name, state)
+        if on and ((lft is not None and lft <= 0) or out_of_hours):
+            # One minute's warning (the child sees "Time is up"), then the end.
+            grace = day.get("grace")
+            if grace is None:
+                day["grace"] = time.time()
+                save_json(os.path.join(STATE, name + ".json"), u, 0o600)
+            elif time.time() - grace >= 55:
+                end_session(name)
+                day.pop("grace", None)
+                save_json(os.path.join(STATE, name + ".json"), u, 0o600)
+        elif day.get("grace") is not None:
+            day.pop("grace", None)
+            save_json(os.path.join(STATE, name + ".json"), u, 0o600)
+    apply_net()
+
+
+def check(name):
+    """PAM (pam_exec, account): exit 1 with a reason to refuse the login."""
+    c = conf(name)
+    if not c:
+        return 0
+    if not in_hours(c):
+        print("It is not computer time now: from %s to %s." % (c["from"], c["to"]))
+        return 1
+    if left(name, c) == 0:
+        print("The computer time for today is used up. Ask a parent for more.")
+        return 1
+    return 0
+
+
+def report(name):
+    u = usage(name)
+    c = conf(name)
+    lines = []
+    for d in sorted(u)[-7:][::-1]:
+        day = u[d]
+        progs = sorted(day.get("programs", {}).items(), key=lambda kv: -kv[1])[:6]
+        lines.append("%s  %3d min%s   %s" % (d, day.get("minutes", 0),
+                                           (" (+%d extra)" % day["extra"]) if day.get("extra") else "",
+                                           ", ".join("%s %d" % (p, m) for p, m in progs)))
+    head = "Time per day: %s on school days, %s at the weekend; from %s to %s." % (
+        (str(c["limit"]) + " min") if c and c.get("limit") else "no limit",
+        (str(c["limit_weekend"]) + " min") if c and c.get("limit_weekend") else "no limit",
+        c["from"] if c else "-", c["to"] if c else "-") if c else "No parental controls."
+    return head + "\n\n" + ("\n".join(lines) if lines else "Not used yet.")
+
+
+def main(a):
+    cmd = a[0] if a else ""
+    if cmd == "tick":
+        tick()
+    elif cmd == "check" and len(a) == 2:
+        sys.exit(check(os.environ.get("PAM_USER") or a[1]))
+    elif cmd == "check" and len(a) == 1 and os.environ.get("PAM_USER"):
+        sys.exit(check(os.environ["PAM_USER"]))
+    elif cmd == "users":
+        for p in pwd.getpwall():
+            if 1000 <= p.pw_uid < 60000:
+                kind = "admin" if is_admin(p.pw_name) else ("child" if conf(p.pw_name) else "user")
+                print("%s\t%s\t%s" % (p.pw_name, kind, (p.pw_gecos.split(",")[0] or p.pw_name)))
+    elif cmd == "get" and len(a) == 2:
+        user_ok(a[1])
+        c = conf(a[1])
+        if c:
+            for k in ("limit", "limit_weekend", "from", "to", "internet"):
+                print("%s=%s" % (k, c[k]))
+            print("blocked=%s" % " ".join(c["blocked"]))
+    elif cmd == "set" and len(a) == 4:
+        if os.geteuid() != 0:
+            die("only an administrator may change parental controls")
+        p = user_ok(a[1])
+        if is_admin(a[1]):
+            die("%s is an administrator: parental controls are for children's accounts" % a[1])
+        c = conf(a[1]) or dict(DEFAULT)
+        k, v = a[2], a[3]
+        if k in ("limit", "limit_weekend"):
+            if not re.fullmatch(r"\d{1,4}", v):
+                die("minutes, or 0 for no limit")
+            c[k] = int(v)
+        elif k in ("from", "to"):
+            if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v):
+                die("a time such as 07:30")
+            c[k] = v
+        elif k == "internet":
+            if v not in ("on", "off", "hours"):
+                die("internet: on, off or hours")
+            c[k] = v
+        elif k == "blocked":
+            c[k] = [x for x in v.split() if re.fullmatch(r"[A-Za-z][A-Za-z0-9:_-]*", x)]
+        elif k == "new":
+            pass
+        else:
+            die("no such setting: " + k)
+        save_json(os.path.join(CONF, a[1] + ".json"), c)
+        tick() if os.geteuid() == 0 else None
+    elif cmd == "extra" and len(a) == 3:
+        if os.geteuid() != 0:
+            die("only an administrator may give more time")
+        user_ok(a[1])
+        if not re.fullmatch(r"-?\d{1,4}", a[2]):
+            die("minutes")
+        u = usage(a[1])
+        day = u.setdefault(today(), {"minutes": 0, "programs": {}, "extra": 0})
+        day["extra"] = int(day.get("extra", 0)) + int(a[2])
+        save_json(os.path.join(STATE, a[1] + ".json"), u, 0o600)
+        tick()
+    elif cmd == "off" and len(a) == 2:
+        if os.geteuid() != 0:
+            die("only an administrator may do that")
+        user_ok(a[1])
+        for path in (os.path.join(CONF, a[1] + ".json"), os.path.join(RUN, a[1])):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        apply_net()
+    elif cmd == "report" and len(a) == 2:
+        user_ok(a[1])
+        if os.geteuid() != 0 and pwd.getpwuid(os.geteuid()).pw_name != a[1]:
+            die("only an administrator, or that user, may see the report")
+        print(report(a[1]))
+    elif cmd == "left" and len(a) == 2:
+        lft = left(a[1])
+        print("unlimited" if lft is None else lft)
+    else:
+        die(__doc__.strip(), 2)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -1,0 +1,41 @@
+# The theme gallery (https://jgm240.github.io/kilobyte/themes.html): a theme
+# submitted as an issue from the gallery page is published when a maintainer
+# adds the label "theme-approved". The issue is only read as data (see
+# .github/scripts/add-theme.py); nothing from it reaches a shell command.
+name: Theme gallery
+on:
+  issues:
+    types: [labeled]
+permissions:
+  contents: write
+  issues: write
+jobs:
+  add:
+    if: github.event.label.name == 'theme-approved'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Add the theme
+        run: |
+          mkdir -p site/themes
+          python3 .github/scripts/add-theme.py "$GITHUB_EVENT_PATH" site/themes out
+      - name: Publish it
+        run: |
+          [ "$(cat out/ok)" = yes ] || exit 0
+          cd site
+          git config user.name "Kilobyte theme gallery"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add themes
+          git commit -q -F ../out/message.txt
+          git push -q origin gh-pages
+      - name: Answer the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file out/comment.txt
+          [ "$(cat out/ok)" = yes ] && gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" || true

@@ -1,0 +1,34 @@
+#!/bin/bash
+# KBFind: find anything (programs, settings, files and what is in them, the
+# agenda, the help) and open it. Ctrl+Space opens it: in Kilobyte Desktop,
+# in programs started from Kilobyte (kb-guard) and in the Terminal.
+#   kbfind [WORDS]
+. /usr/lib/kilobyte/lib.sh
+
+out=$(mktemp)
+trap 'rm -f "$out"' EXIT
+kb_title "KBFind"
+python3 "$KB_LIB/py/kbfind.py" "$out" "$@"
+kb_load_theme
+IFS=$'\t' read -r what a b c < "$out" 2>/dev/null || exit 0
+
+in_desk() { [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; }
+
+case $what in
+    app)      # a program: in Kilobyte Desktop a window of its own
+        if in_desk; then
+            python3 "$KB_LIB/py/deskrun.py" window "$b" "${c:-M}" /usr/bin/kilobyte --app "$a" && exit 0
+        fi
+        exec /usr/bin/kilobyte --app "$a" ;;
+    settings)
+        if in_desk; then
+            python3 "$KB_LIB/py/deskrun.py" window "Settings" M /usr/bin/kilobyte --app Settings "$a" && exit 0
+        fi
+        exec /usr/bin/kilobyte --app Settings "$a" ;;
+    open)     exec "$KB_LIB/kb-open" "$a" ;;
+    agenda)   kb_guarded q calcurse ;;
+    help)     # the help from that line on
+        tail -n +"$a" "$KB_SHARE/help.txt" > "$out.help"
+        kb_textfile "Help" "$out.help"
+        rm -f "$out.help" ;;
+esac

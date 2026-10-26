@@ -32,6 +32,7 @@ else
 fi
 mkdir -p "$W/apt"
 cp out/kilobyte-transition_*_all.deb "$W/apt/"
+cp out/kilobyte-parentalctl_*_all.deb "$W/apt/" 2>/dev/null || true
 : > "$W/.nojekyll"
 
 docker run --rm -v "$PWD/$W/apt:/repo" -v "$KEY:/gpg" -e URL="$URL" debian:trixie bash -c '
