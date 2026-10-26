@@ -1,11 +1,11 @@
 #!/bin/bash
-# Time Machine: web sites as they were, years ago, in the web browser: from
+# Internet Time Machine: web sites as they were, years ago, in the web browser: from
 # the Internet Archive's Wayback Machine (web.archive.org), which has kept
 # copies of the web since 1996.
 #   timemachine [ADDRESS [YEAR]]
 . /usr/lib/kilobyte/lib.sh
 
-T="Time Machine"
+T="Internet Time Machine"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -46,7 +46,7 @@ years() {
     local q
     q=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1")
     kb_info "Asking the archive which years it has..."
-    curl -fsS --max-time 40 -A "Kilobyte Time Machine" \
+    curl -fsS --max-time 40 -A "Kilobyte Internet Time Machine" \
         "https://web.archive.org/cdx/search/cdx?url=$q&output=json&fl=timestamp&collapse=timestamp:4&filter=statuscode:200" \
         2>/dev/null | python3 -c 'import json, sys
 try:

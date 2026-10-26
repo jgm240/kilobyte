@@ -300,9 +300,10 @@
 
  MORE PROGRAMS
  ─────────────
-   Internet       Time Machine: web sites as they were, years ago (the
-                  Internet Archive's Wayback Machine): famous old sites, any
-                  site in any year, or a surprise; links lead on in that year.
+   Internet       Internet Time Machine: web sites as they were, years ago
+                  (the Internet Archive's Wayback Machine): famous old sites,
+                  any site in any year, or a surprise; links lead on in that
+                  year.
                   Chat (IRC rooms), BBS Dialer (bulletin boards with modem
                   sounds; files they send arrive in ~/Downloads), Online videos.
    Media          Camera: Look shows the camera's picture in the Video

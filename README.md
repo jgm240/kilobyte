@@ -48,7 +48,7 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Media › Video Player | `mpv` | video and music as coloured character blocks, or the real picture |
 | Media › Pictures | `mpv` | photos in coloured blocks or the real picture; opens them in Paint |
 | Media › Disc Player | `mpv`, `lsdvd` | DVD titles, audio CDs, data discs |
-| Internet › Time Machine | the Internet Archive's Wayback Machine, ELinks | web sites as they were, years ago: famous old sites (1992 to 2001), any site in any year the archive has, or a surprise; the copies come without the archive's toolbar and their links lead on in the same years |
+| Internet › Internet Time Machine | the Internet Archive's Wayback Machine, ELinks | web sites as they were, years ago: famous old sites (1992 to 2001), any site in any year the archive has, or a surprise; the copies come without the archive's toolbar and their links lead on in the same years |
 | Internet › Network drives | `cifs-utils`, `sshfs` | shared folders of Windows PCs, NAS boxes (SMB) and SSH servers (SFTP) as folders in `~/Network` |
 | Internet › Remote Kilobyte | `ssh` | another Kilobyte (its Program Manager and windows) inside a window |
 | Internet › Company desktops | Citrix's own client | installs the package you download from Citrix and runs it on the graphics screen; see below |

@@ -246,7 +246,7 @@ BBS|internet|BBS Dialer|Call bulletin board systems that still run today|BB|M
 BBSHost|internet|Host a BBS|Make this computer a BBS that friends dial into: boards, files, games, chat|BH|M
 Messenger|internet|Messenger|Talk to Kilobyte computers on this network, and send them files|☺»|M
 YouTube|internet|Online videos|Search YouTube and other video sites; watch, read (as text) or save|Vd|M
-TimeMachine|internet|Time Machine|Web sites as they were, years ago (the Internet Archive's Wayback Machine)|◄►|L
+TimeMachine|internet|Internet Time Machine|Web sites as they were, years ago (the Internet Archive's Wayback Machine)|◄►|L
 Network|internet|Network drives|Shared folders of Windows PCs and servers (SMB, SFTP)|⌂⌂|M
 Remote|internet|Remote Kilobyte|Use another Kilobyte computer in a window (SSH)|≡→|L
 Citrix|internet|Company desktops|Remote desktops and apps of a company or school (with Citrix's own program)|Cx|M
