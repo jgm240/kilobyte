@@ -65,6 +65,8 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Accessories › Typing tutor | `gtypist` | learn to type with ten fingers: courses in English and 20 other languages |
 | Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
 | Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |
+| More programs | `apt`, `.desktop` files | what the Store installed, and programs installed with APT that have a menu entry |
+| More programs › Open program in X | Xvfb, matchbox, ffmpeg, xdotool | graphical programs (Qt, GTK, any X program) in a Kilobyte window: real pixels or coloured blocks |
 | Accessories › Lock the screen | Kilobyte | hides everything until the user's password is typed |
 | Accessories › Windows programs | Wine, box64, box86 | runs `.exe` and `.msi` files; see below |
 | Accessories | Kilobyte | Paint, calculator, agenda (calcurse), block clock, cardfile, calendar, battery meter, character map, print, USB sticks, screen saver |
@@ -154,11 +156,27 @@ Programs talk to Kilobyte Desktop over a private socket (`KB_DESK_SOCK`,
 clipboard, or borrow the whole screen.
 
 **Video in Kilobyte Desktop**: a window is a pseudo terminal, so it cannot
-switch the console to a pixel font or draw on the screen itself. For the
-block modes and the real picture `kb-play` therefore borrows the whole
-screen: the windows step aside, the video plays exactly as without windows,
-and they return when it ends. The Text picture mode and sound play inside
-the window.
+switch the console to a pixel font. For the block modes `kb-play` therefore
+borrows the whole screen: the windows step aside, the video plays exactly as
+without windows, and they return when it ends. The Text picture mode and
+sound play inside the window. So does the real picture, on a computer's own
+screen: `py/fbwin.py` plays it with mpv's library (libmpv's software
+renderer) and writes the pixels into the framebuffer (`/dev/fb0`) exactly
+where the window is. It asks Kilobyte Desktop ten times a second where its
+window is (`KB_WIN`, the `where` request), draws nothing while another
+window, a menu or a note is over it, and leaves the mouse pointer's cells
+alone. Elsewhere (SSH, a terminal emulator) the real picture still borrows
+the whole screen.
+
+**Graphical programs in a window** (`kb-xwin`, More programs › Open program
+in X, and Wine with windows): the program runs in Xvfb, an X server that
+draws into memory, with matchbox as its window manager. `py/xwin.py` takes
+the picture with ffmpeg (x11grab) and shows it the same way as the real
+picture of a video, or as coloured half blocks where that cannot be done; the
+mouse and the keys go on to X with xdotool. F9 has its menu (real pixels or
+blocks, zoom, keys such as Alt+F4, close). Programs installed with APT that
+have a menu entry (`/usr/share/applications`) are listed under More programs
+(`py/aptapps.py`); graphical ones open this way.
 
 **Files**: the file manager (mc) opens files with Kilobyte's programs
 (`~/.config/mc/mc.ext.ini`, set up on the first start): documents in the
@@ -256,9 +274,11 @@ newest stable build from WineHQ, in `/opt/wine`) runs through **box64**
 (64-bit image, from Debian: 64-bit Windows programs) or **box86** (32-bit
 image, built from source by the image build: 32-bit Windows programs), which
 translate x86 code to ARM while it runs. Expect it to be slow on a Pi, and
-not every program works. Graphical programs open full screen in a Windows
-desktop in an X server of their own (`kb-x`, started only for them), and
-you are back in Kilobyte when they close; Ctrl+Alt+Backspace leaves at once.
+not every program works. With windows, graphical programs open in a window
+of their own, in a Windows desktop (`kb-xwin`, see above). Without windows
+they open full screen in a Windows desktop in an X server of their own
+(`kb-x`, started only for them), and you are back in Kilobyte when they
+close; Ctrl+Alt+Backspace leaves at once.
 Text-mode programs can run right in the terminal.
 
 **Start-up**: the Kilobyte logo is on screen from the boot menu on. GRUB shows

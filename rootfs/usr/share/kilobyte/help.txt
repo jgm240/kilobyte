@@ -124,12 +124,15 @@
    Weather and news sit on the desktop. Settings > Wallpaper changes the
    desktop: a pattern, your own characters, colours, or a picture.
 
-   Videos in the block modes and as the real picture take the whole screen
-   while they play; the Text picture mode plays inside the window.
+   Videos in the block modes take the whole screen while they play; the
+   Text picture mode plays inside the window, and so does the real picture
+   on a computer's own screen (it is drawn where the window is, and waits
+   while anything is over the window).
    Settings > Login and startup switches windows off (one program at a time,
    fullscreen). Settings > Mouse pointer makes the pointer any character(s),
    in any colours and sizes: 1 is the characters themselves, 2 to 5 an arrow
-   that many rows tall (kbutils settings chg pointer "<-", pointer-size 3).
+   that many rows tall (kbutils settings chg pointer "<-", pointer-size 3);
+   near the edges of the screen the arrow turns round.
 
 
  FILES
@@ -170,7 +173,21 @@
  ─────────
    Accessories > Store installs more text-mode programs with a keypress:
    editors, system monitors, web browsers, chat, games, DOSBox. They show up
-   under "More programs".
+   under "More programs", and so do programs installed with APT (sudo apt
+   install, or Settings > Add or remove programs) that have a menu entry.
+   Graphical ones open in X (see below).
+
+
+ GRAPHICAL PROGRAMS (OPEN PROGRAM IN X)
+ ──────────────────────────────────────
+   More programs > Open program in X runs graphical programs - Qt, GTK or
+   any other X program, such as GIMP or VLC - in a Kilobyte window. They
+   run in an X server that draws into memory; on a computer's own screen
+   the window shows their real pixels, elsewhere (SSH) coloured blocks. The
+   mouse and the keys go to the program. F9 has the menu: real pixels or
+   blocks, zoom (the whole X screen, or one to one, moving along when the
+   mouse is at an edge), keys that cannot be typed (Alt+F4, Ctrl+Alt+Del)
+   and closing. It needs a few helpers: kbutils dl xwindows.
 
 
  EVERY DAY
@@ -355,8 +372,10 @@
  WINDOWS PROGRAMS
  ────────────────
    Accessories > Windows programs runs .exe and .msi files with Wine.
-   Graphical programs open full screen in a Windows desktop and you come
-   back here when they close; Ctrl+Alt+Backspace leaves at once. Installed
+   With windows, graphical programs open in a window of their own, in a
+   Windows desktop (as with Open program in X; F9 has its menu). Without
+   windows they open full screen and you come back here when they close;
+   Ctrl+Alt+Backspace leaves at once. Installed
    programs live in ~/.wine (drive C:). On a Raspberry Pi, Wine for PCs runs
    through box64 or box86, which translate PC code for the ARM processor:
    it works, slowly, and not with every program.

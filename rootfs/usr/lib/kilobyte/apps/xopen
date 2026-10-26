@@ -1,0 +1,84 @@
+#!/bin/bash
+# Open program in X: graphical programs (Qt, GTK and other X programs) in a
+# Kilobyte window: as real pixels on a computer's own screen, or else as
+# coloured blocks; the mouse and the keys go to the program (see kb-xwin).
+#   xopen                    choose one (or type a command)
+#   xopen --app ID           a program installed with APT (More programs), by
+#                            its menu entry: terminal programs run as they are
+#   xopen PROGRAM [ARGS...]  that program
+. /usr/lib/kilobyte/lib.sh
+
+T="Open Program in X"
+
+ready() { # the X server in memory and its helpers, or offer to download them
+    command -v Xvfb >/dev/null && command -v xdotool >/dev/null && command -v ffmpeg >/dev/null && return 0
+    kb_yesno "$T" "Showing graphical programs needs a few helpers (an X server that draws into memory, about 10 MB).\n\nDownload them now? (Needs the Internet; kbutils dl xwindows does the same.)" 11 66 || return 1
+    clear
+    /usr/bin/kbutils dl xwindows
+    echo
+    read -r -n 1 -s -p "Press any key." || true
+    command -v Xvfb >/dev/null && command -v xdotool >/dev/null
+}
+
+open_x() { # open_x TITLE PROGRAM [ARGS...]
+    local title=$1
+    shift
+    # In Windows (WSL), Windows shows Linux's graphical programs itself.
+    if [ "$KB_VARIANT" = wsl ] && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        setsid "$@" > /dev/null 2>&1 < /dev/null &
+        kb_msg "$T" "$title opens in a window of Windows." 7 56
+        return 0
+    fi
+    ready || return 1
+    kb_title "$title"
+    clear
+    "$KB_LIB/kb-xwin" -t "$title" "$@"
+    local rc=$?
+    clear
+    kb_load_theme
+    [ $rc -eq 0 ] || kb_msg "$T" "$title could not be shown.\n\nDetails are in ~/.cache/kilobyte-xwin.log." 9 60
+    return $rc
+}
+
+if [ "${1:-}" = --app ]; then
+    mapfile -t how < <(python3 "$KB_LIB/py/aptapps.py" exec "${2:-}")
+    [ ${#how[@]} -ge 3 ] || { kb_msg "$T" "That program is not installed any more." 7 50; exit 1; }
+    if [ "${how[0]}" = terminal ]; then
+        kb_title "${how[1]}"
+        clear
+        tput cnorm 2>/dev/null
+        "${how[@]:2}"
+        kb_load_theme
+    else
+        open_x "${how[1]}" "${how[@]:2}"
+    fi
+    exit 0
+fi
+if [ $# -gt 0 ]; then
+    open_x "$(basename "$1")" "$@"
+    exit
+fi
+
+sel=""
+while true; do
+    items=()
+    while IFS=$'\t' read -r id name what; do
+        items+=("$id" "$name" "${what:-A graphical program}")
+    done < <(python3 "$KB_LIB/py/aptapps.py" graphical)
+    items+=(Command "» Type a command" "Any graphical program: its command, such as gimp or vlc")
+    sel=$(kb_dialog --title " $T " --item-help --no-tags --default-item "$sel" --ok-label "Open" --cancel-label "Close" --menu \
+"Graphical programs (Qt, GTK...) in a window, as real pixels on this
+computer's screen or as coloured blocks. F9 in it has the menu.
+More of them: sudo apt install, or Settings > Add or remove programs." 0 72 0 "${items[@]}") || exit 0
+    if [ "$sel" = Command ]; then
+        cmd=$(kb_input "$T" "The command (with its arguments):" "$(cat "$KB_CONF/xopen-last" 2>/dev/null)") || continue
+        [ -n "${cmd// /}" ] || continue
+        echo "$cmd" > "$KB_CONF/xopen-last"
+        read -r -a words <<< "$cmd"
+        command -v "${words[0]}" >/dev/null || { kb_msg "$T" "There is no program called \"${words[0]}\"." 7 56; continue; }
+        open_x "${words[0]}" "${words[@]}"
+    else
+        mapfile -t how < <(python3 "$KB_LIB/py/aptapps.py" exec "$sel")
+        [ ${#how[@]} -ge 3 ] && open_x "${how[1]}" "${how[@]:2}"
+    fi
+done

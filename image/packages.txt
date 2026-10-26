@@ -39,6 +39,11 @@ fdisk e2fsprogs dosfstools exfatprogs
 # X server of its own only while a graphical Windows program runs ---
 xserver-xorg-core xserver-xorg-legacy xserver-xorg-input-libinput xserver-xorg-video-fbdev xinit
 
+# --- graphical programs in a window (Open program in X, Wine with windows): an
+# X server in memory, its window manager and a hand for its mouse and keys;
+# mpv's library for the real picture of videos in a window ---
+xvfb xdotool matchbox-window-manager libmpv2
+
 # --- network drives (Windows shares, SFTP), remote Kilobyte (SSH; the server is
 # off until switched on in Settings) ---
 cifs-utils sshfs openssh-server

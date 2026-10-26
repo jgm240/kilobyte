@@ -1,0 +1,74 @@
+#!/bin/bash
+# kb-xwin [-s WIDTHxHEIGHT] [-t TITLE] PROGRAM [ARGUMENTS...]
+# kb-xwin --size
+#
+# A graphical (X) program - Qt, GTK, Wine and the others - in this window (or
+# terminal): it runs in an X server of its own that draws into memory (Xvfb),
+# with a small window manager that gives it the whole X screen (matchbox).
+# py/xwin.py shows the picture, as real pixels where the screen allows
+# (py/fbwin.py) or as coloured blocks, and passes the mouse and keys on.
+#
+# The X screen is as big as a maximised window (real pixels, one to one), or
+# else 1024x768; --size prints the size it would use.
+. /usr/lib/kilobyte/lib.sh
+
+LOG=${XDG_CACHE_HOME:-$HOME/.cache}/kilobyte-xwin.log
+size="" title=""
+
+default_size() {
+    python3 "$KB_LIB/py/fbwin.py" xsize 2>/dev/null || echo 1024x768
+}
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        --size) default_size; exit 0 ;;
+        -s) size=$2; shift 2 ;;
+        -t) title=$2; shift 2 ;;
+        --) shift; break ;;
+        *)  break ;;
+    esac
+done
+[ $# -gt 0 ] || { echo "usage: kb-xwin [-s WIDTHxHEIGHT] [-t TITLE] PROGRAM [ARGUMENTS...]" >&2; exit 2; }
+for p in Xvfb xdotool ffmpeg; do
+    command -v "$p" >/dev/null || { echo "kb-xwin: $p is missing (kbutils dl xwindows installs it)" >&2; exit 3; }
+done
+[[ $size =~ ^[0-9]+x[0-9]+$ ]] || size=$(default_size)
+title=${title:-$(basename "$1")}
+mkdir -p "$(dirname "$LOG")"
+
+# A free display number (kb-x's real X servers count from 0).
+d=10
+while [ -e "/tmp/.X$d-lock" ] || [ -e "/tmp/.X11-unix/X$d" ]; do d=$((d + 1)); done
+
+Xvfb ":$d" -screen 0 "${size}x24" -nolisten tcp -noreset > "$LOG" 2>&1 &
+xpid=$!
+for _ in $(seq 50); do
+    [ -S "/tmp/.X11-unix/X$d" ] && break
+    kill -0 "$xpid" 2>/dev/null || break
+    sleep 0.1
+done
+if [ ! -S "/tmp/.X11-unix/X$d" ]; then
+    echo "kb-xwin: the X server did not start (see $LOG)" >&2
+    kill "$xpid" 2>/dev/null
+    exit 1
+fi
+
+(
+    export DISPLAY=":$d" GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb SDL_VIDEODRIVER=x11
+    unset WAYLAND_DISPLAY
+    command -v matchbox-window-manager >/dev/null &&
+        matchbox-window-manager -use_titlebar no -use_cursor no >> "$LOG" 2>&1 &
+    exec "$@" < /dev/null >> "$LOG" 2>&1
+) &
+pid=$!
+
+printf '\033]R'                    # (the true colours, not the theme's)
+python3 "$KB_LIB/py/xwin.py" ":$d" "$size" "$pid" "$title"
+
+# Closed: the program (kindly, then not), then everything else on that display.
+kill "$pid" 2>/dev/null
+for _ in $(seq 30); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+kill -9 "$pid" 2>/dev/null
+kill "$xpid" 2>/dev/null
+wait 2>/dev/null
+exit 0

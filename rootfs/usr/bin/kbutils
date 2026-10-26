@@ -329,6 +329,7 @@ feeds|newsboat|News feeds (Internet > News feeds), about 3 MB
 sync|unison|Sync between computers, about 5 MB
 camera|libzbar0t64|QR codes and bar codes in the Camera, under 1 MB
 asciiart|figlet|The ASCII Art Generator's big-letter fonts, under 1 MB
+xwindows|xvfb xdotool matchbox-window-manager libmpv2|Graphical programs in windows (Open program in X), the real picture in a window
 parentalctl|kilobyte-parentalctl|Parental controls: time, bedtimes, programs, the Internet (only this way)"
 # (accessibility: the same packages as image/packages-accessibility.txt.)
 

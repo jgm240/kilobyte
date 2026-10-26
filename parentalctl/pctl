@@ -34,7 +34,7 @@ STATE = "/var/lib/kilobyte-parentalctl"
 RUN = "/run/kilobyte-parental"
 NFT_TABLE = "kilobyte_parental"
 DEFAULT = {"limit": 120, "limit_weekend": 180, "from": "07:00", "to": "20:00",
-           "blocked": ["Terminal", "Store"], "internet": "hours"}
+           "blocked": ["Terminal", "Store", "OpenX"], "internet": "hours"}
 # Programs worth reporting, by the name of their process.
 PROGRAMS = {"mcedit": "Editor", "sc-im": "Spreadsheet", "elinks": "Web", "alpine": "Email", "mc": "Files",
             "weechat": "Chat", "mpv": "Videos", "calcurse": "Agenda", "nudoku": "Sudoku", "frotz": "Text adventures",

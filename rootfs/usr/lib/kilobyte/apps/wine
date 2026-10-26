@@ -3,7 +3,9 @@
 # PCs use Debian's Wine (64- and 32-bit programs). On a Raspberry Pi, Wine for
 # x86 runs through box64 (64-bit Pi OS: 64-bit programs) or box86 (32-bit Pi
 # OS: 32-bit programs), which translate x86 code to ARM as it runs.
-# Graphical programs get their own X server (kb-x) in a Windows desktop.
+# Graphical programs get a Windows desktop: in Kilobyte Desktop in a window of
+# its own (kb-xwin: real pixels on a computer's own screen, else coloured
+# blocks), otherwise in an X server of their own on the whole screen (kb-x).
 . /usr/lib/kilobyte/lib.sh
 
 T="Windows Programs"
@@ -39,8 +41,20 @@ screen_size() {
     [ -n "$s" ] && echo "${s/,/x}" || echo 1024x768
 }
 
-# Graphical: a Windows desktop the size of the screen, in its own X server.
+# Graphical: a Windows desktop in a window, or the size of the screen in its
+# own X server.
 run_x() {
+    local size
+    if [ -n "${KILOBYTE_DESK:-}" ] && command -v Xvfb >/dev/null && command -v xdotool >/dev/null; then
+        size=$("$KB_LIB/kb-xwin" --size)
+        kb_info "Starting the program..."
+        clear
+        "$KB_LIB/kb-xwin" -s "$size" -t "Windows: $(basename "${1:-Desktop}")" "$(command -v wine)" explorer "/desktop=Kilobyte,$size" "$@" &&
+            return 0
+        kb_load_theme
+        kb_msg "$T" "The program's window could not start.\n\nDetails are in ~/.cache/kilobyte-xwin.log." 9 60
+        return 1
+    fi
     kb_dialog --title " $T " --infobox "Starting the program...\n\nCtrl+Alt+Backspace returns here at any time." 7 60
     /usr/lib/kilobyte/kb-x "$(command -v wine)" explorer "/desktop=Kilobyte,$(screen_size)" "$@" ||
         kb_msg "$T" "The graphics screen could not start.\n\nDetails are in ~/.cache/kilobyte-x.log." 9 60

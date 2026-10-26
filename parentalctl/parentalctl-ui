@@ -24,7 +24,8 @@ programs_panel() { # programs_panel USER: which programs are turned off
     done < <(/usr/bin/kilobyte --list-apps | awk -F'|' '!seen[$1]++')
     chosen=$(kb_dialog --title " Programs Turned Off for $u " --separate-output --ok-label "Use" --cancel-label "Back" \
         --checklist "Ticked programs are gone from $u's menus and desktop. The Terminal and the
-file manager can start any program: keep them off for younger children." 0 70 0 "${items[@]}") || return
+file manager (and Open program in X) can start any program: keep them off for
+younger children." 0 70 0 "${items[@]}") || return
     root set "$u" blocked "$(echo $chosen)"
 }
 
@@ -105,7 +106,7 @@ accounts. Administrators (parents) have no limits." 0 70 0 "${items[@]}") || exi
         continue
     fi
     "$PCTL" users | awk -F'\t' -v u="$sel" '$1 == u && $2 == "child"' | grep -q . ||
-        { kb_yesno "$T" "Set up parental controls for $sel?\n\n(Starting with 2 hours a day, 3 at the weekend, from 7:00 to 20:00, no Terminal or Store.)" 10 66 || continue
+        { kb_yesno "$T" "Set up parental controls for $sel?\n\n(Starting with 2 hours a day, 3 at the weekend, from 7:00 to 20:00, no Terminal, Store or Open program in X.)" 10 66 || continue
           root set "$sel" new 1 || continue; }
     child_panel "$sel"
 done

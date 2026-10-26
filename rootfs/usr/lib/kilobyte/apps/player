@@ -30,8 +30,9 @@ choose_mode() {
     local note=""
     [ -n "${KILOBYTE_DESK:-}" ] && note="
 
-In Kilobyte Desktop the block modes and the real picture use the
-whole screen while a video plays; Text plays inside the window."
+In Kilobyte Desktop the block modes use the whole screen while a
+video plays; Text plays inside the window, and so does the real
+picture on a computer's own screen (else it uses the whole screen)."
     m=$(kb_dialog --title " Picture " --ok-label "Use" --cancel-label "Back" --radiolist \
 "How videos are shown. The block modes draw the picture with coloured
 characters; smaller pixels mean a sharper but slower picture.

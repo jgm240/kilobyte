@@ -204,7 +204,7 @@ apps_table() {
 # e-ink screen cannot keep up with. YouTube and the Video Player stay: they
 # save videos and sound, and play as text blocks (silently) in the terminal.
 KINDLE_LEAVE_OUT=" BBS BBSHost Podcasts Typing Camera Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
-KINDLE_LEAVE_OUT+="Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
+KINDLE_LEAVE_OUT+="OpenX Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
 # In Windows (WSL, Kilobyte for Windows): Windows has the hardware, the
 # users and the power button; Kilobyte's window simply closes.
 # Windows' own network is in the way of finding others (Messenger) and of being called (Host a BBS).
@@ -295,6 +295,7 @@ Hangman|games|Hangman|Guess the word: type letters|_a|M
 Adventure|games|Adventure|Colossal Cave Adventure: type commands such as GO NORTH; QUIT ends|N↑|M
 Rain|games|Rain|Rain on the screen; Ctrl+C stops it|' |M
 Worms|games|Worms|Worms on the screen; Ctrl+C stops it|~ |M
+OpenX|more|Open program in X|Graphical programs (Qt, GTK, any X program) in a Kilobyte window|▣X|L
 Find|system|KBFind|Find anything: programs, settings, files and what is in them (Ctrl+Space)|?f|M
 Settings|system|Settings|Wi-Fi, theme, wallpaper, keyboard, date, software, users...|≡≡|M
 Help|system|Help|How to use Kilobyte|? |M
@@ -302,8 +303,9 @@ Users|system|Switch user|Let someone else log in; your programs keep running|☺
 Shutdown|system|Shut down|Turn the computer off|O |S
 Restart|system|Restart|Restart the computer|<>|S
 TABLE
-    # Programs installed from the Store.
+    # Programs installed from the Store, and others installed with APT.
     "$APPS/store" --table 2>/dev/null
+    python3 /usr/lib/kilobyte/py/aptapps.py table 2>/dev/null
     kb_is_live && echo "Install|system|Install Kilobyte|Copy this system to the computer's hard disk|↓↓|M"
     return 0
 }
@@ -400,6 +402,8 @@ run_app() {
         Shutdown)    shut_down ;;
         Restart)     kb_yesno "Restart" "Restart the computer now?" && { clear; kb_sound shutdown wait; sudo -n "$KB_LIB/kb-root" power reboot; } ;;
         Store:*)     "$APPS/store" --run "${id#Store:}" ;;
+        OpenX)       "$APPS/xopen" "$@" ;;
+        Apt:*)       "$APPS/xopen" --app "${id#Apt:}" ;;
         *)           kb_msg "Kilobyte" "There is no program called \"$id\"." ;;
     esac
 }
@@ -591,7 +595,7 @@ program_manager() {
         [[ $cats == *" media "* ]] && items+=(Media "Media  »" "Video player, music, podcasts, pictures, camera, discs")
         [[ $cats == *" accessories "* ]] && items+=(Accessories "Accessories  »" "Today, notes, dictionary, encyclopedia, backup, typing tutor, paint...")
         [[ $cats == *" games "* ]] && items+=(Games "Games  »" "Chess, Sudoku, text adventures, Mines, Solitaire...")
-        [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed from the Store")
+        [[ $cats == *" more "* ]] && items+=(More "More programs  »" "What you installed (Store, APT); graphical programs in X")
         items+=(Find "KBFind" "Find anything: programs, settings, files and what is in them (Ctrl+Space)")
         items+=(Settings "Settings" "Wi-Fi, theme, wallpaper, keyboard, date, software, users...")
         kb_is_live && items+=(Install "Install Kilobyte to disk" "Copy this system to the computer's hard disk")
@@ -636,7 +640,7 @@ program_manager() {
             Media)       category_menu media "Media" "Videos, music, pictures and discs." ;;
             Accessories) category_menu accessories "Accessories" "Small helpers." ;;
             Games)       category_menu games "Games" "Take a break." ;;
-            More)        category_menu more "More Programs" "Installed from the Store." ;;
+            More)        category_menu more "More Programs" "Installed from the Store or with APT. Graphical ones open in X: F9 has their menu." ;;
             Quit)        quit_menu; rc=$?; [ $rc -ne 0 ] && return $rc ;;
             *)           launch "$sel" ;;
         esac

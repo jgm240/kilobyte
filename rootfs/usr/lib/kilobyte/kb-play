@@ -9,6 +9,8 @@
 #   text                      coloured blocks in the normal font (in Kilobyte
 #                             Windows: inside the window)
 #   real                      the real picture, drawn straight to the screen
+#                             (in Kilobyte Windows: inside the window, where
+#                             the computer's own screen allows; py/fbwin.py)
 #   audio                     sound only, with mpv's status line
 #
 # Keys while playing: Space pause, arrows seek, 9/0 volume, q or Ctrl-C stop.
@@ -19,11 +21,29 @@ mode=${1:-medium}
 src=${2:?usage: kb-play MODE SOURCE [MPV-OPTIONS...]}
 shift 2
 
-# In Kilobyte Desktop a window cannot switch the console to a tiny pixel font
-# or show the real picture: for those modes Kilobyte Desktop lends the whole
-# screen while the video plays (KB_FULL_SCREEN is set there). "text" and
-# "audio" play inside the window.
+# Streams from the web (YouTube and others) in the chosen picture size.
+height=$(cat "$KB_CONF/stream-height" 2>/dev/null)
+[[ $height =~ ^[0-9]+$ ]] || height=720
+opts=(--really-quiet --input-terminal=yes --keep-open=no
+      "--ytdl-format=bv*[height<=$height]+ba/b[height<=$height]/b")
+
+# In Kilobyte Desktop the real picture plays inside the window: drawn into the
+# screen where the window is (on a computer's own screen; not over SSH). A
+# window cannot switch the console to a tiny pixel font: for those modes (and
+# the real picture where the window cannot have it) Kilobyte Desktop lends
+# the whole screen while the video plays (KB_FULL_SCREEN is set there).
+# "text" and "audio" play inside the window.
 if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
+    if [ "$mode" = real ]; then
+        printf '\033]R'
+        python3 "$KB_LIB/py/fbwin.py" play "$src" "${opts[@]}" "$@"
+        rc=$?
+        if [ $rc -ne 125 ]; then
+            clear
+            kb_load_theme
+            exit $rc
+        fi
+    fi
     case $mode in
         extreme | fine | medium | real)
             clear
@@ -36,12 +56,6 @@ if [ -n "${KILOBYTE_DESK:-}" ] && [ -S "${KB_DESK_SOCK:-}" ]; then
             ;;
     esac
 fi
-
-# Streams from the web (YouTube and others) in the chosen picture size.
-height=$(cat "$KB_CONF/stream-height" 2>/dev/null)
-[[ $height =~ ^[0-9]+$ ]] || height=720
-opts=(--really-quiet --input-terminal=yes --keep-open=no
-      "--ytdl-format=bv*[height<=$height]+ba/b[height<=$height]/b")
 
 on_console() { [ "$TERM" = linux ] && case $(tty) in /dev/tty[0-9]*) true ;; *) false ;; esac; }
 

@@ -23,6 +23,7 @@ window.
 import ctypes
 import curses
 import fcntl
+import itertools
 import json
 import os
 import pty
@@ -214,8 +215,11 @@ class TermScreen(pyte.Screen):
 
 
 class Window:
+    numbers = itertools.count(1)
+
     def __init__(self, desk, argv, x, y, w, h, title="Program Manager"):
         self.desk = desk
+        self.number = next(Window.numbers)     # (KB_WIN: programs ask where their window is)
         self.x, self.y, self.w, self.h = x, y, w, h
         self.title = title
         self.saved = None                  # position before maximising
@@ -228,7 +232,7 @@ class Window:
         pid, fd = pty.fork()
         if pid == 0:
             env = dict(os.environ, TERM="xterm", KILOBYTE_DESK="1", COLORTERM="",
-                       KB_DESK_PID=str(os.getppid()), KB_DESK_SOCK=desk.sock_path or "",
+                       KB_DESK_PID=str(os.getppid()), KB_DESK_SOCK=desk.sock_path or "", KB_WIN=str(self.number),
                        NCURSES_NO_UTF8_ACS="1")   # real box characters, not VT100 line mode
             env.pop("KILOBYTE", None)
             env.pop("KB_APP_WINDOW", None)
@@ -897,28 +901,62 @@ class Desk:
         else:
             self.s.put(py, px, ch, bg, fg & 7)
 
-    def draw_big_pointer(self, px, py, look):
-        """A pointer of size 2 to 5: an arrow (a triangle) that many rows tall,
-        its tip at the mouse, made of the chosen characters; with the classic
-        pointer, of cells with their colours swapped. It points up and to the
-        left, or up and to the right when it points with its last character."""
-        size = self.pointer_size
+    @staticmethod
+    def arrow_cells(size):
+        """The cells (column, row) of an arrow pointer of size 2 to 5, its tip
+        at (0, 0): a head that many rows tall (cells are twice as tall as
+        wide, so it widens by two a row) and a stem from its middle, down and
+        to the right."""
+        cells = [(c, r) for r in range(size) for c in range(2 * r + 1)]
+        for k in range((size + 1) // 2):
+            cells += [(size - 1 + k, size + k), (size + k, size + k)]
+        return cells
+
+    def big_pointer_cells(self, px, py, look):
+        """(column, row) in the arrow and (x, y) on the screen of each of its
+        cells, turned round where it would be cut off."""
+        H, W = self.s.size()
+        cells = self.arrow_cells(self.pointer_size)
+        width, height = max(c for c, _ in cells) + 1, max(r for _, r in cells) + 1
         hot = look[3] if look else getattr(self, "pointer_hot", "first")
-        step = -1 if hot == "last" else 1
+        sx = -1 if hot == "last" else 1
+        if sx == 1 and px + width > W or sx == -1 and px - width < -1:
+            sx = -sx
+        sy = -1 if py + height > H - 1 else 1     # (the bottom line is the task bar)
+        return [(c, r, px + sx * c, py + sy * r) for c, r in cells]
+
+    def pointer_box(self):
+        """The cells the mouse pointer covers: (x0, y0, x1, y1), or None."""
+        if not self.pointer:
+            return None
+        px, py = self.pointer
+        look = self.pointer_style()
+        if getattr(self, "pointer_size", 1) > 1:
+            xs, ys = zip(*[(x, y) for _, _, x, y in self.big_pointer_cells(px, py, look)])
+            return min(xs), min(ys), max(xs), max(ys)
+        if look and look[3] == "last":
+            return px - len(look[0]) + 1, py, px, py
+        return px, py, px + (len(look[0]) - 1 if look else 0), py
+
+    def draw_big_pointer(self, px, py, look):
+        """A pointer of size 2 to 5: an arrow that many rows tall (and its
+        stem), its tip at the mouse, made of the chosen characters; with the
+        classic pointer, of cells with their colours swapped. It points up
+        and to the left, or up and to the right when it points with its last
+        character. Near the right or bottom edge it turns round, so that it
+        is never cut off."""
         under = self.s.watched.get(px) if py == self.s.watch_y else None
         self.s.watch_y = None
-        for r in range(size):
-            for c in range(2 * r + 1):              # (cells are twice as tall as wide)
-                x, y = px + step * c, py + r
-                if not look:
-                    self.invert(y, x, 1)
-                    continue
-                chars, fg, bg, _ = look
-                if bg < 0:
-                    bg = (under[2] & 7) if under else BLACK
-                    if fg & 7 == bg:
-                        fg = BLACK if bg >= 4 or bg == LIGHTGREY else WHITE
-                self.s.put(y, x, chars[(r + c) % len(chars)], fg, bg)
+        for c, r, x, y in self.big_pointer_cells(px, py, look):
+            if not look:
+                self.invert(y, x, 1)
+                continue
+            chars, fg, bg, _ = look
+            if bg < 0:
+                bg = (under[2] & 7) if under else BLACK
+                if fg & 7 == bg:
+                    fg = BLACK if bg >= 4 or bg == LIGHTGREY else WHITE
+            self.s.put(y, x, chars[(r + c) % len(chars)], fg, bg)
 
     def invert(self, y, x, n):
         """Swap foreground and background of n cells, whatever their colours
@@ -1734,6 +1772,13 @@ class Desk:
                 self.note(req.get("title", "Kilobyte"), req.get("text", ""))
             elif what == "clip":
                 self.copy(str(req.get("text", "")))
+            elif what == "where":
+                reply = json.dumps(self.where(req.get("win"))).encode("utf-8")
+                conn.sendall(reply + b"\n")
+                conn.close()
+                return
+            elif what == "repaint":
+                self.s.scr.clearok(True)
             else:
                 rc = 1
         except (OSError, ValueError):
@@ -1745,6 +1790,29 @@ class Desk:
         except OSError:
             pass
         conn.close()
+
+    def where(self, number):
+        """Where a window is, for a program that draws real pixels into it
+        (fbwin.py): its inside (x, y, columns, rows), the screen's size in
+        characters, whether all of it can be seen (nothing over it: no other
+        window, menu, note or volume control) and the cells of the mouse
+        pointer, which it leaves free."""
+        win = next((w for w in self.windows if str(w.number) == str(number)), None)
+        if not win:
+            return {"ok": False}
+        H, W = self.s.size()
+        x, y, w, h = win.x + 1, win.y + 1, win.w - 2, win.h - 2
+
+        def over(bx, by, bw, bh):
+            return bx < x + w and x < bx + bw and by < y + h and y < by + bh
+        above = self.windows[self.windows.index(win) + 1:]
+        visible = (not win.minimised and not self.menus and not self.volume_open and not self.outline and
+                   not self.mode and not self.quitting and
+                   not any(not o.minimised and over(o.x, o.y, o.w + 2, o.h + 1) for o in above) and
+                   not any(over(nx, ny, self.NOTE_W, nh) for nx, ny, nh, _ in self.note_boxes()) and
+                   x >= 0 and y >= 1 and x + w <= W and y + h <= H - 1)
+        return {"ok": True, "x": x, "y": y, "cols": w, "rows": h, "W": W, "H": H,
+                "visible": visible, "pointer": self.pointer_box()}
 
     def full_screen(self, argv, cwd=None):
         """Step aside: the program runs on the console itself, and the
