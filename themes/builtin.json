@@ -1,0 +1,62 @@
+[
+ {
+  "name": "Classic Blue",
+  "by": "Kilobyte",
+  "code": "AQMAdAcnfwcHeCdYD0h8B1wPfFcGZwAAAKoAAACqAKpVAAAAqqoAqgCqqqqqqlVVVf9VVVX_Vf__VVVV__9V_1X______0NsYXNzaWMgQmx1ZQ",
+  "file": "files/classic.kbtheme"
+ },
+ {
+  "name": "Blue Panels",
+  "by": "Kilobyte",
+  "code": "AQMDMHRcdDR0BnwGXF4GfF5cBlwGXAAAAKoAAACqAKpVAAAAqqoAqgCqqqqqqlVVVf9VVVX_Vf__VVVV__9V_1X______0JsdWUgUGFuZWxz",
+  "file": "files/panels.kbtheme"
+ },
+ {
+  "name": "Cyan Desk",
+  "by": "Kilobyte",
+  "code": "AQMABgd8BwcHfAd8J1x4B3gnBid8JwAAAKoAAACqAKpVAAAAqqoAqgCqqqqqqlVVVf9VVVX_Vf__VVVV__9V_1X______0N5YW4gRGVzaw",
+  "file": "files/cyan.kbtheme"
+ },
+ {
+  "name": "Light Blue (8-bit)",
+  "by": "Kilobyte",
+  "code": "AQIAdHR8dHR0JnwmfH4mdH58fHwmfAAAAIg5MlWgSb_OckAxjYs_lnhpxJ-fn2JiYrhpYpTgib_OcnhpxIs_lnhpxP___0xpZ2h0IEJsdWUgKDgtYml0KQ",
+  "file": "files/lightblue.kbtheme"
+ },
+ {
+  "name": "Blue and Orange (16-bit)",
+  "by": "Kilobyte",
+  "code": "AQMAfHwnfAR8A3wDHCMDfCMcBxwnHAAAIv-IAABVqv-IAABVqv-IAABVqv___wAAIv-IAP____-IAABVqv-IAP_______0JsdWUgYW5kIE9yYW5nZSAoMTYtYml0KQ",
+  "file": "files/orange.kbtheme"
+ },
+ {
+  "name": "Black and White (1984)",
+  "by": "Kilobyte",
+  "code": "AQMABgd4BwcHeAd4B3h4B3gHBwcHBwAAAAAAAAAAAAAAAAAAAAAAAKCgoP___1VVVQAAAAAAAAAAAAAAAAAAAKCgoP___0JsYWNrIGFuZCBXaGl0ZSAoMTk4NCk",
+  "file": "files/mono.kbtheme"
+ },
+ {
+  "name": "Green Screen (P1 phosphor)",
+  "by": "Kilobyte",
+  "code": "AQIBEBBQUBAQAlACUAICEAJQUFACUAAAAAs9Cx-4Hx-4Hws9Cws9Cx-4Hx-4Hws9Cx-4H03_TU3_TR-4Hx-4H03_TU3_TUdyZWVuIFNjcmVlbiAoUDEgcGhvc3Bob3Ip",
+  "file": "files/green.kbtheme"
+ },
+ {
+  "name": "Amber Screen (P3 phosphor)",
+  "by": "Kilobyte",
+  "code": "AQIBGBhYWBgYA1gDWAMDGANYWFgDWAAAAEoqANmMANmMAEoqAEoqANmMANmMAEoqANmMAP_DTf_DTdmMANmMAP_DTf_DTUFtYmVyIFNjcmVlbiAoUDMgcGhvc3Bob3Ip",
+  "file": "files/amber.kbtheme"
+ },
+ {
+  "name": "Ketchup and Mustard",
+  "by": "Kilobyte",
+  "code": "AQMAWQN5CwsDeQt5C1lZA3kLWQtZCwAAAP8AAACqAP__AAAAqqoAqgCqqqqqqlVVVf9VVVX_Vf__VVVV__9V_1X______0tldGNodXAgYW5kIE11c3RhcmQ",
+  "file": "files/mustard.kbtheme"
+ },
+ {
+  "name": "E-ink (black on white)",
+  "by": "Kilobyte",
+  "code": "AQIABwcHBwcHOAc4Bzg4BzgHBwc4BwAAAAAAAAAAAAAAAAAAAAAAAAAAAP___wAAAAAAAAAAAAAAAAAAAAAAAAAAAP___0UtaW5rIChibGFjayBvbiB3aGl0ZSk",
+  "file": "files/eink.kbtheme"
+ }
+]

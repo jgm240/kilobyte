@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Blue Panels
+mc=double-lines
+shadow=ON
+palette=000000 aa0000 00aa00 aa5500 0000aa aa00aa 00aaaa aaaaaa 555555 ff5555 55ff55 ffff55 5555ff ff55ff 55ffff ffffff
+screen=CYAN,BLACK,OFF
+dialog=CYAN,BLUE,ON
+title=YELLOW,BLUE,ON
+border=CYAN,BLUE,ON
+border2=CYAN,BLUE,OFF
+item=CYAN,BLUE,ON
+sel=BLACK,CYAN,OFF
+tag=WHITE,BLUE,ON
+sel_tag=BLACK,CYAN,OFF
+key=YELLOW,BLUE,ON
+sel_key=YELLOW,CYAN,ON
+btn_on=BLACK,CYAN,OFF
+btn_off=WHITE,BLUE,ON
+btn_key_on=YELLOW,CYAN,ON
+btn_key_off=YELLOW,BLUE,ON
+input=BLACK,CYAN,OFF
+arrow=YELLOW,BLUE,ON
+status=BLACK,CYAN,OFF
+gauge=YELLOW,BLUE,ON

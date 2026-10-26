@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Ketchup and Mustard
+mc=default
+shadow=ON
+palette=000000 ff0000 00aa00 ffff00 0000aa aa00aa 00aaaa aaaaaa 555555 ff5555 55ff55 ffff55 5555ff ff55ff 55ffff ffffff
+screen=YELLOW,RED,ON
+dialog=BLACK,YELLOW,OFF
+title=WHITE,RED,ON
+border=RED,YELLOW,OFF
+border2=RED,YELLOW,OFF
+item=BLACK,YELLOW,OFF
+sel=WHITE,RED,ON
+tag=RED,YELLOW,OFF
+sel_tag=WHITE,RED,ON
+key=RED,YELLOW,OFF
+sel_key=YELLOW,RED,ON
+btn_on=YELLOW,RED,ON
+btn_off=BLACK,YELLOW,OFF
+btn_key_on=WHITE,RED,ON
+btn_key_off=RED,YELLOW,OFF
+input=YELLOW,RED,ON
+arrow=RED,YELLOW,OFF
+status=YELLOW,RED,ON
+gauge=RED,YELLOW,OFF

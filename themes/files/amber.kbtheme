@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Amber Screen (P3 phosphor)
+mc=dark
+shadow=OFF
+palette=000000 4a2a00 d98c00 d98c00 4a2a00 4a2a00 d98c00 d98c00 4a2a00 d98c00 ffc34d ffc34d d98c00 d98c00 ffc34d ffc34d
+screen=YELLOW,BLACK,OFF
+dialog=YELLOW,BLACK,OFF
+title=YELLOW,BLACK,ON
+border=YELLOW,BLACK,ON
+border2=YELLOW,BLACK,OFF
+item=YELLOW,BLACK,OFF
+sel=BLACK,YELLOW,OFF
+tag=YELLOW,BLACK,ON
+sel_tag=BLACK,YELLOW,OFF
+key=YELLOW,BLACK,ON
+sel_key=BLACK,YELLOW,OFF
+btn_on=BLACK,YELLOW,OFF
+btn_off=YELLOW,BLACK,OFF
+btn_key_on=BLACK,YELLOW,OFF
+btn_key_off=YELLOW,BLACK,ON
+input=YELLOW,BLACK,ON
+arrow=YELLOW,BLACK,ON
+status=BLACK,YELLOW,OFF
+gauge=YELLOW,BLACK,ON

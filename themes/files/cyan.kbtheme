@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Cyan Desk
+mc=default
+shadow=ON
+palette=000000 aa0000 00aa00 aa5500 0000aa aa00aa 00aaaa aaaaaa 555555 ff5555 55ff55 ffff55 5555ff ff55ff 55ffff ffffff
+screen=BLACK,CYAN,OFF
+dialog=BLACK,WHITE,OFF
+title=WHITE,BLUE,ON
+border=BLACK,WHITE,OFF
+border2=BLACK,WHITE,OFF
+item=BLACK,WHITE,OFF
+sel=WHITE,BLUE,ON
+tag=BLACK,WHITE,OFF
+sel_tag=WHITE,BLUE,ON
+key=BLUE,WHITE,OFF
+sel_key=YELLOW,BLUE,ON
+btn_on=WHITE,BLACK,ON
+btn_off=BLACK,WHITE,OFF
+btn_key_on=WHITE,BLACK,ON
+btn_key_off=BLUE,WHITE,OFF
+input=BLACK,CYAN,OFF
+arrow=BLUE,WHITE,OFF
+status=WHITE,BLUE,ON
+gauge=BLUE,WHITE,OFF

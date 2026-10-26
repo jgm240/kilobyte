@@ -1,0 +1,24 @@
+# Kilobyte theme (Settings > Colour theme > Theme editor)
+name=Green Screen (P1 phosphor)
+mc=dark
+shadow=OFF
+palette=000000 0b3d0b 1fb81f 1fb81f 0b3d0b 0b3d0b 1fb81f 1fb81f 0b3d0b 1fb81f 4dff4d 4dff4d 1fb81f 1fb81f 4dff4d 4dff4d
+screen=GREEN,BLACK,OFF
+dialog=GREEN,BLACK,OFF
+title=GREEN,BLACK,ON
+border=GREEN,BLACK,ON
+border2=GREEN,BLACK,OFF
+item=GREEN,BLACK,OFF
+sel=BLACK,GREEN,OFF
+tag=GREEN,BLACK,ON
+sel_tag=BLACK,GREEN,OFF
+key=GREEN,BLACK,ON
+sel_key=BLACK,GREEN,OFF
+btn_on=BLACK,GREEN,OFF
+btn_off=GREEN,BLACK,OFF
+btn_key_on=BLACK,GREEN,OFF
+btn_key_off=GREEN,BLACK,ON
+input=GREEN,BLACK,ON
+arrow=GREEN,BLACK,ON
+status=BLACK,GREEN,OFF
+gauge=GREEN,BLACK,ON

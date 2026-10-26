@@ -270,3 +270,8 @@ footer a { color: var(--desk-hi); }
 .bar { height: 16px; background: var(--dark); margin: 8px 0; }
 .bar > i { display: block; height: 100%; width: 0; background: var(--btn-bg); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* The theme gallery (themes.html): each theme as a small Kilobyte screen. */
+.themegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(264px, 1fr)); gap: 16px; }
+.themecard p { margin: 8px 0 0; }
+.themepreview { margin: 0; padding: 0; background: none; color: inherit; overflow: hidden; line-height: var(--cell-h); white-space: pre; }
