@@ -320,6 +320,7 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 |---|---|---|
 | `kilobyte-1.5-amd64.iso` | 64-bit PCs (BIOS, UEFI, and 32-bit EFI such as early Intel Macs) | `./build.sh` |
 | `kilobyte-1.5-amd64-usb.img` | USB stick for UEFI PCs and Intel Macs | `./build.sh` |
+| `kilobyte-1.5-amd64-mac-usb.img`, `kilobyte-1.5-amd64-mac.iso` | The Mac version, for Intel Macs (2006-2015): Broadcom's Wi-Fi driver, F1-F12 as F-keys, fan control, and boot entries for Macs whose graphics stay on the boot menu's picture (see below) | `./build.sh --mac` |
 | `kilobyte-1.5-i386.iso` | 32-bit PCs, from the Pentium 4 era on (BIOS and 32-bit UEFI); Debian 13 with Debian 12's kernel | `./build.sh --arch i386` |
 | `kilobyte-1.5-i386-cd.iso` | The same for a 650 MB CD (PCs and laptops that only start from CDs): DOSBox for DOS programs instead of Wine; starts without windows | `./build.sh --arch i386 --cd` |
 | `kilobyte-1.5-raspberrypi-arm64.img.xz` | Raspberry Pi 3, 4, 400, 5, 500, Zero 2 W (with Raspberry Pi's own kernel) | `./build.sh --arch arm64` |
@@ -328,6 +329,23 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 
 `./build.sh --arch all` builds all five (the PC builds also write a
 `-usb.img`).
+
+**The Mac version** (`./build.sh --mac`): most Intel Macs from 2006 to 2015
+have Broadcom Wi-Fi (BCM4321, 4322, 4331, 4360...), which only Broadcom's
+own driver handles well. The Mac version has it: `wl`, from Debian's
+non-free section (Broadcom's licence), built for the kernel with DKMS; the
+kernel headers and compiler stay, so that kernel updates build it again.
+The kernel's drivers it would clash with (b43, ssb, bcma, brcmsmac) are left
+out; Atheros Wi-Fi (ath9k) and the newer Broadcom chips (brcmfmac) work as
+in the other images. Apple keyboards' F1-F12 are F-keys (`hid_apple
+fnmode=2`; Fn gives brightness and volume), `mbpfan` runs the fans by
+temperature, and the boot menu keeps GRUB's screen for Linux
+(`gfxpayload=keep`: old Mac firmware gives Linux no screen of its own) and
+has two more entries for Macs whose graphics do not take over: "graphics
+driver off" (`nouveau.modeset=0 radeon.modeset=0`) and "firmware screen
+only" (`nomodeset`). Installing keeps the options the Mac was started with.
+Start a Mac from the stick by holding Option (⌥) at the chime and choosing
+"EFI Boot".
 
 The long part of a build, installing Debian and some 1,500 packages in an
 emulated container, is **cached**: the base system of each architecture is

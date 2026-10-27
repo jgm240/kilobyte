@@ -368,6 +368,17 @@ EOF
     [ "$(dpkg --print-architecture)" = i386 ] && efi=i386-efi
     [ $efi = x86_64-efi ] && [ -d "$TARGET/usr/lib/grub/i386-efi" ] && efi32=i386-efi
     in_target grub-install --target=i386-pc "$DISK"
+    # The graphics options this start needed (safe graphics, the Mac
+    # version's "graphics driver off") are needed by the installed system too.
+    local o gfx=""
+    for o in $(cat /proc/cmdline); do
+        case $o in nomodeset | nouveau.modeset=0 | radeon.modeset=0) gfx+=" $o" ;; esac
+    done
+    if [ -n "$gfx" ]; then
+        mkdir -p "$TARGET/etc/default/grub.d"
+        printf 'GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT%s"\n' "$gfx" \
+            > "$TARGET/etc/default/grub.d/kilobyte-graphics.cfg"
+    fi
     if [ $MODE = alongside ]; then
         # A menu with both at every start; Windows starts from its own drive.
         printf '%s\n' '#!/bin/sh' "cat <<'MENU'" 'menuentry "Windows 98" {' '    insmod part_msdos' '    insmod fat' \

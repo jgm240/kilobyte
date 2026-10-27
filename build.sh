@@ -12,6 +12,9 @@
 #                               32-bit PC ISO fits on a 650 MB CD
 #   ./build.sh --wsl            Kilobyte for Windows: a WSL system (amd64; with
 #                               --arch arm64 for Windows on ARM), for kb.exe
+#   ./build.sh --mac            the Mac version (amd64): for Intel Macs, with
+#                               Broadcom's Wi-Fi driver (wl), F-keys as F-keys,
+#                               fan control and boot entries for old Macs
 #   ./build.sh --kindle         KilobytEink: Kilobyte for jailbroken Kindles
 #                               (Paperwhite 2 and others), a ZIP with a scriptlet
 #   ./build.sh --fresh ...      build the Debian base system anew (it is
@@ -29,6 +32,7 @@ LITE=
 CD=
 KINDLE=
 WSL=
+MAC=
 FRESH=
 FAST=
 while [ $# -gt 0 ]; do
@@ -37,11 +41,12 @@ while [ $# -gt 0 ]; do
         --cd) CD=1 ;;
         --kindle) KINDLE=1 ARCHES=armhf ;;
         --wsl) WSL=1 ;;
+        --mac) MAC=1 ;;
         --fresh) FRESH=1 ;;
         --fast) FAST=1 ;;
         --arch) shift; ARCHES=$1 ;;
         --arch=*) ARCHES=${1#--arch=} ;;
-        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--cd] [--kindle] [--wsl] [--fresh] [--fast]" >&2; exit 2 ;;
+        *) echo "usage: $0 [--arch amd64|i386|arm64|armhf|armel|all] [--lite] [--cd] [--mac] [--kindle] [--wsl] [--fresh] [--fast]" >&2; exit 2 ;;
     esac
     shift
 done
@@ -69,7 +74,7 @@ for ARCH in $ARCHES; do
     echo "######## Kilobyte for $ARCH"
     # A variant has a work area of its own (its base system differs); the
     # first time, it starts with the downloads and packages of the usual one.
-    VOL="kilobyte-work-$ARCH${CD:+-cd}${KINDLE:+-kindle}${WSL:+-wsl}"
+    VOL="kilobyte-work-$ARCH${CD:+-cd}${MAC:+-mac}${KINDLE:+-kindle}${WSL:+-wsl}"
     if ! docker volume inspect "$VOL" >/dev/null 2>&1; then
         docker volume create "$VOL" >/dev/null
         if [ "$VOL" != "kilobyte-work-$ARCH" ] && docker volume inspect "kilobyte-work-$ARCH" >/dev/null 2>&1; then
@@ -81,7 +86,7 @@ for ARCH in $ARCHES; do
     stage() { # stage NAME [docker options...]
         name=$1
         shift
-        docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e CD="$CD" -e KINDLE="$KINDLE" -e WSL="$WSL" -e KB_COMMIT="$KB_COMMIT" \
+        docker run --rm "$@" -e ARCH="$ARCH" -e LITE="$LITE" -e CD="$CD" -e KINDLE="$KINDLE" -e WSL="$WSL" -e MAC="$MAC" -e KB_COMMIT="$KB_COMMIT" \
             -e FRESH="$FRESH" -e FAST="$FAST" \
             -v "$PWD:/src:ro" -v "$VOL:/work" -v "$PWD/out:/out" \
             "debian:$SUITE" bash /src/image/build-in-container.sh "$name"

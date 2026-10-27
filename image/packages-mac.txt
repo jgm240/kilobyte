@@ -1,0 +1,9 @@
+# The Mac version (./build.sh --mac): Intel Macs, 2006-2015.
+# Broadcom Wi-Fi (BCM4321, 4322, 4331, 4360 and others: most Macs of those
+# years) with Broadcom's own driver, wl, built for the kernel by DKMS (the
+# kernel's headers come with it; Kilobyte Update and kernel updates build it
+# again). Atheros Wi-Fi (ath9k) and the newer Broadcom chips (brcmfmac) need
+# nothing more than the usual firmware.
+broadcom-sta-dkms
+# The fans of MacBooks and iMacs, by temperature (Linux leaves them slow).
+mbpfan

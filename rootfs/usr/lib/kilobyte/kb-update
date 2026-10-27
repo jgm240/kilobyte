@@ -168,7 +168,7 @@ install_tree() {
     esac
     # The CD version of the 32-bit PC image has DOSBox instead of Wine.
     local variant="" arch_list
-    # (Only the CD version and KilobytEink have this file.)
+    # (Only the CD and Mac versions, KilobytEink and Kilobyte for Windows have this file.)
     { read -r variant < /etc/kilobyte/variant; } 2>/dev/null || variant=""
     arch_list="$src/../image/packages-$(dpkg --print-architecture).txt"
     [ -n "$variant" ] && [ -f "$src/../image/packages-$(dpkg --print-architecture)-$variant.txt" ] &&
@@ -179,6 +179,7 @@ install_tree() {
     case $variant in
         kindle | wsl) new_pkgs=$(package_list "$src/../image/packages-$variant.txt") ;;
         cd)           ;;   # (the screen reader: "kbutils dl accessibility")
+        mac)          new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-accessibility.txt" "$src/../image/packages-mac.txt")" | sort -u) ;;
         *)            new_pkgs=$(printf '%s\n' "$new_pkgs" "$(package_list "$src/../image/packages-accessibility.txt")" | sort -u) ;;
     esac
     grep -qx firmware-iwlwifi <<< "$old_pkgs" &&   # not a --lite image

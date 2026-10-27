@@ -57,6 +57,14 @@ if [ -n "$WSL" ]; then
     case $ARCH in amd64 | arm64) ;; *) echo "Kilobyte for Windows is built for amd64 or arm64" >&2; exit 2 ;; esac
     KIND=wsl KERNEL= EFI= EFI32= FOREIGN= RPI_REPO=
 fi
+# The Mac version (MAC=1, amd64): Broadcom's Wi-Fi driver (wl, from Debian's
+# non-free section, built for the kernel with DKMS) and image/packages-mac.txt.
+MAC=${MAC:-}
+if [ -n "$MAC" ]; then
+    [ "$ARCH" = amd64 ] || { echo "the Mac version is built for amd64" >&2; exit 2; }
+    KERNEL="$KERNEL,linux-headers-amd64"
+fi
+COMPONENTS="main${MAC:+ non-free} non-free-firmware"
 RPI_MIRROR=http://archive.raspberrypi.com/debian
 RPI_KEY=/usr/share/keyrings/raspberrypi-archive-keyring.pgp
 if [ $KIND = kindle ]; then
@@ -64,7 +72,7 @@ if [ $KIND = kindle ]; then
 elif [ $KIND = wsl ]; then
     NAME="kilobyte-$VERSION-wsl-$ARCH"
 elif [ $KIND = pc ]; then
-    NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}${CD:+-cd}"
+    NAME="kilobyte-$VERSION-$ARCH${LITE:+-lite}${CD:+-cd}${MAC:+-mac}"
 else
     NAME="kilobyte-$VERSION-raspberrypi-$ARCH${LITE:+-lite}"
 fi
@@ -194,7 +202,7 @@ CONTROL
 # The key of a base system: everything that decides what is in it.
 base_key() {
     {
-        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}${KINDLE:+ kindle}${WSL:+ wsl}"
+        echo "v2 $ARCH $SUITE ${KERNEL_SUITE:-} ${FOREIGN:-} ${LITE:+lite}${RPI_REPO:+ rpi}${KINDLE:+ kindle}${WSL:+ wsl}${MAC:+ mac}"
         echo "$1"                                   # the package list
         cat "$WORK/debs/.recipes" 2>/dev/null
         ls "$WORK/debs" 2>/dev/null
@@ -217,6 +225,7 @@ stage_base() {
     elif [ -f "/src/image/packages-$ARCH.txt" ]; then
         lists+=("/src/image/packages-$ARCH.txt")
     fi
+    [ -n "$MAC" ] && lists+=(/src/image/packages-mac.txt)
     # The screen reader: not on the CD version (no room), see packages-accessibility.txt.
     [ $KIND = wsl ] || [ $KIND = kindle ] || [ -n "${CD:-}" ] || lists+=(/src/image/packages-accessibility.txt)
     packages="$(pkgs "${lists[@]}")${KERNEL:+,$KERNEL}${EFI:+,$EFI}${EFI32:+,$EFI32}"
@@ -235,7 +244,7 @@ stage_base() {
     echo "==> Installing build tools"
     # The firmware is in non-free-firmware: the check below must see it.
     [ -f /etc/apt/sources.list.d/debian.sources ] &&
-        sed -i 's/^Components: main$/Components: main non-free-firmware/' /etc/apt/sources.list.d/debian.sources
+        sed -i "s/^Components: main\$/Components: $COMPONENTS/" /etc/apt/sources.list.d/debian.sources
     if [ -n "$KERNEL_SUITE" ]; then
         printf 'Types: deb\nURIs: %s\nSuites: %s %s-updates\nComponents: main non-free-firmware\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
             "$MIRROR" "$KERNEL_SUITE" "$KERNEL_SUITE" > /etc/apt/sources.list.d/kernel-suite.sources
@@ -275,7 +284,7 @@ stage_base() {
     ln -sf bash /bin/sh
     # Downloaded packages are kept in apt-cache/ and offered to apt again.
     mmdebstrap --variant=minbase --mode=root --architectures="$ARCH${FOREIGN:+,$FOREIGN}" \
-        --components="main non-free-firmware" \
+        --components="$COMPONENTS" \
         --include="$packages" \
         --skip=download/empty --skip=essential/unlink \
         --aptopt='APT::Install-Recommends "false"' \
@@ -298,9 +307,9 @@ stage_base() {
         --customize-hook='mkdir -p "$1/usr/local/bin" && { [ -n "$KINDLE$WSL" ] || bash /src/image/wine-x86.sh "$1"; }' \
         --customize-hook='rm -f "$1"/var/cache/apt/archives/*.deb' \
         "$SUITE" "$WORK/base" \
-        "deb $MIRROR $SUITE main non-free-firmware" \
-        "deb $MIRROR $SUITE-updates main non-free-firmware" \
-        "deb http://security.debian.org/debian-security $SUITE-security main non-free-firmware" \
+        "deb $MIRROR $SUITE $COMPONENTS" \
+        "deb $MIRROR $SUITE-updates $COMPONENTS" \
+        "deb http://security.debian.org/debian-security $SUITE-security $COMPONENTS" \
         ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE main non-free-firmware"} \
         ${KERNEL_SUITE:+"deb $MIRROR $KERNEL_SUITE-updates main non-free-firmware"} \
         ${KERNEL_SUITE:+"deb http://security.debian.org/debian-security $KERNEL_SUITE-security main non-free-firmware"} \
@@ -323,6 +332,8 @@ stage_rootfs() {
     rm -rf "$r" "$WORK/iso"
     cp -a "$WORK/base" "$r"
     tar -C /src/rootfs --owner=0 --group=0 -cf - . | tar -C "$r" -xf -
+    # The Mac version's own settings (image/mac).
+    [ -z "$MAC" ] || tar -C /src/image/mac --owner=0 --group=0 -cf - . | tar -C "$r" -xf -
     curl -fsSL --retry 5 --retry-all-errors -o "$r/usr/local/bin/yt-dlp" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
     chmod 755 "$r/usr/local/bin/yt-dlp"
     echo "${KB_COMMIT:-unknown}" > "$r/usr/share/kilobyte/commit"
@@ -332,6 +343,7 @@ stage_rootfs() {
     if [ -n "${CD:-}" ]; then echo cd > "$r/etc/kilobyte/variant"
     elif [ $KIND = kindle ]; then echo kindle > "$r/etc/kilobyte/variant"
     elif [ $KIND = wsl ]; then echo wsl > "$r/etc/kilobyte/variant"
+    elif [ -n "$MAC" ]; then echo mac > "$r/etc/kilobyte/variant"
     else rm -f "$r/etc/kilobyte/variant"; fi
     cp /src/image/customize.sh "$r/tmp/customize.sh"
     # customize.sh runs in the system: it needs /proc, /sys and /dev there,
@@ -363,6 +375,12 @@ stage_squash() {
     du -sh "$WORK/iso/live/filesystem.squashfs"
 }
 
+# The boot menu; the Mac version's has more (image/grub-mac.cfg).
+grub_cfg() {
+    cat /src/image/grub.cfg
+    [ -z "$MAC" ] || cat /src/image/grub-mac.cfg
+}
+
 stage_iso() {
     local iso="/out/$NAME.iso"
     echo "==> Writing $iso (boots with BIOS and UEFI)"
@@ -372,7 +390,7 @@ stage_iso() {
     mkdir -p "$WORK/iso/boot/grub" /out
     cp "$WORK"/rootfs/boot/vmlinuz-* "$WORK/iso/live/vmlinuz"
     cp "$WORK"/rootfs/boot/initrd.img-* "$WORK/iso/live/initrd.img"
-    cp /src/image/grub.cfg "$WORK/iso/boot/grub/grub.cfg"
+    grub_cfg > "$WORK/iso/boot/grub/grub.cfg"
     mkdir -p "$WORK/iso/boot/grub/themes"
     cp -r /src/rootfs/usr/share/kilobyte/grub "$WORK/iso/boot/grub/themes/kilobyte"
     grub-mkrescue -o "$iso.tmp" "$WORK/iso" -- -volid KILOBYTE 2>&1 | grep -v '^xorriso : UPDATE' || true
@@ -406,7 +424,8 @@ stage_usbimg() {
     mmd -i "$esp" ::/EFI ::/EFI/BOOT ::/boot ::/boot/grub ::/boot/grub/fonts ::/boot/grub/themes ::/live
     mcopy -i "$esp" "$g"/*.EFI ::/EFI/BOOT/
     mcopy -s -i "$esp" "$g"/mods/* ::/boot/grub/
-    mcopy -i "$esp" /src/image/grub.cfg ::/boot/grub/grub.cfg
+    grub_cfg > "$g/grub.cfg"
+    mcopy -i "$esp" "$g/grub.cfg" ::/boot/grub/grub.cfg
     : > "$g/kilobyte-usb" && mcopy -i "$esp" "$g/kilobyte-usb" ::/boot/grub/
     mcopy -i "$esp" /usr/share/grub/unicode.pf2 ::/boot/grub/fonts/
     mcopy -s -i "$esp" /src/rootfs/usr/share/kilobyte/grub ::/boot/grub/themes/kilobyte
