@@ -204,11 +204,11 @@ apps_table() {
 # e-ink screen cannot keep up with. YouTube and the Video Player stay: they
 # save videos and sound, and play as text blocks (silently) in the terminal.
 KINDLE_LEAVE_OUT=" BBS BBSHost Podcasts Typing Camera Network Citrix Pictures Music Disc Sound Paint Print USB DOS Wine "
-KINDLE_LEAVE_OUT+="OpenX Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
+KINDLE_LEAVE_OUT+="OpenX Fans Saver Lock MoonBuggy Snake Rain Worms Clock Users Shutdown Restart Install "
 # In Windows (WSL, Kilobyte for Windows): Windows has the hardware, the
 # users and the power button; Kilobyte's window simply closes.
 # Windows' own network is in the way of finding others (Messenger) and of being called (Host a BBS).
-WSL_LEAVE_OUT=" Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network Messenger BBSHost Camera "
+WSL_LEAVE_OUT=" Fans Disc USB Print DOS Wine Citrix Lock Users Shutdown Restart Install Sound Battery Network Messenger BBSHost Camera "
 apps_table_for_device() {
     local line leave=""
     case $KB_VARIANT in
@@ -274,6 +274,7 @@ Charmap|accessories|Character Map|Box drawing and block characters for your own 
 Print|accessories|Print|Send a file to the printer|Pr|M
 USB|accessories|USB sticks|Open, safely remove or format a USB stick|↔ |M
 Backup|accessories|Backup|Encrypted backups (USB stick, server, network drive); bring back any file|»»|M
+Fans|accessories|Fan control|Temperatures and fans: automatic, quiet, cool, full or a fixed speed|✣ |M
 Typing|accessories|Typing tutor|Learn to type with ten fingers, in many languages (GNU Typist)|Ty|L
 Sync|accessories|Sync|Keep Documents the same on your computers and Kindle (network or USB stick)|«»|M
 Trash|accessories|Trash|Files you threw away: put them back or delete them for good|▄▄|M
@@ -363,6 +364,7 @@ run_app() {
         USB)         "$APPS/usb" ;;
         Backup)      "$APPS/backup" ;;
         Typing)      "$APPS/typing" ;;
+        Fans)        "$APPS/fans" "$@" ;;
         Sync)        "$APPS/sync" ;;
         Trash)       "$APPS/trash" ;;
         Wine)        "$APPS/wine" "$@" ;;

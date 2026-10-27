@@ -62,6 +62,7 @@ system as an ISO or SD card image: [Downloads](#downloads-and-builds))
 | Accessories › Sync | `unison` | keeps `~/Documents` the same on several Kilobyte computers and a Kindle, over SSH or through a USB stick; deletions sync too, the newer change wins |
 | Accessories › Backup | Kilobyte, `restic` | encrypted backups to a USB stick, an SSH server or a network drive, by hand or every day or week by themselves; any file comes back as it was on a chosen day |
 | Accessories › ASCII Art Generator | Kilobyte (`py/asciiart.py`), `figlet` | a heading in big letters (figlet's fonts, or a built-in block font), a subheading and art (big letters, a picture made of characters, or your own text) in a border of any characters; saved as text, printed portrait or landscape and scaled to the page |
+| Accessories › Fan control | hwmon, applesmc, thermal cooling devices | temperatures and fans; automatic, quiet, normal, cool (curves by temperature), full or a fixed speed, run by `kilobyte-fan.service`; full speed above 85 °C in every mode. PC fan chips, ThinkPads, Intel Macs, the Raspberry Pi 5's fan, a fan on a Pi's GPIO pin |
 | Accessories › Typing tutor | `gtypist` | learn to type with ten fingers: courses in English and 20 other languages |
 | Accessories › Trash | Kilobyte | the freedesktop trash: put back or delete for good |
 | Accessories › Store | Kilobyte, `apt` | a curated list of text-mode programs from Debian, installed with a keypress |

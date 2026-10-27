@@ -343,6 +343,14 @@
                   or landscape, as big as the page allows.
                   Typing tutor: learn to type with ten fingers, in many
                   languages; Esc leaves a lesson.
+                  Fan control: the temperatures and fans, and how the fans
+                  run: A automatic (the computer's own way), Q quiet, N
+                  normal, C cool (faster as it gets warmer), F full speed,
+                  or 1-9 a fixed 10% to 90%. Above 85 °C every fan runs at
+                  full speed. It sets PC fan chips, Intel Macs' fans and the
+                  Raspberry Pi 5's fan; on a ThinkPad T allows it (after a
+                  restart), on other Pis G sets up a fan on a GPIO pin.
+                  (kbutils settings chg fan quiet)
    Games          Mines, Solitaire, Reversi, Moon Buggy, Snake and others.
                   Each shows its keys on the bottom line.
                   Chess: pick a piece with Space and put it down with Space,

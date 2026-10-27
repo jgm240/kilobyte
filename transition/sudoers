@@ -4,4 +4,5 @@
 # with the computer's own tools; "kb" asks for your password.
 %users ALL=(root) NOPASSWD: /usr/lib/kilobyte/kb-root power *, /usr/lib/kilobyte/kb-root usb *, \
     /usr/lib/kilobyte/kb-root smb *, /usr/lib/kilobyte/kb-root vt switch *, \
-    /usr/lib/kilobyte/kb-root sounds *, /usr/lib/kilobyte/kb-root ytdlp update
+    /usr/lib/kilobyte/kb-root sounds *, /usr/lib/kilobyte/kb-root ytdlp update, \
+    /usr/lib/kilobyte/kb-root fan *

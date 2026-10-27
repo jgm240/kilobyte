@@ -5,6 +5,6 @@ set -e
 if [ "$1" = remove ] && [ -x /usr/lib/kilobyte/kb-transition ]; then
     /usr/lib/kilobyte/kb-transition remove || true
     # A BBS that was on stops with Kilobyte.
-    systemctl disable --now kilobyte-backup.timer kilobyte-bbs.service kilobyte-bbs-update.path >/dev/null 2>&1 || true
+    systemctl disable --now kilobyte-backup.timer kilobyte-bbs.service kilobyte-bbs-update.path kilobyte-fan.service >/dev/null 2>&1 || true
 fi
 exit 0

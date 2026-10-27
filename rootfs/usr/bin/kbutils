@@ -49,7 +49,8 @@ clock-sync|Set the clock from the Internet|on, off|kindle wsl transition
 autologin|Log in automatically|on, off|kindle wsl transition
 autostart|Start Kilobyte after login|on, off|kindle wsl transition
 startup-screen|The start-up screen|on, off|kindle wsl transition
-remote-login|Remote login (SSH)|on, off|kindle wsl transition"
+remote-login|Remote login (SSH)|on, off|kindle wsl transition
+fan|How the fans run (Fan Control)|auto, quiet, normal, cool, full, 10 to 100 (percent)|kindle wsl"
 
 setting_line() { awk -F'|' -v n="$1" '$1 == n' <<< "$SETTINGS"; }
 
@@ -90,6 +91,7 @@ disp() {
         tiles)          flag_off "$KB_CONF/tiles-off" ;;
         pointer)        st=$(sed -n 's/^chars=//p' "$KB_CONF/pointer" 2>/dev/null | tail -n 1); echo "${st:-classic}" ;;
         pointer-size)   st=$(sed -n 's/^size=//p' "$KB_CONF/pointer" 2>/dev/null | tail -n 1); echo "${st:-1}" ;;
+        fan)            python3 "$KB_LIB/py/fan.py" mode ;;
         tiles-city)     st=$(cat "$KB_CONF/tiles-city" 2>/dev/null); echo "${st:-(guessed from the Internet address)}" ;;
         tiles-units)    [ -e "$KB_CONF/tiles-fahrenheit" ] && echo F || echo C ;;
         speech)         if [ -e /etc/kilobyte/speech-on ]; then echo on
@@ -198,6 +200,11 @@ chg() {
             echo "$v" > "$KB_CONF/saver-minutes" ;;
         saver-lock)     onoff "$v" saver-lock
                         if [ "$v" = on ]; then : > "$KB_CONF/saver-lock"; else rm -f "$KB_CONF/saver-lock"; fi ;;
+        fan)
+            [[ $v =~ ^(auto|quiet|normal|cool|full|[1-9][0-9]|100)$ ]] && { ! [[ $v =~ ^[0-9]+$ ]] || [ "$v" -ge 10 ]; } ||
+                die "fan: auto, quiet, normal, cool, full or 10 to 100"
+            need_sudo
+            sudo "$KB_LIB/kb-root" fan "$v" ;;
         pointer-size)
             [[ $v =~ ^[1-5]$ ]] || die "pointer-size: 1 to 5"
             { grep -v '^size=' "$KB_CONF/pointer" 2>/dev/null; printf 'size=%s\n' "$v"; } > "$KB_CONF/pointer.new" &&

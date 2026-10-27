@@ -1,0 +1,29 @@
+#!/bin/bash
+# Fan Control (Accessories > Fan control): see py/fan.py.
+#   fans          the program
+#   fans --gpio   on a Raspberry Pi: a fan on a GPIO pin (config.txt)
+. /usr/lib/kilobyte/lib.sh
+
+if [ "${1:-}" = --gpio ]; then
+    T="A Fan on a GPIO Pin"
+    sel=$(kb_dialog --title " $T " --ok-label "Select" --cancel-label "Back" --menu \
+"A small fan on a GPIO pin (through a transistor, or a fan board that has
+one) that the Pi switches on above a temperature. GPIO 14 is pin 8 of the
+header. The Pi uses it after a restart." 0 70 0 \
+        On  "Set it up (or change it)" \
+        Off "No fan on a GPIO pin") || exit 0
+    if [ "$sel" = Off ]; then
+        sudo -n "$KB_LIB/kb-root" fan gpio off && kb_msg "$T" "Done: after a restart there is no fan on a GPIO pin." 7 60
+        exit 0
+    fi
+    pin=$(kb_input "$T" "The GPIO number of the fan (2 to 27; GPIO 14 is pin 8):" 14) || exit 0
+    temp=$(kb_input "$T" "On above this temperature, in °C (40 to 85):" 60) || exit 0
+    if sudo -n "$KB_LIB/kb-root" fan gpio "$pin" "$temp" 2> /tmp/kb-fan.$$; then
+        kb_msg "$T" "Done: after a restart the fan on GPIO $pin runs above $temp °C." 7 64
+    else
+        kb_msg "$T" "\Z1$(tail -n 1 /tmp/kb-fan.$$)\Zn" 7 60
+    fi
+    rm -f /tmp/kb-fan.$$
+    exit 0
+fi
+exec python3 "$KB_LIB/py/fan.py" ui

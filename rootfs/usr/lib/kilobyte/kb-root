@@ -236,11 +236,33 @@ case "${1:-} ${2:-}" in
             log)     tail -n 2000 /var/lib/kilobyte-bbs/hostbbs.log 2>/dev/null || echo "(nothing logged yet)" ;;
         esac
         ;;
+    # Fan Control (py/fan.py): the mode; on a ThinkPad, letting the fan be set
+    # (after a restart); on a Raspberry Pi, a fan on a GPIO pin (config.txt).
+    "fan "*)
+        case ${2:-} in
+            thinkpad)
+                echo "options thinkpad_acpi fan_control=1" > /etc/modprobe.d/kilobyte-thinkpad-fan.conf ;;
+            gpio)
+                cfg=/boot/firmware/config.txt
+                [ -f "$cfg" ] || cfg=/boot/config.txt
+                [ -f "$cfg" ] || { echo "no config.txt: is this a Raspberry Pi?" >&2; exit 1; }
+                pin=${3:-} temp=${4:-}
+                if [ "$pin" != off ]; then
+                    case $pin in [2-9] | 1[0-9] | 2[0-7]) ;; *) echo "GPIO 2 to 27" >&2; exit 2 ;; esac
+                    case $temp in [4-7][0-9] | 8[0-5]) ;; *) echo "40 to 85 °C" >&2; exit 2 ;; esac
+                fi
+                sed -i '/^# Kilobyte Fan Control/,/^dtoverlay=gpio-fan/d' "$cfg"
+                [ "$pin" = off ] ||
+                    printf '# Kilobyte Fan Control: a fan on a GPIO pin\n[all]\ndtoverlay=gpio-fan,gpiopin=%s,temp=%s000\n' "$pin" "$temp" >> "$cfg" ;;
+            *)  exec python3 /usr/lib/kilobyte/py/fan.py set "$2" ;;
+        esac
+        ;;
     "power reboot")   systemctl reboot ;;
     "power poweroff") systemctl poweroff ;;
     *) echo "usage: kb-root wifi on|off | power reboot|poweroff | ytdlp update | kilobyte update COMMIT" >&2
        echo "       autologin on|off | sounds on|off | post on|off | usb mount|eject DEV | usb format DISK fat32|exfat LABEL" >&2
        echo "       speech on|off | speech voice LANG | speech rate 0-9 | braille on|off | access boot" >&2
        echo "       bbs setup|on|off|restart|who|log|update | bbs passwd [USER] | bbs op COMMAND..." >&2
+       echo "       fan auto|quiet|normal|cool|full|10-100 | fan thinkpad | fan gpio PIN TEMP | fan gpio off" >&2
        exit 2 ;;
 esac
