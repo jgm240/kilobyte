@@ -1,23 +1,23 @@
 Architectures: all
 Codename: stable
-Date: Mon, 26 Oct 2026 13:19:20 +0000
+Date: Tue, 27 Oct 2026 14:04:20 +0000
 Description: Kilobyte for normal Debian, Ubuntu and Raspberry Pi OS
 Label: Kilobyte
 Origin: Kilobyte
 Suite: stable
 MD5Sum:
- cfcc6a9d8580689114a741fed2fe96ba            20239 Packages
- ea69a885eb2c8dc1417a505219365e7c             2809 Packages.gz
- 3e7679f3161d47c29a6e67a398171b5b              189 Release
+ 2fffba0df1be39957a9ac519a24a8883            21737 Packages
+ e036eb8e59d218b0ac6e776edb8f6661             2924 Packages.gz
+ 166129d8f221a85cc4e8d2d1967b881f              189 Release
 SHA1:
- 8f887f26fd990c5857298207f65160738ff6e4c8            20239 Packages
- e34e5d95d79ae4901e3242691816edb1c1ae9de4             2809 Packages.gz
- 91dd3cc832216baf66bb3decf34c5972b8b529d0              189 Release
+ 4e804b9a3a05f52f7f024c21c004ab601b2ce172            21737 Packages
+ 1a1dcfd2543f0c00a534b4956f1d12de37b06cf6             2924 Packages.gz
+ 908fe3b7a476817745da06462b6532c90ea3cefb              189 Release
 SHA256:
- f68d5e57d5fd5d5bbb3887fb1e667fc49b213b94e3a16e9192ebc92bbf0a9a55            20239 Packages
- 3700f19bcd128222887686e899d61cb72ab06cdcb62669fc99720edfdc9b3395             2809 Packages.gz
- 828412feaa24ec0d3cdd3d742ee86345f58cc594f73af8b4da7a37d38d6cd15c              189 Release
+ 5ec820b28f5e6f8198fd3a1d5924a0968c0060a41a435e3e7ab429e11472d407            21737 Packages
+ 9acdd7b7369bb9f17edc624de4998875e3ebdaf0568141cdfe3069c45a00c6fb             2924 Packages.gz
+ fb7f53622ca45eaa00676b1aab2aa5dce93255b0543ffd0a350382bdbc1738c6              189 Release
 SHA512:
- d197e2fe6b3916f7314e6c525de6ce279b6652a71bf65151e36978bfe62d72a4213b5fe7655671c17189951866519805793326360dba60a70ff3acd342314c49            20239 Packages
- b61c6493c8ea82a37fa607889d4913580389898a94507d5d8869d6accb14d973c73e250ba9ebcd3c2532d27abb9169fb7a5011f5547a96a09df2873b48424e63             2809 Packages.gz
- 8c484d1c31259eef4b3a12b2f93249b1c4db33ac608337598f2ce60533a82605be1cb670cb235d5883cb33ba25a023b7cc366e55678c664250ad5fc2cb2ac114              189 Release
+ 71000438743314b9e0e75beb01066a8cafbbdd4077211d98b469d2b854053081cefa80f9b186b9af81476b1b0536eedb3640e8d700518afdadfc2c27c99316cc            21737 Packages
+ 6e23c20bbb7f63ea088c92d15982c0851a832e2222cb44298d9d0ca698201ae5fc44e5fc8c118bfd696e4150ab6b0093d7b51d8ac3df5c17cb4b8cd934fe3749             2924 Packages.gz
+ da50492f59f3255ddb98427b1fa504d5c141b0d156ca1b00554a909a1fd0c963ea01af64c95c2a11cfaa66213550086a5270d72e9f6a6687f081e325081ef1d3              189 Release
