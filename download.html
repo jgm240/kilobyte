@@ -18,7 +18,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=ee4794a">
+<link rel="stylesheet" href="style.css?v=647401d">
 </head>
 <body>
 <a class="sr" href="html/download.html">Text version of this page</a>
@@ -72,8 +72,12 @@ if (!/[?&]graphical\b/.test(location.search) &&
     <p><b>CD:</b> burn the CD version's ISO as an image (not as a file). <b>Virtual machine:</b> start the ISO
       in QEMU, VirtualBox or UTM. Kilobyte runs from the stick or CD; "Install Kilobyte to disk" in the
       Program Manager puts it on the hard disk (the CD version can also keep Windows 98 next to it).</p>
-    <p><b>Tested on:</b> MacBook Pro Late 2008 (made about 2008), Medion Akoya E6240 (made December 2014)
-      and Sony VAIO PCG-71811M (made about 2011). <a href="index.html#test-computers" data-help="A photo of the three laptops">See them</a>.</p>
+    <p><b>Tested on</b> (<a href="index.html#test-computers" data-help="A photo of the three laptops">see them</a>):</p>
+    <table class="tested">
+      <tr><td>MacBook Pro Late 2008</td><td>made about 2008</td><td>64-bit, the Mac version's USB stick image</td></tr>
+      <tr><td>Medion Akoya E6240</td><td>made December 2014</td><td>64-bit, the USB stick image</td></tr>
+      <tr><td>Sony VAIO PCG-71811M</td><td>made about 2011</td><td>32-bit (i386), the ISO</td></tr>
+    </table>
   </section>
 
   <section class="box" id="pi">
@@ -103,7 +107,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
     <a href="https://github.com/jgm240/kilobyte">Source code</a> · <a href="html/download.html" data-help="The same pages without pictures, colours or scripts, for text browsers and screen readers">Text version</a></p>
 </footer>
 <div class="status" role="status">Point at a file to see what it is for.</div>
-<script src="site.js?v=ee4794a"></script>
+<script src="site.js?v=647401d"></script>
 <script>
 // The files of the newest release, from GitHub's API, described for people.
 (function () {
