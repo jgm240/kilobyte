@@ -331,6 +331,15 @@ run under `kb-guard` are on a pseudo terminal and get no mouse there.
 `./build.sh --arch all` builds all five (the PC builds also write a
 `-usb.img`).
 
+**On GitHub instead** (`.github/workflows/images.yml`): pushing a tag builds
+its images on GitHub's runners, one job per version side by side, and puts
+them with `.sha256` checksums on the tag's release (a draft if there is none
+yet): `v1.6` the PC, CD and Raspberry Pi images, `mac-v1.6` the Mac version,
+`kilobyteink-v1.6` KilobytEink. Actions › Images › Run workflow builds any
+versions by hand (kept as the run's artifacts for a week, or on a release
+you name). Nothing is cached there, so each job takes about as long as a
+first build, and your own disk stays free.
+
 **The Mac version** (`./build.sh --mac`): most Intel Macs from 2006 to 2015
 have Broadcom Wi-Fi (BCM4321, 4322, 4331, 4360...), which only Broadcom's
 own driver handles well. The Mac version has it: `wl`, from Debian's

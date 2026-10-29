@@ -1,0 +1,156 @@
+# Kilobyte's images, built on GitHub's runners instead of your own computer
+# (./build.sh, one job per version, side by side).
+#
+# Pushing a tag builds what it names and puts the files, with .sha256
+# checksums, on that tag's release (a draft if there is none yet; publish it
+# on GitHub when it looks right):
+#   v1.6               64-bit and 32-bit PC, CD version, Raspberry Pi (all three)
+#   mac-v1.6           the Mac version
+#   kilobyteink-v1.6   KilobytEink (Kindle)
+# A tag whose release already has files builds nothing (Run workflow below
+# replaces them). The version in the tag must be Kilobyte's (KB_VERSION in
+# rootfs/usr/lib/kilobyte/lib.sh).
+#
+# Actions › Images › Run workflow builds any versions by hand: the files are
+# kept as the run's artifacts for a week, and also go on a release if one is
+# named. Kilobyte for Windows' WSL systems (wsl-amd64, wsl-arm64) are built
+# here too; tools/make-windows.sh and the WinGet manifests stay local.
+name: Images
+on:
+  push:
+    tags: ["v*", "mac-v*", "kilobyteink-v*"]
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "Versions, separated by spaces: pc-amd64 pc-i386 cd mac pi-arm64 pi-armhf pi-armel kindle wsl-amd64 wsl-arm64"
+        default: "pc-amd64"
+        type: string
+      release:
+        description: "Put the files on this release (its tag; it is made as a draft if missing). Empty: artifacts only"
+        default: ""
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: images-${{ github.ref }}-${{ inputs.release }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          VERSIONS: ${{ inputs.versions }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          set -e
+          kb=$(sed -n 's/^KB_VERSION="\(.*\)"/\1/p' rootfs/usr/lib/kilobyte/lib.sh)
+          if [ "$EVENT" = push ]; then
+              tag=$REF_NAME
+              case $tag in
+                  mac-v*)         versions="mac" title="Kilobyte for Mac" ;;
+                  kilobyteink-v*) versions="kindle" title="KilobytEink" ;;
+                  v*)             versions="pc-amd64 pc-i386 cd pi-arm64 pi-armhf pi-armel" title="Kilobyte" ;;
+              esac
+          else
+              tag=$RELEASE versions=$VERSIONS title=""
+          fi
+          if [ -n "$tag" ]; then
+              v=${tag##*-v}; v=${v#v}
+              [ "$v" = "$kb" ] || { echo "::error::The tag says $v, but this commit is Kilobyte $kb (KB_VERSION)"; exit 1; }
+              if gh release view "$tag" >/dev/null 2>&1; then
+                  n=$(gh release view "$tag" --json assets --jq '.assets | length')
+                  if [ "$EVENT" = push ] && [ "$n" -gt 0 ]; then
+                      echo "::notice::Release $tag already has $n files: nothing built (Run workflow replaces them)"
+                      echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+              else
+                  gh release create "$tag" --draft --verify-tag --title "${title:-$tag} ${v}" \
+                      --notes "Built by the Images workflow from $(git rev-parse --short HEAD). Release notes to come."
+              fi
+          fi
+          # version -> build.sh options, runner, and whether 32-bit ARM needs emulating
+          # (GitHub's ARM runners cannot run 32-bit ARM programs themselves).
+          entries=""
+          for name in $versions; do
+              case $name in
+                  pc-amd64)  e='"args":"--arch amd64","runner":"ubuntu-24.04","qemu":""' ;;
+                  pc-i386)   e='"args":"--arch i386","runner":"ubuntu-24.04","qemu":""' ;;
+                  cd)        e='"args":"--arch i386 --cd","runner":"ubuntu-24.04","qemu":""' ;;
+                  mac)       e='"args":"--mac","runner":"ubuntu-24.04","qemu":""' ;;
+                  wsl-amd64) e='"args":"--wsl","runner":"ubuntu-24.04","qemu":""' ;;
+                  pi-arm64)  e='"args":"--arch arm64","runner":"ubuntu-24.04-arm","qemu":""' ;;
+                  wsl-arm64) e='"args":"--wsl --arch arm64","runner":"ubuntu-24.04-arm","qemu":""' ;;
+                  pi-armhf)  e='"args":"--arch armhf","runner":"ubuntu-24.04-arm","qemu":"arm"' ;;
+                  pi-armel)  e='"args":"--arch armel","runner":"ubuntu-24.04-arm","qemu":"arm"' ;;
+                  kindle)    e='"args":"--kindle","runner":"ubuntu-24.04-arm","qemu":"arm"' ;;
+                  *) echo "::error::Unknown version: $name"; exit 1 ;;
+              esac
+              entries="$entries${entries:+,}{\"name\":\"$name\",$e}"
+          done
+          [ -n "$entries" ] || { echo "::error::No versions to build"; exit 1; }
+          echo "matrix={\"include\":[$entries]}" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.matrix != '{"include":[]}'
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Make room
+        # A build needs about 15 GB; the runner's preinstalled toolchains go.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+              /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          docker image prune -af >/dev/null
+          df -h /
+      - uses: actions/checkout@v4
+      - if: matrix.qemu != ''
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: ${{ matrix.qemu }}
+      - name: Build (./build.sh ${{ matrix.args }})
+        run: ./build.sh ${{ matrix.args }}
+      - name: Checksums
+        run: |
+          cd out
+          for f in *; do
+              [ -f "$f" ] || continue
+              case $f in *.sha256 | *.txt | *.deb) continue ;; esac
+              [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256"
+          done
+          ls -l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            out/*
+            !out/*.deb
+          retention-days: 7
+          compression-level: 0
+      - name: Put them on the release
+        if: needs.plan.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          cd out
+          set --
+          for f in *; do
+              case $f in *.deb) ;; *) [ -f "$f" ] && set -- "$@" "$f" ;; esac
+          done
+          gh release upload "$TAG" "$@" --clobber
