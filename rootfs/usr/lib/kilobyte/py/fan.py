@@ -10,6 +10,10 @@ temperature, Kilobyte's way), at full speed or at a fixed speed.
                            kilobyte-fan.service runs it
     fan.py run             (root, kilobyte-fan.service) keep the fans as the
                            mode says; back to automatic when it stops
+    fan.py detect          (root) find the fan chips: load their drivers, now
+                           and at every start
+    fan.py lax             (root) let Linux use a fan chip the firmware also
+                           uses (acpi_enforce_resources=lax, after a restart)
 
 Fans it can set: a PC's fan chips (hwmon pwm: most desktop boards, Dell and
 ThinkPad laptops), Apple's SMC (Intel Macs: from their lowest to their
@@ -283,6 +287,94 @@ def is_pi():
     return "raspberry pi" in (read("/proc/device-tree/model", "") or "").lower()
 
 
+# --- finding the fan chips ---------------------------------------------------
+# Debian loads the drivers of a PC's fan chips (the Super I/O chip on the
+# board, Dell's and HP's firmware) only when told to: detect() tries each,
+# keeps those that find something and loads them at every start
+# (modules-load.d).
+CHIP_MODULES = ["nct6775", "nct6683", "it87", "f71882fg", "w83627ehf", "w83627hf", "w83793",
+                "sch5627", "sch5636", "asus_ec_sensors", "asus_wmi_sensors", "dell_smm_hwmon",
+                "hp_wmi_sensors", "thinkpad_acpi", "applesmc", "coretemp", "k10temp"]
+LOAD = "/etc/modules-load.d/kilobyte-fans.conf"
+LAX = "/etc/default/grub.d/kilobyte-fans.cfg"
+TRIED = "/run/kilobyte-fan-detect.json"        # what detect() found, this start
+
+
+def modules_loaded():
+    return {line.split()[0] for line in (read("/proc/modules", "") or "").splitlines() if line.strip()}
+
+
+def tried():
+    try:
+        with open(TRIED) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def found_count():
+    return len(fans()), len(temperatures())
+
+
+def acpi_conflict():
+    """The firmware keeps the fan chip's ports for itself (ACPI): Linux
+    leaves it alone unless started with acpi_enforce_resources=lax."""
+    try:
+        log = subprocess.run(["dmesg"], capture_output=True, text=True).stdout
+    except OSError:
+        return False
+    return bool(re.search(r"SystemIO range .* conflicts with OpRegion|ACPI: OSL: Resource conflict", log)) and \
+        bool(re.search(r"(nct6775|nct6683|it87|f71882fg|w83627)", log))
+
+
+def detect():
+    """(root) Load each fan chip driver that finds its chip; JSON: what it found."""
+    kept = [m for m in (read(LOAD, "") or "").split() if not m.startswith("#")]
+    have = modules_loaded()
+    before = found_count()
+    for mod in CHIP_MODULES:
+        if mod in have:
+            continue
+        n = found_count()
+        try:
+            r = subprocess.run(["modprobe", mod], capture_output=True)
+        except OSError:
+            break
+        if r.returncode != 0:
+            continue                           # (no such chip here)
+        time.sleep(0.3)
+        if found_count() != n:
+            kept.append(mod)
+        else:
+            subprocess.run(["modprobe", "-r", mod], capture_output=True)
+    kept = sorted(set(kept))
+    if kept:
+        os.makedirs(os.path.dirname(LOAD), exist_ok=True)
+        write(LOAD, "# Fan Control: the drivers of this computer's fan chips\n" + "\n".join(kept) + "\n")
+    after = found_count()
+    out = {"modules": kept, "fans": after[0], "new_fans": after[0] - before[0], "new_temps": after[1] - before[1],
+           "conflict": after[0] == 0 and acpi_conflict(), "lax": os.path.exists(LAX)}
+    write(TRIED, json.dumps(out))
+    print(json.dumps(out))
+    return 0
+
+
+def lax():
+    """(root) Start Linux with acpi_enforce_resources=lax (after a restart)."""
+    os.makedirs(os.path.dirname(LAX), exist_ok=True)
+    write(LAX, "# Fan Control: let Linux use the fan chip that the firmware also uses\n"
+               'GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT acpi_enforce_resources=lax"\n')
+    try:
+        r = subprocess.run(["update-grub"], capture_output=True, text=True)
+    except OSError:
+        r = None
+    if r is None or r.returncode != 0:
+        os.unlink(LAX)
+        print("fan: update-grub did not work (is Kilobyte installed on this computer?)", file=sys.stderr)
+        return 1
+    return 0
+
+
 # --- the mode ----------------------------------------------------------------
 def mode():
     m = "auto"
@@ -421,7 +513,7 @@ def status():
         print("  %-40s %s%s%s" % (f.name[:40], "%d rpm" % rpm if rpm is not None else "-",
                                    "  %d%%" % pct if pct is not None else "", "" if f.settable() else "  (cannot be set)"))
     if not fs:
-        print("  No fans found.")
+        print("  No fans found." + ("" if tried() or is_pi() else "  (To look for the fan chips: sudo /usr/lib/kilobyte/kb-root fan detect)"))
 
 
 # --- the program -------------------------------------------------------------
@@ -442,9 +534,27 @@ def ui():
         r = subprocess.run(["sudo", "-n", "/usr/lib/kilobyte/kb-root", "fan", m], capture_output=True, text=True)
         return None if r.returncode == 0 else (r.stderr.strip().splitlines() or ["not allowed"])[-1]
 
+    def look(s):
+        """Find the fan chips (kb-root fan detect); what it found, as a message."""
+        h, w = s.size()
+        s.put(h - 1, 0, " Looking for the fan chips...".ljust(w - 1), BLACK, CYAN)
+        s.scr.refresh()
+        err = apply("detect")
+        found = tried()
+        if err or not found:
+            return "Could not look for fan chips: " + (err or "no answer")
+        if found.get("new_fans"):
+            return "Found %d fan%s: from now on Kilobyte finds %s at every start." % (
+                found["new_fans"], "" if found["new_fans"] == 1 else "s", "it" if found["new_fans"] == 1 else "them")
+        if found.get("conflict"):
+            return "The firmware keeps the fan chip to itself: L lets Linux use it (after a restart)."
+        return "No fan chip that Linux can use: the computer runs its fans itself."
+
     def main(s):
         s.scr.timeout(1000)
         message, hits = "", []
+        if not fans() and not tried():
+            message = look(s)
         while True:
             h, w = s.size()
             s.fill(LIGHTGREY, BLUE)
@@ -488,6 +598,12 @@ def ui():
                 if is_pi() and not fs:
                     s.put(y, 4, "G: a fan on a GPIO pin (with a transistor), on above a temperature"[: w - 6], YELLOW, BLUE)
                     y += 1
+                elif not is_pi():
+                    s.put(y, 4, "S: look for the fan chips again"[: w - 6], YELLOW, BLUE)
+                    y += 1
+                    if (tried() or {}).get("conflict") and not os.path.exists(LAX):
+                        s.put(y, 4, "L: let Linux use the fan chip (acpi_enforce_resources=lax, after a restart)"[: w - 6], YELLOW, BLUE)
+                        y += 1
             # The modes, as buttons.
             y = h - 5
             text = "Mode: %s" % mode_name(m)
@@ -528,6 +644,11 @@ def ui():
                 if c == "T" and thinkpad_locked():
                     err = apply("thinkpad")
                     message = err or "Done: after a restart Kilobyte can set this ThinkPad's fan."
+                if c == "S" and not settable and not is_pi():
+                    message = look(s)
+                if c == "L" and (tried() or {}).get("conflict") and not os.path.exists(LAX):
+                    err = apply("lax")
+                    message = ("Could not: " + err) if err else "Done: after a restart, S looks for the fan chip again."
                 if c == "G" and is_pi():
                     curses.endwin()
                     subprocess.call(["/usr/lib/kilobyte/apps/fans", "--gpio"])
@@ -554,6 +675,10 @@ def main(argv):
         return set_mode(argv[1])
     elif what == "run":
         return run()
+    elif what == "detect":
+        return detect()
+    elif what == "lax":
+        return lax()
     else:
         sys.exit(__doc__)
     return 0

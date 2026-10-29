@@ -237,7 +237,9 @@ case "${1:-} ${2:-}" in
         esac
         ;;
     # Fan Control (py/fan.py): the mode; on a ThinkPad, letting the fan be set
-    # (after a restart); on a Raspberry Pi, a fan on a GPIO pin (config.txt).
+    # (after a restart); on a Raspberry Pi, a fan on a GPIO pin (config.txt);
+    # on a PC, finding the fan chips (detect) and letting Linux use one the
+    # firmware also uses (lax).
     "fan "*)
         case ${2:-} in
             thinkpad)
@@ -254,6 +256,7 @@ case "${1:-} ${2:-}" in
                 sed -i '/^# Kilobyte Fan Control/,/^dtoverlay=gpio-fan/d' "$cfg"
                 [ "$pin" = off ] ||
                     printf '# Kilobyte Fan Control: a fan on a GPIO pin\n[all]\ndtoverlay=gpio-fan,gpiopin=%s,temp=%s000\n' "$pin" "$temp" >> "$cfg" ;;
+            detect | lax) exec python3 /usr/lib/kilobyte/py/fan.py "$2" ;;
             *)  exec python3 /usr/lib/kilobyte/py/fan.py set "$2" ;;
         esac
         ;;
@@ -263,6 +266,6 @@ case "${1:-} ${2:-}" in
        echo "       autologin on|off | sounds on|off | post on|off | usb mount|eject DEV | usb format DISK fat32|exfat LABEL" >&2
        echo "       speech on|off | speech voice LANG | speech rate 0-9 | braille on|off | access boot" >&2
        echo "       bbs setup|on|off|restart|who|log|update | bbs passwd [USER] | bbs op COMMAND..." >&2
-       echo "       fan auto|quiet|normal|cool|full|10-100 | fan thinkpad | fan gpio PIN TEMP | fan gpio off" >&2
+       echo "       fan auto|quiet|normal|cool|full|10-100 | fan detect | fan lax | fan thinkpad | fan gpio PIN TEMP | fan gpio off" >&2
        exit 2 ;;
 esac

@@ -350,7 +350,11 @@
                   full speed. It sets PC fan chips, Intel Macs' fans and the
                   Raspberry Pi 5's fan; on a ThinkPad T allows it (after a
                   restart), on other Pis G sets up a fan on a GPIO pin.
-                  (kbutils settings chg fan quiet)
+                  When it finds no fans, it looks for the PC's fan chips
+                  by itself (S looks again); L lets Linux use a chip the
+                  firmware keeps for itself (after a restart). Many
+                  laptops run their fans only in the firmware: those it
+                  cannot set. (kbutils settings chg fan quiet)
    Games          Mines, Solitaire, Reversi, Moon Buggy, Snake and others.
                   Each shows its keys on the bottom line.
                   Chess: pick a piece with Space and put it down with Space,
