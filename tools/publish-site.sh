@@ -19,6 +19,11 @@ git -C "$W" reset -q --hard origin/gh-pages
 # The pages (site/; its "try" is only a link to out/web-vm for previewing),
 # then the virtual PC: the emulator, and the disk once it is made.
 rsync -a --exclude try --exclude .DS_Store site/ "$W/"
+# The pages ask for this version's style.css and scripts (?v=...): browsers
+# keep the old ones for a while, and new pages with an old style.css look
+# broken.
+rev=$(git rev-parse --short HEAD)
+perl -pi -e 's/(href|src)="((?:style\.css|[a-z]+\.js))"/$1="$2?v='"$rev"'"/g' "$W"/*.html
 mkdir -p "$W/try"
 [ -d out/web-vm/v86 ] && rsync -a --delete out/web-vm/v86/ "$W/try/v86/"
 if [ -f out/web-vm/disk/manifest.json ]; then
@@ -78,7 +83,6 @@ push() { # push MESSAGE: commit what is staged and push it, trying again on erro
     echo "Pushing failed: run tools/publish-site.sh again later (it carries on)." >&2
     exit 1
 }
-rev=$(git rev-parse --short HEAD)
 # 1: the pages, the emulator and what was removed (not yet the new manifest)
 git -C "$W" add -A -- . ':!try/disk'
 git -C "$W" add -u -- try/disk ':!try/disk/manifest.json' 2>/dev/null || true
