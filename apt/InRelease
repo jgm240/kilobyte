@@ -3,31 +3,31 @@ Hash: SHA512
 
 Architectures: all
 Codename: stable
-Date: Tue, 27 Oct 2026 14:04:20 +0000
+Date: Thu, 29 Oct 2026 08:30:40 +0000
 Description: Kilobyte for normal Debian, Ubuntu and Raspberry Pi OS
 Label: Kilobyte
 Origin: Kilobyte
 Suite: stable
 MD5Sum:
- 2fffba0df1be39957a9ac519a24a8883            21737 Packages
- e036eb8e59d218b0ac6e776edb8f6661             2924 Packages.gz
- 166129d8f221a85cc4e8d2d1967b881f              189 Release
+ 0c081c261f674986c42c0563b3f6eaea            23235 Packages
+ a45c9305267e7f95a2434f1babe4cd15             3033 Packages.gz
+ 3d9b9ebac1004ca78f58d94789adb7a4              189 Release
 SHA1:
- 4e804b9a3a05f52f7f024c21c004ab601b2ce172            21737 Packages
- 1a1dcfd2543f0c00a534b4956f1d12de37b06cf6             2924 Packages.gz
- 908fe3b7a476817745da06462b6532c90ea3cefb              189 Release
+ b24339326745812a7d2a8f89205352e9b0998f65            23235 Packages
+ 8d3169a5bdb15c4910d0d4f0ced913bd6ecb0436             3033 Packages.gz
+ 5328bcb2511ef24db2556282af86ea8f3df31c51              189 Release
 SHA256:
- 5ec820b28f5e6f8198fd3a1d5924a0968c0060a41a435e3e7ab429e11472d407            21737 Packages
- 9acdd7b7369bb9f17edc624de4998875e3ebdaf0568141cdfe3069c45a00c6fb             2924 Packages.gz
- fb7f53622ca45eaa00676b1aab2aa5dce93255b0543ffd0a350382bdbc1738c6              189 Release
+ 25238b38ec8cad628d5ccd673e786e4649d1c23859bad257a1d20419dd493510            23235 Packages
+ ac7229a46f6459876eaa2d2d5a04d8b64ae63a78a7370007b3ff91f9ce3d4cac             3033 Packages.gz
+ b168f84342cbe50f926f11eef843bfef2084c24777bef2a6eacc61376cfa698b              189 Release
 SHA512:
- 71000438743314b9e0e75beb01066a8cafbbdd4077211d98b469d2b854053081cefa80f9b186b9af81476b1b0536eedb3640e8d700518afdadfc2c27c99316cc            21737 Packages
- 6e23c20bbb7f63ea088c92d15982c0851a832e2222cb44298d9d0ca698201ae5fc44e5fc8c118bfd696e4150ab6b0093d7b51d8ac3df5c17cb4b8cd934fe3749             2924 Packages.gz
- da50492f59f3255ddb98427b1fa504d5c141b0d156ca1b00554a909a1fd0c963ea01af64c95c2a11cfaa66213550086a5270d72e9f6a6687f081e325081ef1d3              189 Release
+ 02bdee2e512f5ca6cf3ca65bf798c28af1d96b4a03cae10c640ea10dab11604d30e44a72044bbf9419e1345f8d76b5d05b64eda70607d67e3bf136ff508c9204            23235 Packages
+ 9105eb68ba68199cb5b111aa3f5507e853c86e68c69281884082ab13657e675da57b4de38f3e520ae6bb7f8d2be9b896d174412eeda4b163f88ce9e13432ff72             3033 Packages.gz
+ 83120f46de5563cf7c6a8ed66c070955ae700cd74d17123edc96b4c990b5c9e5d260ba8900531622bc01315bf07beaaefd300714a7964989987befbd57914270              189 Release
 -----BEGIN PGP SIGNATURE-----
 
-iHUEARYKAB0WIQTIcRYaEAR7AXAA7TfbDJjWZaEuBgUCauCvZAAKCRDbDJjWZaEu
-Biv1AP9ZXLUoqCGMv2AofBibeNS7EVtrDbfQ4rywQs21NcTz5gD/TzKmqkmCqDsx
-YaX9PY4O4uWKyTIIs11yuyUkN67FaA4=
-=IuUD
+iHUEARYKAB0WIQTIcRYaEAR7AXAA7TfbDJjWZaEuBgUCauMEMAAKCRDbDJjWZaEu
+BoU2AQCOtdSWhWnRyp8pHQEENGkexQfyv97RxqxGyrgQZsCc2wD+O70y4SwbZRSn
+vYdds9RRnLDhVLzcAnPZQEWO1vHIrwA=
+=ZS9T
 -----END PGP SIGNATURE-----
