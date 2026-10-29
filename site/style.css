@@ -220,6 +220,15 @@ pre {
 table { border-collapse: collapse; width: 100%; margin: 0 0 16px; }
 th, td { text-align: left; vertical-align: top; padding: 0 16px 0 0; }
 th { color: var(--title); font-weight: normal; }
+/* The Download page's test computers: a row each; on a phone, each one's
+   three parts under each other. */
+.tested td:nth-child(-n+2) { white-space: nowrap; }
+@media (max-width: 560px) {
+  .tested tr { display: block; margin-bottom: 16px; }
+  .tested tr:last-child { margin-bottom: 0; }
+  .tested td { display: block; padding: 0; white-space: normal !important; }
+  .tested td:first-child { color: var(--title); }
+}
 tr + tr td { padding-top: 8px; }
 .cols { display: grid; gap: 0 32px; }
 @media (min-width: 760px) { .cols { grid-template-columns: 1fr 1fr; } }
