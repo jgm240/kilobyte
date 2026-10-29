@@ -40,6 +40,7 @@ import html, json, re, sys
 page = sys.argv[1]
 releases = [r for r in json.load(open(sys.argv[2])) if not r["draft"] and not r["prerelease"]]
 kinds = [(r"-amd64\.iso$", "64-bit PC (ISO)"), (r"-amd64-usb\.img$", "64-bit PC (USB stick)"),
+         (r"-amd64-mac-usb\.img$", "Intel Mac (USB stick)"), (r"-amd64-mac\.iso$", "Intel Mac (ISO)"),
          (r"-i386\.iso$", "32-bit PC (ISO)"), (r"-i386-usb\.img$", "32-bit PC (USB stick)"),
          (r"-i386-cd\.iso$", "CD version, for PCs from the 1990s"),
          (r"-raspberrypi-arm64\.img\.xz$", "Raspberry Pi 3, 4, 400, 5, 500, Zero 2 W"),

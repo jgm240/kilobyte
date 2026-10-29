@@ -45,6 +45,20 @@ on the hard disk (the CD version can also keep Windows 98 next to it).</p>
 <li>Sony VAIO PCG-71811M (made about 2011): 32-bit (i386), the ISO</li>
 </ul>
 
+<h2>Intel Macs</h2>
+<p>The Mac version is the 64-bit version plus what Intel Macs (2006 to 2015)
+need: Broadcom's Wi-Fi driver, F1-F12 as F-keys, and fans that run by
+temperature.</p>
+<p><b>USB stick:</b> write the -mac-usb.img file with balenaEtcher, or in the
+Terminal (diskutil list shows which disk the stick is):</p>
+<pre>diskutil unmountDisk /dev/diskN
+sudo dd if=kilobyte-1.5-amd64-mac-usb.img of=/dev/rdiskN bs=4m</pre>
+<p>Then hold Option at the start-up chime and choose "EFI Boot". If the screen
+stays on the boot menu's picture, start again and choose "Kilobyte (Mac:
+graphics driver off)", or else "Kilobyte (Mac: firmware screen only)".</p>
+<p>Macs with Apple's own chips (M1 and newer) cannot start Kilobyte;
+<a href="../transition.html">Transition</a> puts it next to macOS instead.</p>
+
 <h2>Raspberry Pi</h2>
 <p>Write the .img.xz file to a memory card with Raspberry Pi Imager ("Use
 custom") or balenaEtcher; no need to unpack it. The first start asks for
