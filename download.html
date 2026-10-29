@@ -18,7 +18,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=647401d">
+<link rel="stylesheet" href="style.css?v=7589e34">
 </head>
 <body>
 <a class="sr" href="html/download.html">Text version of this page</a>
@@ -42,8 +42,9 @@ if (!/[?&]graphical\b/.test(location.search) &&
     <h2>PC Selector</h2>
     <p>What will Kilobyte run on?</p>
     <ul class="menu" id="choices">
-      <li><button type="button" data-pc="x64" data-help="Most PCs and laptops from about 2007 on, and Intel Macs"><span><span class="k">6</span>4-bit PC</span><span class="d">x64 (amd64)</span></button></li>
+      <li><button type="button" data-pc="x64" data-help="Most PCs and laptops from about 2007 on"><span><span class="k">6</span>4-bit PC</span><span class="d">x64 (amd64)</span></button></li>
       <li><button type="button" data-pc="i386" data-help="Older PCs: Pentium 4, the first Atom netbooks, PCs from the 1990s"><span><span class="k">3</span>2-bit PC</span><span class="d">i386</span></button></li>
+      <li><button type="button" data-pc="mac" data-help="Macs with an Intel processor, 2006 to 2015 (not M1 and newer)"><span>Intel <span class="k">M</span>ac</span><span class="d">2006-2015</span></button></li>
       <li><button type="button" data-pc="pi2" data-help="Raspberry Pi 2, 3, 4, 400, 5, 500 and Zero 2 W"><span><span class="k">R</span>aspberry Pi</span><span class="d">2 or newer</span></button></li>
       <li><button type="button" data-pc="pi1" data-help="The first Raspberry Pi: models A, B, A+ and B+"><span>Raspberry Pi <span class="k">1</span></span><span class="d">the first one</span></button></li>
       <li><button type="button" data-pc="zero" data-help="Raspberry Pi Zero and Zero W (the Zero 2 W is under Raspberry Pi 2 or newer)"><span>Raspberry Pi <span class="k">Z</span>ero</span><span class="d">Zero, Zero W</span></button></li>
@@ -80,6 +81,22 @@ if (!/[?&]graphical\b/.test(location.search) &&
     </table>
   </section>
 
+  <section class="box" id="mac">
+    <h2>Intel Macs</h2>
+    <p>The Mac version is the 64-bit version plus what Intel Macs (2006 to 2015) need: Broadcom's Wi-Fi
+      driver, F1-F12 as F-keys (Fn gives brightness and volume), and fans that run by temperature
+      (Accessories › Fan control sets them).</p>
+    <p><b>USB stick:</b> write the <code>-mac-usb.img</code> file with balenaEtcher, or in the Terminal
+      (<code>diskutil list</code> shows which disk the stick is):</p>
+    <pre data-copy>diskutil unmountDisk /dev/diskN
+sudo dd if=kilobyte-1.5-amd64-mac-usb.img of=/dev/rdiskN bs=4m</pre>
+    <p>Then hold Option (⌥) at the start-up chime and choose "EFI Boot". If the screen stays on the
+      boot menu's picture, start again and choose "Kilobyte (Mac: graphics driver off)", or else
+      "Kilobyte (Mac: firmware screen only)"; installing keeps the one that worked.</p>
+    <p>Macs with Apple's own chips (M1 and newer) cannot start Kilobyte; <a href="transition.html">Transition</a>
+      puts it next to macOS instead.</p>
+  </section>
+
   <section class="box" id="pi">
     <h2>Raspberry Pi</h2>
     <p>Write the <code>.img.xz</code> file to a memory card with Raspberry Pi Imager ("Use custom") or
@@ -107,7 +124,7 @@ if (!/[?&]graphical\b/.test(location.search) &&
     <a href="https://github.com/jgm240/kilobyte">Source code</a> · <a href="html/download.html" data-help="The same pages without pictures, colours or scripts, for text browsers and screen readers">Text version</a></p>
 </footer>
 <div class="status" role="status">Point at a file to see what it is for.</div>
-<script src="site.js?v=647401d"></script>
+<script src="site.js?v=7589e34"></script>
 <script>
 // The files of the newest release, from GitHub's API, described for people.
 (function () {
@@ -115,7 +132,9 @@ if (!/[?&]graphical\b/.test(location.search) &&
   var KINDS = [
     // [pattern, label, help, section, id]
     [/-amd64\.iso$/, "64-bit PC", "ISO for 64-bit PCs and virtual machines: USB stick, DVD, BIOS and UEFI", "#pc"],
-    [/-amd64-usb\.img$/, "64-bit USB", "USB stick image for UEFI PCs and Intel Macs", "#pc"],
+    [/-amd64-usb\.img$/, "64-bit USB", "USB stick image for UEFI PCs", "#pc"],
+    [/-amd64-mac-usb\.img$/, "Mac USB", "The Mac version, for Intel Macs (2006-2015): USB stick image", "#mac"],
+    [/-amd64-mac\.iso$/, "Mac ISO", "The Mac version as an ISO: DVD or virtual machine", "#mac"],
     [/-i386\.iso$/, "32-bit PC", "ISO for 32-bit PCs, from the Pentium 4 era on", "#pc"],
     [/-i386-usb\.img$/, "32-bit USB", "USB stick image for 32-bit PCs", "#pc"],
     [/-i386-cd\.iso$/, "CD version", "Fits a 650 MB CD: for PCs and laptops from the 1990s that start only from CDs", "#pc"],
@@ -144,12 +163,16 @@ if (!/[?&]graphical\b/.test(location.search) &&
     '<a href="https://etcher.balena.io/">balenaEtcher</a> or Raspberry Pi Imager ("Use custom"), then start the PC ' +
     "from the stick (a key such as F12, F11, Esc or F8 at power-on shows the boot menu). " +
     '<a href="#pc">More about PCs</a></p>';
+  var MACSTICK = "<p>Write it to a USB stick (4 GB or more; everything on it is erased) with " +
+    '<a href="https://etcher.balena.io/">balenaEtcher</a>, then hold Option (⌥) at the start-up chime and choose ' +
+    '"EFI Boot". <a href="#mac">More about Macs</a></p>';
   var CARD = "<p>Write it to a memory card with Raspberry Pi Imager (\"Use custom\") or " +
     '<a href="https://etcher.balena.io/">balenaEtcher</a>; no need to unpack it. The first start asks for keyboard, ' +
     'time zone, name and password. <a href="#pi">More about the Raspberry Pi</a></p>';
   var PICKS = {
-    x64: { title: "64-bit PC", files: [[/-amd64-usb\.img$/, "For a USB stick (UEFI PCs, Intel Macs)"], [/-amd64\.iso$/, "ISO: DVD, virtual machine, or a stick for older BIOS PCs"]], how: STICK },
+    x64: { title: "64-bit PC", files: [[/-amd64-usb\.img$/, "For a USB stick (UEFI PCs)"], [/-amd64\.iso$/, "ISO: DVD, virtual machine, or a stick for older BIOS PCs"]], how: STICK },
     i386: { title: "32-bit PC", files: [[/-i386-usb\.img$/, "For a USB stick"], [/-i386\.iso$/, "ISO: DVD, CD-sized stick, virtual machine"], [/-i386-cd\.iso$/, "CD version: fits a 650 MB CD, for PCs from the 1990s and laptops that only start from CDs"]], how: STICK },
+    mac: { title: "Intel Mac", files: [[/-amd64-mac-usb\.img$/, "The Mac version, for a USB stick"], [/-amd64-mac\.iso$/, "The Mac version as an ISO: DVD or virtual machine"]], how: MACSTICK },
     pi2: { title: "Raspberry Pi 2 or newer", files: [[/-raspberrypi-arm64\.img\.xz$/, "Raspberry Pi 3, 4, 400, 5, 500 and Zero 2 W"], [/-raspberrypi-armhf\.img\.xz$/, "Raspberry Pi 2 (and the 3, in 32-bit)"]], how: CARD },
     pi1: { title: "Raspberry Pi 1", files: [[/-raspberrypi-armel\.img\.xz$/, "Raspberry Pi 1 (A, B, A+, B+)"]], how: CARD },
     zero: { title: "Raspberry Pi Zero", files: [[/-raspberrypi-armel\.img\.xz$/, "Raspberry Pi Zero and Zero W"]], how: CARD + "<p>A Zero 2 W takes the image for the Raspberry Pi 2 or newer.</p>" }
