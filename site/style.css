@@ -119,6 +119,13 @@ body {
 }
 a { color: inherit; }
 img, canvas { image-rendering: pixelated; }
+/* A photo in a box: sunken like a menu's frame, smooth (not pixelated). */
+.photo { margin: 0; }
+.photo img {
+  display: block; width: 100%; height: auto; image-rendering: auto;
+  border: 2px solid; border-color: var(--dark) var(--light) var(--light) var(--dark);
+}
+.photo figcaption { margin-top: 16px; text-align: center; }
 ::selection { background: var(--sel-bg); color: var(--sel-ink); }
 
 /* The top line: like the line above every Kilobyte screen. */
